@@ -207,7 +207,7 @@ function AdminDashboard() {
             WebkitTextFillColor: 'transparent',
           }}
         >
-          Admin Dashboard
+          Analytics Dashboard
         </Typography>
 
         <Grid container spacing={2}>
