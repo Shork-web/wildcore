@@ -16,7 +16,9 @@ import {
   TableRow,
   Paper,
   Collapse,
-  IconButton
+  IconButton,
+  Card,
+  Button
 } from '@mui/material';
 import { 
   Warning, 
@@ -24,22 +26,44 @@ import {
   Lightbulb, 
   Assessment,
   KeyboardArrowDown,
-  KeyboardArrowUp
+  KeyboardArrowUp,
+  FilterList,
+  Clear
 } from '@mui/icons-material';
 
 function ConcernsSolutions({ students }) {
-  const [programFilter, setProgramFilter] = React.useState('All');
-  const [semesterFilter, setSemesterFilter] = React.useState('All');
+  const [programFilter, setProgramFilter] = useState('All');
+  const [semesterFilter, setSemesterFilter] = useState('All');
+  const [yearFilter, setYearFilter] = useState('All');
+  const [showFilters, setShowFilters] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState(null);
+
+  const programs = ['All', ...new Set(students.map(student => student.program))];
+  const semesters = ['All', 'First', 'Second', 'Summer'];
+  const schoolYears = ['All', ...new Set(students.map(student => student.schoolYear))];
 
   const filteredStudents = students.filter(student => {
     if (programFilter !== 'All' && student.program !== programFilter) return false;
     if (semesterFilter !== 'All' && student.semester !== semesterFilter) return false;
+    if (yearFilter !== 'All' && student.schoolYear !== yearFilter) return false;
     return student.concerns || student.solutions || student.recommendations || student.evaluation;
   });
 
-  const programs = ['All', ...new Set(students.map(student => student.program))];
-  const semesters = ['All', 'First', 'Second', 'Summer'];
+  const resetFilters = () => {
+    setProgramFilter('All');
+    setSemesterFilter('All');
+    setYearFilter('All');
+  };
+
+  const activeFiltersCount = [
+    programFilter, 
+    semesterFilter, 
+    yearFilter
+  ].filter(filter => filter !== 'All').length;
+
+  const handleRowClick = (studentId) => {
+    setExpandedStudent(expandedStudent === studentId ? null : studentId);
+  };
 
   const StatusIcon = ({ type }) => {
     const icons = {
@@ -51,58 +75,128 @@ function ConcernsSolutions({ students }) {
     return icons[type] || null;
   };
 
-  const handleRowClick = (studentId) => {
-    setExpandedStudent(expandedStudent === studentId ? null : studentId);
-  };
-
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography 
-        variant="h4" 
-        align="center" 
-        sx={{
-          mb: 4,
-          fontWeight: 'bold',
-          background: 'linear-gradient(45deg, #800000, #FFD700)',
-          backgroundClip: 'text',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-        }}
-      >
-        Concerns & Solutions
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography 
+          variant="h4" 
+          sx={{
+            fontWeight: 'bold',
+            background: 'linear-gradient(45deg, #800000, #FFD700)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          Concerns & Solutions
+        </Typography>
+        <Button
+          startIcon={<FilterList />}
+          onClick={() => setShowFilters(!showFilters)}
+          variant={showFilters ? "contained" : "outlined"}
+          color="primary"
+          sx={{ 
+            borderRadius: 2,
+            position: 'relative'
+          }}
+        >
+          Filters
+          {activeFiltersCount > 0 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: -8,
+                right: -8,
+                backgroundColor: '#FFD700',
+                color: '#800000',
+                borderRadius: '50%',
+                width: 20,
+                height: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+              }}
+            >
+              {activeFiltersCount}
+            </Box>
+          )}
+        </Button>
+      </Box>
 
-      {/* Filters */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6}>
-          <FormControl fullWidth>
-            <InputLabel>Program</InputLabel>
-            <Select
-              value={programFilter}
-              onChange={(e) => setProgramFilter(e.target.value)}
-              label="Program"
-            >
-              {programs.map(program => (
-                <MenuItem key={program} value={program}>{program}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <FormControl fullWidth>
-            <InputLabel>Semester</InputLabel>
-            <Select
-              value={semesterFilter}
-              onChange={(e) => setSemesterFilter(e.target.value)}
-              label="Semester"
-            >
-              {semesters.map(semester => (
-                <MenuItem key={semester} value={semester}>{semester}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-      </Grid>
+      <Collapse in={showFilters}>
+        <Card 
+          sx={{ 
+            mb: 3, 
+            p: 2,
+            borderRadius: 2,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
+              Filter Options
+            </Typography>
+            {activeFiltersCount > 0 && (
+              <Button
+                startIcon={<Clear />}
+                onClick={resetFilters}
+                size="small"
+                sx={{ color: '#800000' }}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </Box>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Program</InputLabel>
+                <Select
+                  value={programFilter}
+                  onChange={(e) => setProgramFilter(e.target.value)}
+                  label="Program"
+                >
+                  {programs.map(program => (
+                    <MenuItem key={program} value={program}>{program}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Semester</InputLabel>
+                <Select
+                  value={semesterFilter}
+                  onChange={(e) => setSemesterFilter(e.target.value)}
+                  label="Semester"
+                >
+                  {semesters.map(semester => (
+                    <MenuItem key={semester} value={semester}>{semester}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>School Year</InputLabel>
+                <Select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  label="School Year"
+                >
+                  {schoolYears.map(year => (
+                    <MenuItem key={year} value={year}>{year}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </Card>
+      </Collapse>
 
       {/* Table View */}
       <TableContainer 
