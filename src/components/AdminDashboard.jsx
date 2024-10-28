@@ -274,31 +274,52 @@ function AdminDashboard() {
                     Recent Activity
                   </Typography>
                 </Box>
-                {stats.recentActivity.length > 0 ? (
-                  <List>
-                    {stats.recentActivity.map((activity, index) => (
-                      <React.Fragment key={index}>
-                        <ListItem sx={{ py: 2 }}>
-                          <ListItemText
-                            primary={
-                              <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
-                                {`${activity.name} - ${activity.program}`}
-                              </Typography>
-                            }
-                            secondary={
-                              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-                                {`${activity.partnerCompany} (${new Date(activity.startDate).toLocaleDateString()} - ${new Date(activity.endDate).toLocaleDateString()})`}
-                              </Typography>
-                            }
-                          />
-                        </ListItem>
-                        {index < stats.recentActivity.length - 1 && <Divider />}
-                      </React.Fragment>
-                    ))}
-                  </List>
-                ) : (
-                  <Typography variant="body1">No recent activity to display.</Typography>
-                )}
+                <Box 
+                  sx={{ 
+                    maxHeight: '300px', // Fixed height for scrollable area
+                    overflowY: 'auto', // Enable vertical scrolling
+                    '&::-webkit-scrollbar': {
+                      width: '8px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: '#f1f1f1',
+                      borderRadius: '4px',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: '#800000',
+                      borderRadius: '4px',
+                      '&:hover': {
+                        background: '#600000',
+                      },
+                    },
+                  }}
+                >
+                  {stats.recentActivity.length > 0 ? (
+                    <List>
+                      {stats.recentActivity.map((activity, index) => (
+                        <React.Fragment key={index}>
+                          <ListItem sx={{ py: 2 }}>
+                            <ListItemText
+                              primary={
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                                  {`${activity.name} - ${activity.program}`}
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+                                  {`${activity.partnerCompany} (${new Date(activity.startDate).toLocaleDateString()} - ${new Date(activity.endDate).toLocaleDateString()})`}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          {index < stats.recentActivity.length - 1 && <Divider />}
+                        </React.Fragment>
+                      ))}
+                    </List>
+                  ) : (
+                    <Typography variant="body1">No recent activity to display.</Typography>
+                  )}
+                </Box>
               </CardContent>
             </StyledCard>
           </Grid>
