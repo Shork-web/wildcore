@@ -1,0 +1,102 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cit-logo {
+    animation:cit-logo-spin infinite 20s ;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes cit-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.navbar-brand {
+  padding-left: 0 !important; 
+  margin-left: 0 !important;
+}
+
+.navbar .logo {
+  width: 150px !important; 
+  height: auto !important; 
+  margin-left: 0 !important; 
+}
+
+.nav-link {
+  color: white;
+}
+
+.navbar-nav {
+  margin-left: auto; 
+}
+
+.cit-logo-wrapper {
+  position: fixed; /* Changed from absolute to fixed */
+  bottom: -150px;
+  left: -80px;
+  opacity: 0.7;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.cit-logo {
+  width: 400px; 
+  filter: blur(1px) grayscale(40%); 
+}
+
+.auth-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 80px 20px;
+  transition: opacity 0.4s ease-in-out;
+}
+
+button {
+  border-radius: 10px;
+  border: none;
+  max-height: 50px;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  .cit-logo-wrapper {
+    bottom: -100px;
+    left: -60px;
+  }
+  
+  .cit-logo {
+    width: 300px;
+  }
+}
+
+@media (max-height: 600px) {
+  .auth-wrapper {
+    padding: 40px 15px;
+  }
+}
