@@ -236,8 +236,76 @@ function CoreContent({ handleLogout }) {
           onClose={closeDialog}
           maxWidth="md"
           fullWidth
+          PaperProps={{
+            sx: {
+              maxHeight: '90vh', // Set maximum height to 90% of viewport height
+              m: 2, // Add margin around the dialog
+              borderRadius: 2,
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            }
+          }}
         >
-          <StudentForm addStudent={addStudent} initialData={editingStudent} />
+          <DialogTitle
+            sx={{
+              background: 'linear-gradient(45deg, #800000, #FFD700)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              fontWeight: 'bold',
+              borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            }}
+          >
+            Edit Student Information
+          </DialogTitle>
+          <DialogContent
+            sx={{
+              p: 3,
+              overflowY: 'auto',
+              '&::-webkit-scrollbar': {
+                width: '8px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: '#f1f1f1',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#800000',
+                borderRadius: '4px',
+                '&:hover': {
+                  background: '#600000',
+                },
+              },
+            }}
+          >
+            <StudentForm addStudent={addStudent} initialData={editingStudent} />
+          </DialogContent>
+          <DialogActions
+            sx={{
+              borderTop: '1px solid rgba(0, 0, 0, 0.12)',
+              position: 'sticky',
+              bottom: 0,
+              bgcolor: 'background.paper',
+              p: 2,
+            }}
+          >
+            <Button 
+              onClick={closeDialog}
+              sx={{ 
+                color: '#800000',
+                '&:hover': {
+                  backgroundColor: 'rgba(128, 0, 0, 0.1)'
+                }
+              }}
+            >
+              Cancel
+            </Button>
+          </DialogActions>
         </Dialog>
       )}
 

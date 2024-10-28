@@ -82,9 +82,21 @@ function StudentForm({ addStudent, initialData = {} }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    addStudent({ ...studentData });
+    
+    // Create a copy of the form data
+    const formattedData = {
+      ...studentData,
+      // Set empty feedback fields to "N/A"
+      concerns: studentData.concerns.trim() || 'N/A',
+      solutions: studentData.solutions.trim() || 'N/A',
+      recommendations: studentData.recommendations.trim() || 'N/A',
+      evaluation: studentData.evaluation.trim() || 'N/A',
+    };
+
+    addStudent(formattedData);
     setSnackbarMessage(isEditing ? 'Student updated successfully!' : 'Student added successfully!');
     setOpenSnackbar(true);
+
     if (!isEditing) {
       setStudentData({
         name: '',
@@ -111,6 +123,25 @@ function StudentForm({ addStudent, initialData = {} }) {
     setOpenSnackbar(false);
   };
 
+  // Define available programs
+  const programs = [
+    'BSIT',
+    'BSCS',
+    'BSIS',
+    'BSEMC',
+    'BSCpE',
+    'BSCE',
+    'BSEE',
+    'BSME',
+    'BSA',
+    'BSBA',
+    'BSN',
+    'BSMT',
+    'BSPT',
+    'BSPharma',
+    'BSRT'
+  ];
+
   return (
     <StyledCard elevation={0}>
       <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
@@ -122,14 +153,26 @@ function StudentForm({ addStudent, initialData = {} }) {
           <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
               <SectionTitle>Personal Information</SectionTitle>
-              <CompactTextField
+              <TextField
                 fullWidth
+                required
                 label="Student Name"
                 name="name"
                 value={studentData.name}
                 onChange={handleChange}
-                required
                 size="small"
+                sx={{
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
+                    height: '40px',
+                  },
+                  '& .MuiInputLabel-root': {
+                    transform: 'translate(14px, 10px) scale(0.75)',
+                  },
+                  '& .MuiInputLabel-shrink': {
+                    transform: 'translate(14px, -6px) scale(0.75)',
+                  },
+                }}
               />
               <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
                 <InputLabel>Gender</InputLabel>
@@ -138,6 +181,9 @@ function StudentForm({ addStudent, initialData = {} }) {
                   value={studentData.gender}
                   onChange={handleChange}
                   label="Gender"
+                  sx={{
+                    height: '40px',
+                  }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
@@ -149,15 +195,21 @@ function StudentForm({ addStudent, initialData = {} }) {
 
             <Grid item xs={12} md={6}>
               <SectionTitle>Academic Information</SectionTitle>
-              <CompactTextField
-                fullWidth
-                label="Program"
-                name="program"
-                value={studentData.program}
-                onChange={handleChange}
-                required
-                size="small"
-              />
+              <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
+                <InputLabel>Program</InputLabel>
+                <Select
+                  name="program"
+                  value={studentData.program}
+                  onChange={handleChange}
+                  label="Program"
+                >
+                  {programs.map((program) => (
+                    <MenuItem key={program} value={program}>
+                      {program}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
