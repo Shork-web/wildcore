@@ -11,10 +11,10 @@ function Navigation() {
     return (
       <AppBar position="static">
         <Toolbar>
-          <Button color="inherit" component={Link} to="/login">
+          <Button color="inherit" component={Link} to="/sign-in">
             Login
           </Button>
-          <Button color="inherit" component={Link} to="/signup">
+          <Button color="inherit" component={Link} to="/sign-up">
             Sign Up
           </Button>
         </Toolbar>
@@ -50,7 +50,7 @@ function Navigation() {
               Add Student
             </Button>
             <Button color="inherit" component={Link} to="/students">
-              History
+              Student List
             </Button>
           </>
         )}

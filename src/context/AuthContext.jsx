@@ -1,37 +1,32 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { auth, db } from '../firebase-config';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import Auth from '../classes/Auth';
 
 export const AuthContext = createContext();
 export const StudentsContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [userRole, setUserRole] = useState(null);
+  const [auth] = useState(new Auth());
   const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      
-      if (user) {
-        // Get user role from Firestore
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const role = userDoc.data().role;
-          setUserRole(role);
-        }
+    const unsubscribe = auth.onAuthStateChanged((userState) => {
+      if (userState) {
+        setCurrentUser(userState.user);
+        setUserRole(userState.role);
       } else {
+        setCurrentUser(null);
         setUserRole(null);
       }
       setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
+  }, [auth]);
 
   const value = {
+    auth,
     currentUser,
     userRole,
     loading

@@ -59,6 +59,10 @@ export default function ForgotPassword() {
     }
   };
 
+  const handleChange = (e) => {
+    setEmail(e.target.value);
+  };
+
   return (
     <Box sx={{ 
       minHeight: '100vh',
@@ -162,7 +166,7 @@ export default function ForgotPassword() {
                   autoComplete="email"
                   autoFocus
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       '&:hover fieldset': {

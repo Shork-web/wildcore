@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import { Email, Lock, Visibility, VisibilityOff, School, AdminPanelSettings } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-import Login from '../classes/Login';
 import Auth from '../classes/Auth';
 
 // Styles object to keep JSX clean
@@ -76,7 +75,12 @@ const styles = {
 
 export default function LoginComponent({ onLogin }) {
   // State management
-  const [loginData] = useState(new Login());
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password: '',
+    accountType: 'instructor',
+    showPassword: false
+  });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -88,7 +92,7 @@ export default function LoginComponent({ onLogin }) {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
-    if (!loginData.isValid()) {
+    if (!loginData.email || !loginData.password) {
       setMessage({ type: 'error', text: 'Please enter valid credentials' });
       return;
     }
@@ -114,16 +118,25 @@ export default function LoginComponent({ onLogin }) {
   };
 
   const handleChange = useCallback((e) => {
-    loginData[e.target.name] = e.target.value;
-  }, [loginData]);
+    setLoginData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  }, []);
 
   const handleAccountTypeChange = useCallback((type) => {
-    loginData.accountType = type;
-  }, [loginData]);
+    setLoginData(prev => ({
+      ...prev,
+      accountType: type
+    }));
+  }, []);
 
   const togglePasswordVisibility = useCallback(() => {
-    loginData.togglePasswordVisibility();
-  }, [loginData]);
+    setLoginData(prev => ({
+      ...prev,
+      showPassword: !prev.showPassword
+    }));
+  }, []);
 
   const handleForgotPassword = useCallback((e) => {
     e.preventDefault();

@@ -16,27 +16,47 @@ import {
 } from '@mui/material';
 import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import User from '../classes/User';
 import Auth from '../classes/Auth';
 
 export default function SignUp() {
-  const [user] = useState(new User());
-  const auth = new Auth();
-
+  const [userData, setUserData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    idNumber: '',
+    phoneNumber: '',
+    accountType: 'instructor',
+    adminKey: ''
+  });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const auth = new Auth();
+
+  const validatePasswords = () => {
+    return userData.password === userData.confirmPassword;
+  };
+
+  const validateAdminKey = () => {
+    if (userData.accountType === 'admin') {
+      // Replace with your actual admin key validation
+      return userData.adminKey === 'your-admin-key';
+    }
+    return true;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
-    if (!user.validatePasswords()) {
+    if (!validatePasswords()) {
       setMessage({ type: 'error', text: 'Passwords do not match' });
       return;
     }
 
-    if (!user.validateAdminKey()) {
+    if (!validateAdminKey()) {
       setMessage({ type: 'error', text: 'Invalid Admin Key' });
       return;
     }
@@ -44,7 +64,22 @@ export default function SignUp() {
     setIsSubmitting(true);
 
     try {
-      const result = await auth.signUp(user);
+      const userForAuth = {
+        ...userData,
+        role: userData.accountType,
+        toJSON: function() {
+          return {
+            firstName: this.firstName,
+            lastName: this.lastName,
+            email: this.email,
+            idNumber: this.idNumber,
+            phoneNumber: this.phoneNumber,
+            role: this.role
+          };
+        }
+      };
+
+      const result = await auth.signUp(userForAuth);
       if (result.success) {
         setMessage({ type: 'success', text: 'Account created successfully!' });
         setTimeout(() => navigate('/sign-in'), 2000);
@@ -57,14 +92,18 @@ export default function SignUp() {
   };
 
   const handleChange = (e) => {
-    user[e.target.name] = e.target.value;
+    setUserData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
   };
 
   const handleAccountTypeChange = (type) => {
-    user.accountType = type;
-    if (type !== 'admin') {
-      user.adminKey = '';
-    }
+    setUserData(prev => ({
+      ...prev,
+      accountType: type,
+      adminKey: type !== 'admin' ? '' : prev.adminKey
+    }));
   };
 
   return (
@@ -123,8 +162,8 @@ export default function SignUp() {
               onClick={() => handleAccountTypeChange('instructor')}
               sx={{
                 flex: 1,
-                color: user.accountType === 'instructor' ? '#800000' : '#555',
-                borderBottom: user.accountType === 'instructor' ? '3px solid #800000' : 'none',
+                color: userData.accountType === 'instructor' ? '#800000' : '#555',
+                borderBottom: userData.accountType === 'instructor' ? '3px solid #800000' : 'none',
                 borderRadius: 0,
                 '&:hover': {
                   background: 'transparent',
@@ -141,8 +180,8 @@ export default function SignUp() {
               onClick={() => handleAccountTypeChange('admin')}
               sx={{
                 flex: 1,
-                color: user.accountType === 'admin' ? '#800000' : '#555',
-                borderBottom: user.accountType === 'admin' ? '3px solid #800000' : 'none',
+                color: userData.accountType === 'admin' ? '#800000' : '#555',
+                borderBottom: userData.accountType === 'admin' ? '3px solid #800000' : 'none',
                 borderRadius: 0,
                 '&:hover': {
                   background: 'transparent',
@@ -169,7 +208,7 @@ export default function SignUp() {
                   name="firstName"
                   label="First Name"
                   autoFocus
-                  value={user.firstName}
+                  value={userData.firstName}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -197,7 +236,7 @@ export default function SignUp() {
                   fullWidth
                   name="lastName"
                   label="Last Name"
-                  value={user.lastName}
+                  value={userData.lastName}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -225,7 +264,7 @@ export default function SignUp() {
                   fullWidth
                   name="idNumber"
                   label="ID Number"
-                  value={user.idNumber}
+                  value={userData.idNumber}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -253,7 +292,7 @@ export default function SignUp() {
                   fullWidth
                   name="phoneNumber"
                   label="Phone Number"
-                  value={user.phoneNumber}
+                  value={userData.phoneNumber}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -290,7 +329,7 @@ export default function SignUp() {
                   name="email"
                   label="Email Address"
                   type="email"
-                  value={user.email}
+                  value={userData.email}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -319,7 +358,7 @@ export default function SignUp() {
                   name="password"
                   label="Password"
                   type="password"
-                  value={user.password}
+                  value={userData.password}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -348,7 +387,7 @@ export default function SignUp() {
                   name="confirmPassword"
                   label="Confirm Password"
                   type="password"
-                  value={user.confirmPassword}
+                  value={userData.confirmPassword}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -372,14 +411,14 @@ export default function SignUp() {
               </Grid>
             </Grid>
 
-            <Collapse in={user.accountType === 'admin'}>
+            <Collapse in={userData.accountType === 'admin'}>
               <TextField
-                required={user.accountType === 'admin'}
+                required={userData.accountType === 'admin'}
                 fullWidth
                 name="adminKey"
                 label="Admin Key"
                 type="password"
-                value={user.adminKey}
+                value={userData.adminKey}
                 onChange={handleChange}
                 sx={{
                   mt: 3,
