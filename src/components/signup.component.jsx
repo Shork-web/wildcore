@@ -20,8 +20,7 @@ import User from '../classes/User';
 import Auth from '../classes/Auth';
 
 export default function SignUp() {
-  const [user, setUser] = useState(new User());
-  const [formState, setFormState] = useState({});
+  const [user] = useState(new User());
   const auth = new Auth();
 
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -59,7 +58,6 @@ export default function SignUp() {
 
   const handleChange = (e) => {
     user[e.target.name] = e.target.value;
-    setFormState({ ...formState });
   };
 
   const handleAccountTypeChange = (type) => {
@@ -67,7 +65,6 @@ export default function SignUp() {
     if (type !== 'admin') {
       user.adminKey = '';
     }
-    setFormState({ ...formState });
   };
 
   return (

@@ -77,7 +77,6 @@ const styles = {
 export default function LoginComponent({ onLogin }) {
   // State management
   const [loginData] = useState(new Login());
-  const [formState, setFormState] = useState({});
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -116,17 +115,14 @@ export default function LoginComponent({ onLogin }) {
 
   const handleChange = useCallback((e) => {
     loginData[e.target.name] = e.target.value;
-    setFormState(prev => ({ ...prev }));
   }, [loginData]);
 
   const handleAccountTypeChange = useCallback((type) => {
     loginData.accountType = type;
-    setFormState(prev => ({ ...prev }));
   }, [loginData]);
 
   const togglePasswordVisibility = useCallback(() => {
     loginData.togglePasswordVisibility();
-    setFormState(prev => ({ ...prev }));
   }, [loginData]);
 
   const handleForgotPassword = useCallback((e) => {

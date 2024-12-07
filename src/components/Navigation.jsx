@@ -1,16 +1,36 @@
 import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from '../context/AuthContext';
 import { AppBar, Toolbar, Button } from '@mui/material';
 
 function Navigation() {
-  const { userRole, toggleUserRole } = useContext(AuthContext);
+  const { userRole, currentUser } = useContext(AuthContext);
+
+  // If not logged in, show only login/signup buttons
+  if (!currentUser) {
+    return (
+      <AppBar position="static">
+        <Toolbar>
+          <Button color="inherit" component={Link} to="/login">
+            Login
+          </Button>
+          <Button color="inherit" component={Link} to="/signup">
+            Sign Up
+          </Button>
+        </Toolbar>
+      </AppBar>
+    );
+  }
 
   return (
     <AppBar position="static">
       <Toolbar>
-        {/* Common Links */}
-        <Button color="inherit" component={Link} to="/">
+        {/* Dashboard link based on role */}
+        <Button 
+          color="inherit" 
+          component={Link} 
+          to={userRole === 'admin' ? '/admin' : '/dashboard'}
+        >
           Dashboard
         </Button>
 
@@ -20,12 +40,11 @@ function Navigation() {
             <Button color="inherit" component={Link} to="/students">
               Student List
             </Button>
-            {/* Add other admin tabs here, excluding 'Add Student' */}
           </>
         )}
 
-        {/* User Links */}
-        {userRole === 'user' && (
+        {/* Instructor Links */}
+        {userRole === 'instructor' && (
           <>
             <Button color="inherit" component={Link} to="/add-student">
               Add Student
@@ -35,11 +54,6 @@ function Navigation() {
             </Button>
           </>
         )}
-
-        {/* Toggle Role Button (for testing) */}
-        <Button color="inherit" onClick={toggleUserRole} style={{ marginLeft: 'auto' }}>
-          Switch to {userRole === 'admin' ? 'User' : 'Admin'}
-        </Button>
       </Toolbar>
     </AppBar>
   );

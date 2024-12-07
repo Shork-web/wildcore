@@ -1,7 +1,8 @@
 import React from 'react';
 import { Container, Grid, Typography, Paper, Box, Card, CardContent, IconButton, Divider, Chip } from '@mui/material';
 import { styled } from '@mui/system';
-import { Assignment, History, HelpOutline, School, ArrowForward, Notifications, TrendingUp } from '@mui/icons-material';
+import { Assignment, History, School, ArrowForward, Notifications, TrendingUp, HelpOutline } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 const DashboardCard = styled(Card)(({ theme }) => ({
   height: '100%',
@@ -30,7 +31,15 @@ const IconWrapper = styled(Box)(({ theme }) => ({
   marginBottom: theme.spacing(2),
 }));
 
-function FeatureCard({ icon, title, description, action }) {
+function FeatureCard({ icon, title, description, action, path }) {
+  const navigate = useNavigate();
+
+  const handleNavigate = () => {
+    if (path) {
+      navigate(path);
+    }
+  };
+
   return (
     <DashboardCard elevation={2}>
       <CardContent>
@@ -41,7 +50,18 @@ function FeatureCard({ icon, title, description, action }) {
         </Typography>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Chip label={action} color="primary" size="small" />
-          <IconButton size="small" color="primary">
+          <IconButton 
+            size="small" 
+            color="primary"
+            onClick={handleNavigate}
+            sx={{ 
+              '&:hover': { 
+                backgroundColor: 'rgba(128, 0, 0, 0.04)',
+                transform: 'scale(1.1)'
+              },
+              transition: 'transform 0.2s ease-in-out'
+            }}
+          >
             <ArrowForward />
           </IconButton>
         </Box>
@@ -76,14 +96,16 @@ function UserDashboard() {
                 title="Add New Student"
                 description="Create a new student record with program details and internship information."
                 action="Add Student"
+                path="/add-student"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <FeatureCard
                 icon={<History />}
-                title="View Student History"
+                title="Review Student List"
                 description="Review all previously submitted student records and verify their accuracy."
-                action="View History"
+                action="View List"
+                path="/students"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -92,6 +114,7 @@ function UserDashboard() {
                 title="Update Records"
                 description="Edit existing records to keep the information up-to-date and accurate."
                 action="Update Records"
+                path="/students"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -108,29 +131,32 @@ function UserDashboard() {
           <Paper elevation={2} sx={{ p: 3, borderRadius: 4, height: '100%' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6" color="primary" fontWeight="bold">
-                Quick Insights
+                Getting Started
               </Typography>
               <TrendingUp color="primary" />
             </Box>
             <Divider sx={{ mb: 2 }} />
             <Typography variant="body2" paragraph>
-              • 85% of students completed their internships successfully this quarter.
+              • Click "Add New Student" to create a new internship record with complete student details.
             </Typography>
             <Typography variant="body2" paragraph>
-              • Top 3 industries: Tech (40%), Finance (25%), Healthcare (20%).
+              • Use "Student List" to access and review all submitted records.
             </Typography>
             <Typography variant="body2" paragraph>
-              • Average internship duration: 3.5 months.
+              • Select "Update Records" to modify existing student information.
             </Typography>
             <Divider sx={{ my: 2 }} />
             <Typography variant="subtitle2" color="primary" gutterBottom>
               Pro Tips
             </Typography>
             <Typography variant="body2" paragraph>
-              • Use advanced filters to generate targeted reports.
+              • Fill out all required fields marked with an asterisk (*).
+            </Typography>
+            <Typography variant="body2" paragraph>
+              • Keep student contact information up to date.
             </Typography>
             <Typography variant="body2">
-              • Set up email alerts for important student milestones.
+              • Regularly review and verify submitted records.
             </Typography>
           </Paper>
         </Grid>

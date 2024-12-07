@@ -21,7 +21,7 @@ import {
 import { Email } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
-import { app } from '../firebaseConfig';
+import { app } from '../firebase-config';
 import '../css/login.css';
 import citLogo from '../assets/citlogo.png';
 import logo from '../assets/wordlogo.png';

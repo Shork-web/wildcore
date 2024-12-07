@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import { Container, Dialog, Grid, Button, Box, DialogActions, DialogContent, DialogContentText, DialogTitle, CssBaseline } from '@mui/material';
 import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import StudentForm from './components/StudentForm';
@@ -10,6 +10,8 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { AppBar, Toolbar } from '@mui/material';
 import logo from './assets/wordlogo.png'; 
 import ConcernsSolutions from './components/ConcernsSolutions';
+import { AuthContext, AuthProvider, StudentsContext } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -31,34 +33,6 @@ const theme = createTheme({
     },
   },
 });
-
-// Create the context for user role
-export const AuthContext = createContext();
-
-// Create a provider component for user role management
-export const AuthProvider = ({ children }) => {
-  const [userRole, setUserRole] = useState('user'); // 'admin' or 'user'
-
-  // Function to toggle user role
-  const toggleUserRole = () => {
-    setUserRole((prevRole) => (prevRole === 'admin' ? 'user' : 'admin'));
-  };
-
-  return (
-    <AuthContext.Provider value={{ userRole, toggleUserRole }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-// ProtectedRoute component to guard routes based on user roles
-const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { userRole } = useContext(AuthContext);
-  return allowedRoles.includes(userRole) ? children : <Navigate to="/" />;
-};
-
-// Create a new context for students data
-export const StudentsContext = createContext();
 
 function Core() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -94,12 +68,11 @@ function Core() {
 
 function CoreContent({ handleLogout }) {
   const { students, updateStudents } = useContext(StudentsContext);
+  const { userRole } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [editingStudent, setEditingStudent] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-  const navigate = useNavigate();
-
-  const { userRole, toggleUserRole } = useContext(AuthContext);
 
   // Add Student Function
   const addStudent = (student) => {
@@ -173,19 +146,16 @@ function CoreContent({ handleLogout }) {
               </Button>
             </>
           )}
-          {userRole === 'user' && (
+          {userRole === 'instructor' && (
             <>
               <Button color="inherit" component={Link} to="/add-student">
                 Student Form
               </Button>
               <Button color="inherit" component={Link} to="/students">
-                Student History
+                Student List
               </Button>
             </>
           )}
-          <Button color="inherit" onClick={toggleUserRole}>
-            Switch to {userRole === 'admin' ? 'User' : 'Admin'}
-          </Button>
           <Button color="inherit" onClick={openLogoutDialog}>
             Logout
           </Button>
@@ -200,7 +170,7 @@ function CoreContent({ handleLogout }) {
             <Route
               path="/students"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'user']}>
+                <ProtectedRoute allowedRoles={['admin', 'instructor']}>
                   <StudentList
                     students={students}
                     updateStudent={editStudent}
@@ -220,7 +190,7 @@ function CoreContent({ handleLogout }) {
             <Route
               path="/add-student"
               element={
-                <ProtectedRoute allowedRoles={['user']}>
+                <ProtectedRoute allowedRoles={['instructor']}>
                   <StudentForm addStudent={addStudent} />
                 </ProtectedRoute>
               }
@@ -230,84 +200,82 @@ function CoreContent({ handleLogout }) {
       </Container>
 
       {/* Edit Student Dialog */}
-      {editingStudent && (
-        <Dialog
-          open={isDialogOpen}
-          onClose={closeDialog}
-          maxWidth="md"
-          fullWidth
-          PaperProps={{
-            sx: {
-              maxHeight: '90vh', // Set maximum height to 90% of viewport height
-              m: 2, // Add margin around the dialog
-              borderRadius: 2,
-              background: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(10px)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            }
+      <Dialog
+        open={isDialogOpen}
+        onClose={closeDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+            m: 2,
+            borderRadius: 2,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          }
+        }}
+      >
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(45deg, #800000, #FFD700)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: 'bold',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 1,
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
           }}
         >
-          <DialogTitle
-            sx={{
-              background: 'linear-gradient(45deg, #800000, #FFD700)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              fontWeight: 'bold',
-              borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
-              position: 'sticky',
-              top: 0,
-              zIndex: 1,
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          Edit Student Information
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            p: 3,
+            overflowY: 'auto',
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#f1f1f1',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#800000',
+              borderRadius: '4px',
+              '&:hover': {
+                background: '#600000',
+              },
+            },
+          }}
+        >
+          <StudentForm addStudent={addStudent} initialData={editingStudent} />
+        </DialogContent>
+        <DialogActions
+          sx={{
+            borderTop: '1px solid rgba(0, 0, 0, 0.12)',
+            position: 'sticky',
+            bottom: 0,
+            bgcolor: 'background.paper',
+            p: 2,
+          }}
+        >
+          <Button 
+            onClick={closeDialog}
+            sx={{ 
+              color: '#800000',
+              '&:hover': {
+                backgroundColor: 'rgba(128, 0, 0, 0.1)'
+              }
             }}
           >
-            Edit Student Information
-          </DialogTitle>
-          <DialogContent
-            sx={{
-              p: 3,
-              overflowY: 'auto',
-              '&::-webkit-scrollbar': {
-                width: '8px',
-              },
-              '&::-webkit-scrollbar-track': {
-                background: '#f1f1f1',
-                borderRadius: '4px',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: '#800000',
-                borderRadius: '4px',
-                '&:hover': {
-                  background: '#600000',
-                },
-              },
-            }}
-          >
-            <StudentForm addStudent={addStudent} initialData={editingStudent} />
-          </DialogContent>
-          <DialogActions
-            sx={{
-              borderTop: '1px solid rgba(0, 0, 0, 0.12)',
-              position: 'sticky',
-              bottom: 0,
-              bgcolor: 'background.paper',
-              p: 2,
-            }}
-          >
-            <Button 
-              onClick={closeDialog}
-              sx={{ 
-                color: '#800000',
-                '&:hover': {
-                  backgroundColor: 'rgba(128, 0, 0, 0.1)'
-                }
-              }}
-            >
-              Cancel
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Logout Confirmation Dialog */}
       <Dialog

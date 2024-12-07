@@ -9,7 +9,7 @@ import {
   PeopleAlt, School, WomanRounded, ManRounded,
   TrendingUp, Assessment, CalendarToday
 } from '@mui/icons-material';
-import { StudentsContext } from '../Core';
+import { StudentsContext } from '../context/AuthContext';
 
 const StyledCard = styled(Card)(({ theme }) => ({
   height: '100%',

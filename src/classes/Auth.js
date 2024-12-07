@@ -1,6 +1,6 @@
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
-import { app } from '../firebaseConfig';
+import { app } from '../firebase-config';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
