@@ -1,12 +1,16 @@
 import React from "react";
-import { BrowserRouter as Router } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Core from "./Core";
+import ForgotPassword from './components/forgotpw.component';
 
 function App() {
   return (
     <Router>
       <div className="App">
-        <Core />
+        <Routes>
+          <Route path="/*" element={<Core />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+        </Routes>
       </div>
     </Router>
   );

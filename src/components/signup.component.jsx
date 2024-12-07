@@ -10,32 +10,64 @@ import {
   Grid,
   InputAdornment,
   Fade,
-  Divider
+  Divider,
+  Collapse,
+  Alert
 } from '@mui/material';
-import { Person, Email, Lock, School, Phone } from '@mui/icons-material'; // Removed Home icon
-import { Link as RouterLink } from 'react-router-dom';
+import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey } from '@mui/icons-material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import User from '../classes/User';
+import Auth from '../classes/Auth';
 
 export default function SignUp() {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    idNumber: '',
-    phoneNumber: '' // Removed address
-  });
+  const [user, setUser] = useState(new User());
+  const [formState, setFormState] = useState({});
+  const auth = new Auth();
 
-  const handleSubmit = (e) => {
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log(formData);
+    setMessage({ type: '', text: '' });
+
+    if (!user.validatePasswords()) {
+      setMessage({ type: 'error', text: 'Passwords do not match' });
+      return;
+    }
+
+    if (!user.validateAdminKey()) {
+      setMessage({ type: 'error', text: 'Invalid Admin Key' });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await auth.signUp(user);
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Account created successfully!' });
+        setTimeout(() => navigate('/sign-in'), 2000);
+      } else {
+        setMessage({ type: 'error', text: result.error });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    user[e.target.name] = e.target.value;
+    setFormState({ ...formState });
+  };
+
+  const handleAccountTypeChange = (type) => {
+    user.accountType = type;
+    if (type !== 'admin') {
+      user.adminKey = '';
+    }
+    setFormState({ ...formState });
   };
 
   return (
@@ -79,6 +111,55 @@ export default function SignUp() {
             Create Account
           </Typography>
 
+          {message.text && (
+            <Alert severity={message.type} sx={{ mb: 2, width: '100%' }}>
+              {message.text}
+            </Alert>
+          )}
+
+          <Typography variant="h6" sx={{ mb: 2, color: '#800000' }}>
+            Register Type
+          </Typography>
+
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+            <Button
+              onClick={() => handleAccountTypeChange('instructor')}
+              sx={{
+                flex: 1,
+                color: user.accountType === 'instructor' ? '#800000' : '#555',
+                borderBottom: user.accountType === 'instructor' ? '3px solid #800000' : 'none',
+                borderRadius: 0,
+                '&:hover': {
+                  background: 'transparent',
+                },
+                transition: 'background 0.3s ease',
+                padding: '10px 20px',
+                textTransform: 'uppercase',
+              }}
+            >
+              <School sx={{ mr: 1 }} />
+              Instructor
+            </Button>
+            <Button
+              onClick={() => handleAccountTypeChange('admin')}
+              sx={{
+                flex: 1,
+                color: user.accountType === 'admin' ? '#800000' : '#555',
+                borderBottom: user.accountType === 'admin' ? '3px solid #800000' : 'none',
+                borderRadius: 0,
+                '&:hover': {
+                  background: 'transparent',
+                },
+                transition: 'background 0.3s ease',
+                padding: '10px 20px',
+                textTransform: 'uppercase',
+              }}
+            >
+              <AdminPanelSettings sx={{ mr: 1 }} />
+              Admin
+            </Button>
+          </Box>
+
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, color: '#800000' }}>
               Personal Information
@@ -91,7 +172,7 @@ export default function SignUp() {
                   name="firstName"
                   label="First Name"
                   autoFocus
-                  value={formData.firstName}
+                  value={user.firstName}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -119,7 +200,7 @@ export default function SignUp() {
                   fullWidth
                   name="lastName"
                   label="Last Name"
-                  value={formData.lastName}
+                  value={user.lastName}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -147,7 +228,7 @@ export default function SignUp() {
                   fullWidth
                   name="idNumber"
                   label="ID Number"
-                  value={formData.idNumber}
+                  value={user.idNumber}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -175,7 +256,7 @@ export default function SignUp() {
                   fullWidth
                   name="phoneNumber"
                   label="Phone Number"
-                  value={formData.phoneNumber}
+                  value={user.phoneNumber}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -212,7 +293,7 @@ export default function SignUp() {
                   name="email"
                   label="Email Address"
                   type="email"
-                  value={formData.email}
+                  value={user.email}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -241,7 +322,7 @@ export default function SignUp() {
                   name="password"
                   label="Password"
                   type="password"
-                  value={formData.password}
+                  value={user.password}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -270,7 +351,7 @@ export default function SignUp() {
                   name="confirmPassword"
                   label="Confirm Password"
                   type="password"
-                  value={formData.confirmPassword}
+                  value={user.confirmPassword}
                   onChange={handleChange}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -294,10 +375,42 @@ export default function SignUp() {
               </Grid>
             </Grid>
 
+            <Collapse in={user.accountType === 'admin'}>
+              <TextField
+                required={user.accountType === 'admin'}
+                fullWidth
+                name="adminKey"
+                label="Admin Key"
+                type="password"
+                value={user.adminKey}
+                onChange={handleChange}
+                sx={{
+                  mt: 3,
+                  '& .MuiOutlinedInput-root': {
+                    height: '56px',
+                    '&:hover fieldset': {
+                      borderColor: '#800000',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#800000',
+                    },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <VpnKey sx={{ color: '#800000' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Collapse>
+
             <Button
               type="submit"
               fullWidth
               variant="contained"
+              disabled={isSubmitting}
               sx={{
                 mt: 4,
                 mb: 3,
@@ -316,7 +429,7 @@ export default function SignUp() {
                 },
               }}
             >
-              Create Account
+              {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Button>
             <Grid container justifyContent="center">
               <Grid item>
