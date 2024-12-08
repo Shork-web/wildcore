@@ -23,17 +23,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!currentUser) {
-    // Save the attempted URL
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (!allowedRoles.includes(userRole)) {
-    // Only redirect if not already on a valid route
-    const defaultRoute = userRole === 'admin' ? '/admin' : '/dashboard';
-    if (location.pathname === defaultRoute) {
-      return children;
-    }
-    return <Navigate to={defaultRoute} replace />;
+    const redirectPath = userRole === 'admin' ? '/admin' : '/dashboard';
+    return <Navigate to={redirectPath} replace />;
   }
 
   return children;

@@ -1,12 +1,7 @@
 import React, { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import styled from 'styled-components';
-
-const MainDashboardContainer = styled('div')({
-  height: '100vh',
-  overflowY: 'auto',
-});
+import { Box, CircularProgress } from '@mui/material';
 
 function MainDashboard() {
   const { userRole, loading } = useContext(AuthContext);
@@ -14,20 +9,27 @@ function MainDashboard() {
 
   useEffect(() => {
     if (!loading) {
-      if (userRole === 'admin') {
-        navigate('/admin');
-      } else if (userRole === 'user' || userRole === 'instructor') {
-        navigate('/dashboard');
-      }
+      const path = userRole === 'admin' ? '/admin' : '/dashboard';
+      navigate(path, { replace: true });
     }
   }, [userRole, loading, navigate]);
 
-  // Show loading state while determining role
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh' 
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
   }
 
-  return null; // Component will redirect before rendering
+  return null;
 }
 
 export default MainDashboard;

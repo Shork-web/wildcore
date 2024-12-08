@@ -1,17 +1,28 @@
 import React, { useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { AppBar, Toolbar, Button } from '@mui/material';
+import { AppBar, Toolbar, Button, Box, IconButton } from '@mui/material';
+import { Menu as MenuIcon } from '@mui/icons-material';
 
 function Navigation() {
-  const { userRole, currentUser } = useContext(AuthContext);
+  const { userRole, currentUser, auth } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   // If not logged in, show only login/signup buttons
   if (!currentUser) {
     return (
       <AppBar position="static">
         <Toolbar>
-          <Button color="inherit" component={Link} to="/sign-in">
+          <Button color="inherit" component={Link} to="/login">
             Login
           </Button>
           <Button color="inherit" component={Link} to="/sign-up">
@@ -40,6 +51,9 @@ function Navigation() {
             <Button color="inherit" component={Link} to="/students">
               Student List
             </Button>
+            <Button color="inherit" component={Link} to="/concerns">
+              Concerns & Solutions
+            </Button>
           </>
         )}
 
@@ -54,6 +68,11 @@ function Navigation() {
             </Button>
           </>
         )}
+
+        {/* Logout Button */}
+        <Button color="inherit" onClick={handleLogout}>
+          Logout
+        </Button>
       </Toolbar>
     </AppBar>
   );

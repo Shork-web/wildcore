@@ -82,7 +82,7 @@ export default function SignUp() {
       const result = await auth.signUp(userForAuth);
       if (result.success) {
         setMessage({ type: 'success', text: 'Account created successfully!' });
-        setTimeout(() => navigate('/sign-in'), 2000);
+        setTimeout(() => navigate('/login', { replace: true }), 2000);
       } else {
         setMessage({ type: 'error', text: result.error });
       }

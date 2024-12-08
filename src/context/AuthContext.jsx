@@ -3,6 +3,7 @@ import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase-config';
 import Auth from '../classes/Auth';
+import { CircularProgress, Box } from '@mui/material';
 
 export const AuthContext = createContext();
 export const StudentsContext = createContext();
@@ -15,34 +16,49 @@ export const AuthProvider = ({ children }) => {
   const firebaseAuth = getAuth();
 
   useEffect(() => {
+    // Try to restore user data from localStorage
+    const storedUserData = localStorage.getItem('userData');
+    if (storedUserData) {
+      const { role } = JSON.parse(storedUserData);
+      setUserRole(role);
+    }
+
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-      if (user) {
-        try {
+      try {
+        if (user) {
           // Get user role from Firestore
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setCurrentUser(user);
             setUserRole(userData.role);
+            
+            // Update localStorage
+            localStorage.setItem('userData', JSON.stringify({
+              uid: user.uid,
+              role: userData.role
+            }));
           } else {
-            // Handle case where user document doesn't exist
             console.error('User document not found');
             setCurrentUser(null);
             setUserRole(null);
+            localStorage.removeItem('userData');
           }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
+        } else {
           setCurrentUser(null);
           setUserRole(null);
+          localStorage.removeItem('userData');
         }
-      } else {
+      } catch (error) {
+        console.error('Error fetching user data:', error);
         setCurrentUser(null);
         setUserRole(null);
+        localStorage.removeItem('userData');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    // Cleanup subscription
     return () => unsubscribe();
   }, [firebaseAuth]);
 
@@ -55,9 +71,24 @@ export const AuthProvider = ({ children }) => {
     setUserRole
   };
 
+  if (loading) {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh' 
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }; 

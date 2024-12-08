@@ -1,4 +1,4 @@
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 import { app } from '../firebase-config';
 
@@ -11,6 +11,12 @@ export default class Auth {
     this._db = db;
     this._currentUser = null;
     this._userRole = null;
+    
+    // Set persistence when class is instantiated
+    setPersistence(this._auth, browserLocalPersistence)
+      .catch((error) => {
+        console.error("Auth persistence error:", error);
+      });
   }
 
   // Getters
@@ -60,6 +66,9 @@ export default class Auth {
 
   async signIn(email, password, accountType) {
     try {
+      // First set persistence, then sign in
+      await setPersistence(this._auth, browserLocalPersistence);
+      
       const userCredential = await signInWithEmailAndPassword(this._auth, email, password);
       const userDoc = await getDoc(doc(this._db, 'users', userCredential.user.uid));
       
@@ -74,6 +83,12 @@ export default class Auth {
 
       this._currentUser = userCredential.user;
       this._userRole = userData.role;
+
+      // Store user data in localStorage for persistence
+      localStorage.setItem('userData', JSON.stringify({
+        uid: userCredential.user.uid,
+        role: userData.role
+      }));
 
       return { 
         success: true, 
@@ -102,6 +117,8 @@ export default class Auth {
       await this._auth.signOut();
       this._currentUser = null;
       this._userRole = null;
+      // Clear stored user data
+      localStorage.removeItem('userData');
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };

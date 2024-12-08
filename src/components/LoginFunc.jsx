@@ -114,7 +114,8 @@ function LoginFunc({ onLogin }) {
 
   const handleLogin = () => {
     onLogin();
-    navigate('/dashboard');
+    const from = location.state?.from?.pathname || '/dashboard';
+    navigate(from, { replace: true });
   };
 
   return (
@@ -152,7 +153,7 @@ function LoginFunc({ onLogin }) {
                 <Route path="/sign-in" element={<Login onLogin={handleLogin} />} />
                 <Route path="/sign-up" element={<SignUp />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/" element={<Navigate to="/sign-in" />} />
+                <Route path="/" element={<Navigate to="/sign-in" replace />} />
               </Routes>
             </CSSTransition>
           </TransitionGroup>

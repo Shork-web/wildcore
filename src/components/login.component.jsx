@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -85,6 +85,7 @@ export default function LoginComponent({ onLogin }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = new Auth();
 
   // Event handlers
@@ -108,7 +109,9 @@ export default function LoginComponent({ onLogin }) {
 
       if (result.success) {
         onLogin();
-        navigate('/dashboard');
+        // Get the redirect path from location state or default to dashboard
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
       } else {
         setMessage({ type: 'error', text: result.error });
       }

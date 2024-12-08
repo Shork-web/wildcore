@@ -34,7 +34,7 @@ const IconWrapper = styled(Box)(({ theme }) => ({
 function FeatureCard({ icon, title, description, action, path }) {
   const navigate = useNavigate();
 
-  const handleNavigate = () => {
+  const handleClick = () => {
     if (path) {
       navigate(path);
     }
@@ -53,7 +53,7 @@ function FeatureCard({ icon, title, description, action, path }) {
           <IconButton 
             size="small" 
             color="primary"
-            onClick={handleNavigate}
+            onClick={handleClick}
             sx={{ 
               '&:hover': { 
                 backgroundColor: 'rgba(128, 0, 0, 0.04)',
