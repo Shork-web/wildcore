@@ -1,25 +1,39 @@
 import React, { useContext } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { Box, CircularProgress } from '@mui/material';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { currentUser, userRole, loading } = useContext(AuthContext);
+  const location = useLocation();
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh' 
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (!currentUser) {
-    return <Navigate to="/login" />;
+    // Save the attempted URL
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (!allowedRoles.includes(userRole)) {
-    if (userRole === 'admin') {
-      return <Navigate to="/admin" />;
-    } else if (userRole === 'instructor') {
-      return <Navigate to="/dashboard" />;
+    // Only redirect if not already on a valid route
+    const defaultRoute = userRole === 'admin' ? '/admin' : '/dashboard';
+    if (location.pathname === defaultRoute) {
+      return children;
     }
-    return <Navigate to="/dashboard" />;
+    return <Navigate to={defaultRoute} replace />;
   }
 
   return children;

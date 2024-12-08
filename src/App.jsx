@@ -1,12 +1,19 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './components/AuthContext';
+import { AuthProvider, useAuthContext } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminDashboard from './components/AdminDashboard';
 import UserDashboard from './components/UserDashboard';
 import Navigation from './components/Navigation';
 import Login from './components/login.component';
 import Signup from './components/signup.component';
-import MainDashboard from './components/MainDashboard';
+import StudentList from './components/StudentList';
+import StudentForm from './components/StudentForm';
+import ConcernsSolutions from './components/ConcernsSolutions';
+
+function DefaultRoute() {
+  const { userRole } = useAuthContext();
+  return <Navigate to={userRole === 'admin' ? '/admin' : '/dashboard'} replace />;
+}
 
 function App() {
   return (
@@ -18,7 +25,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
-          {/* Protected Admin Route */}
+          {/* Protected Admin Routes */}
           <Route
             path="/admin"
             element={
@@ -27,8 +34,16 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/concerns"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <ConcernsSolutions />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Protected User/Instructor Route */}
+          {/* Protected Instructor Routes */}
           <Route
             path="/dashboard"
             element={
@@ -37,13 +52,41 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/add-student"
+            element={
+              <ProtectedRoute allowedRoles={['instructor']}>
+                <StudentForm />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Root route - will redirect based on role */}
+          {/* Shared Protected Routes */}
+          <Route
+            path="/students"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'instructor']}>
+                <StudentList />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Root route */}
           <Route
             path="/"
             element={
               <ProtectedRoute allowedRoles={['admin', 'instructor']}>
-                <MainDashboard />
+                <DefaultRoute />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch all route - redirect to appropriate dashboard */}
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'instructor']}>
+                <DefaultRoute />
               </ProtectedRoute>
             }
           />
