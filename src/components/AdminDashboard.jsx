@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Container, Grid, Typography, Box, List, ListItem, ListItemText, 
   useTheme, useMediaQuery, Card, CardContent, Divider,
@@ -9,7 +9,8 @@ import {
   PeopleAlt, School, WomanRounded, ManRounded,
   TrendingUp, Assessment, CalendarToday
 } from '@mui/icons-material';
-import { StudentsContext } from '../context/AuthContext';
+import { db } from '../firebase-config';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 
 const StyledCard = styled(Card)(({ theme }) => ({
   height: '100%',
@@ -44,29 +45,41 @@ const DashboardContainer = styled(Container)(({ theme }) => ({
   position: 'relative',
 }));
 
-function AdminDashboard() {
-  const { students } = useContext(StudentsContext);
-  const [stats, setStats] = useState({
-    totalStudents: 0,
-    genderDistribution: { Male: 0, Female: 0, Other: 0 },
-    programDistribution: {},
-    semesterDistribution: { First: 0, Second: 0, Summer: 0 },
-    recentActivity: []
-  });
+class DashboardManager {
+  constructor() {
+    this._students = [];
+    this._stats = {
+      totalStudents: 0,
+      genderDistribution: { Male: 0, Female: 0, Other: 0 },
+      programDistribution: {},
+      semesterDistribution: { First: 0, Second: 0, Summer: 0 },
+      recentActivity: []
+    };
+  }
 
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Getters
+  get students() { return [...this._students]; }
+  get stats() { return { ...this._stats }; }
+  get totalStudents() { return this._stats.totalStudents; }
+  get genderDistribution() { return { ...this._stats.genderDistribution }; }
+  get programDistribution() { return { ...this._stats.programDistribution }; }
+  get semesterDistribution() { return { ...this._stats.semesterDistribution }; }
+  get recentActivity() { return [...this._stats.recentActivity]; }
+  get totalPrograms() { return Object.keys(this._stats.programDistribution).length; }
 
-  useEffect(() => {
-    updateStats(students);
-  }, [students]);
+  // Setters
+  set students(data) {
+    this._students = [...data];
+    this._updateStats();
+  }
 
-  const updateStats = (data) => {
+  // Methods
+  _updateStats() {
     const genderDist = { Male: 0, Female: 0, Other: 0 };
     const programDist = {};
     const semesterDist = { First: 0, Second: 0, Summer: 0 };
 
-    data.forEach(student => {
+    this._students.forEach(student => {
       // Gender distribution
       genderDist[student.gender] = (genderDist[student.gender] || 0) + 1;
 
@@ -77,14 +90,57 @@ function AdminDashboard() {
       semesterDist[student.semester] = (semesterDist[student.semester] || 0) + 1;
     });
 
-    setStats({
-      totalStudents: data.length,
+    // Sort program distribution by count
+    const sortedProgramDist = Object.fromEntries(
+      Object.entries(programDist).sort(([,a], [,b]) => b - a)
+    );
+
+    this._stats = {
+      totalStudents: this._students.length,
       genderDistribution: genderDist,
-      programDistribution: programDist,
+      programDistribution: sortedProgramDist,
       semesterDistribution: semesterDist,
-      recentActivity: data.slice(-5).reverse()
-    });
-  };
+      recentActivity: this._students
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 5)
+    };
+  }
+
+  getPercentage(value, total) {
+    return total > 0 ? Math.round((value / total) * 100) : 0;
+  }
+}
+
+function AdminDashboard() {
+  const [dashboardManager] = useState(() => new DashboardManager());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [, forceUpdate] = useState();
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  useEffect(() => {
+    const q = query(collection(db, 'studentData'));
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        const studentsList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        dashboardManager.students = studentsList;
+        setLoading(false);
+        forceUpdate({}); // Force re-render when data changes
+      },
+      (error) => {
+        console.error("Error fetching students:", error);
+        setError(error.message);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [dashboardManager]);
 
   const StatItem = ({ icon, value, label }) => (
     <Grid item xs={12} sm={6} md={3}>
@@ -110,10 +166,7 @@ function AdminDashboard() {
           </Typography>
           <Typography 
             variant={isMobile ? "body2" : "body1"} 
-            sx={{ 
-              color: 'text.secondary',
-              fontWeight: 500
-            }}
+            sx={{ color: 'text.secondary', fontWeight: 500 }}
           >
             {label}
           </Typography>
@@ -153,7 +206,7 @@ function AdminDashboard() {
         <List dense>
           {Object.entries(data).map(([key, value], index) => (
             <React.Fragment key={key}>
-              <ListItem sx={{ py: 1 }}>
+              <ListItem sx={{ py: 1, position: 'relative' }}>
                 <ListItemText 
                   primary={
                     <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
@@ -161,15 +214,14 @@ function AdminDashboard() {
                     </Typography>
                   }
                   secondary={
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: 'text.secondary',
-                        mt: 0.5 
-                      }}
-                    >
-                      {`${value} student${value !== 1 ? 's' : ''}`}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {`${value} student${value !== 1 ? 's' : ''}`}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
+                        ({dashboardManager.getPercentage(value, dashboardManager.totalStudents)}%)
+                      </Typography>
+                    </Box>
                   }
                 />
                 <Box
@@ -181,6 +233,7 @@ function AdminDashboard() {
                     position: 'absolute',
                     bottom: 0,
                     left: 0,
+                    transition: 'width 0.6s ease-in-out',
                   }}
                 />
               </ListItem>
@@ -191,6 +244,22 @@ function AdminDashboard() {
       </CardContent>
     </StyledCard>
   );
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Typography>Loading dashboard data...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3, color: 'error.main' }}>
+        <Typography>Error: {error}</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Fade in timeout={800}>
@@ -213,29 +282,29 @@ function AdminDashboard() {
         <Grid container spacing={2}>
           <StatItem 
             icon={<PeopleAlt />}
-            value={stats.totalStudents}
+            value={dashboardManager.totalStudents}
             label="Total Students"
           />
           <StatItem 
             icon={<ManRounded />}
-            value={stats.genderDistribution.Male}
+            value={dashboardManager.genderDistribution.Male}
             label="Male Students"
           />
           <StatItem 
             icon={<WomanRounded />}
-            value={stats.genderDistribution.Female}
+            value={dashboardManager.genderDistribution.Female}
             label="Female Students"
           />
           <StatItem 
             icon={<School />}
-            value={Object.keys(stats.programDistribution).length}
+            value={dashboardManager.totalPrograms}
             label="Total Programs"
           />
 
           <Grid item xs={12} md={6}>
             <DistributionList 
               title="Programs Distribution" 
-              data={stats.programDistribution}
+              data={dashboardManager.programDistribution}
               icon={<Assessment />}
             />
           </Grid>
@@ -243,7 +312,7 @@ function AdminDashboard() {
           <Grid item xs={12} md={6}>
             <DistributionList 
               title="Semester Distribution" 
-              data={stats.semesterDistribution}
+              data={dashboardManager.semesterDistribution}
               icon={<CalendarToday />}
             />
           </Grid>
@@ -294,9 +363,9 @@ function AdminDashboard() {
                     },
                   }}
                 >
-                  {stats.recentActivity.length > 0 ? (
+                  {dashboardManager.recentActivity.length > 0 ? (
                     <List>
-                      {stats.recentActivity.map((activity, index) => (
+                      {dashboardManager.recentActivity.map((activity, index) => (
                         <React.Fragment key={index}>
                           <ListItem sx={{ py: 2 }}>
                             <ListItemText
@@ -312,7 +381,7 @@ function AdminDashboard() {
                               }
                             />
                           </ListItem>
-                          {index < stats.recentActivity.length - 1 && <Divider />}
+                          {index < dashboardManager.recentActivity.length - 1 && <Divider />}
                         </React.Fragment>
                       ))}
                     </List>

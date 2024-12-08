@@ -15,6 +15,8 @@ import {
   Alert,
 } from '@mui/material';
 import { styled } from '@mui/system';
+import { db, auth } from '../firebase-config';
+import { collection, addDoc } from 'firebase/firestore';
 
 const maroon = '#800000';
 
@@ -48,71 +50,199 @@ const CompactTextField = styled(TextField)(({ theme }) => ({
   },
 }));
 
-function StudentForm({ addStudent, initialData = {} }) {
-  const [studentData, setStudentData] = useState({
-    name: '',
-    gender: '',
-    program: '',
-    semester: '',
-    schoolYear: '2024-2025',
-    partnerCompany: '',
-    location: '',
-    startDate: '',
-    endDate: '',
-    concerns: '',
-    solutions: '',
-    recommendations: '',
-    evaluation: '',
-  });
+class Student {
+  constructor(data = {}) {
+    this._data = {
+      name: data.name || '',
+      gender: data.gender || '',
+      program: data.program || '',
+      semester: data.semester || '',
+      schoolYear: data.schoolYear || '2024-2025',
+      partnerCompany: data.partnerCompany || '',
+      location: data.location || '',
+      startDate: data.startDate || '',
+      endDate: data.endDate || '',
+      concerns: data.concerns || '',
+      solutions: data.solutions || '',
+      recommendations: data.recommendations || '',
+      evaluation: data.evaluation || '',
+      createdAt: data.createdAt || null,
+      createdBy: data.createdBy || null,
+      updatedAt: data.updatedAt || null,
+      updatedBy: data.updatedBy || null,
+    };
+  }
 
+  // Getters
+  get name() { return this._data.name; }
+  get gender() { return this._data.gender; }
+  get program() { return this._data.program; }
+  get semester() { return this._data.semester; }
+  get schoolYear() { return this._data.schoolYear; }
+  get partnerCompany() { return this._data.partnerCompany; }
+  get location() { return this._data.location; }
+  get startDate() { return this._data.startDate; }
+  get endDate() { return this._data.endDate; }
+  get concerns() { return this._data.concerns; }
+  get solutions() { return this._data.solutions; }
+  get recommendations() { return this._data.recommendations; }
+  get evaluation() { return this._data.evaluation; }
+
+  // Setters
+  set name(value) { this._data.name = value; }
+  set gender(value) { this._data.gender = value; }
+  set program(value) { this._data.program = value; }
+  set semester(value) { this._data.semester = value; }
+  set schoolYear(value) { this._data.schoolYear = value; }
+  set partnerCompany(value) { this._data.partnerCompany = value; }
+  set location(value) { this._data.location = value; }
+  set startDate(value) { this._data.startDate = value; }
+  set endDate(value) { this._data.endDate = value; }
+  set concerns(value) { this._data.concerns = value; }
+  set solutions(value) { this._data.solutions = value; }
+  set recommendations(value) { this._data.recommendations = value; }
+  set evaluation(value) { this._data.evaluation = value; }
+
+  // Methods
+  toJSON() {
+    return { ...this._data };
+  }
+
+  validate() {
+    const requiredFields = [
+      'name', 'gender', 'program', 'semester', 'schoolYear',
+      'partnerCompany', 'location', 'startDate', 'endDate'
+    ];
+    
+    for (const field of requiredFields) {
+      if (!this._data[field] || this._data[field].trim() === '') {
+        throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} is required`);
+      }
+    }
+    return true;
+  }
+
+  update(field, value) {
+    if (field in this._data) {
+      // Ensure we're not setting undefined values
+      this._data[field] = value ?? '';
+      
+      // Trim string values
+      if (typeof this._data[field] === 'string') {
+        this._data[field] = this._data[field].trim();
+      }
+    }
+  }
+
+  getAllData() {
+    return { ...this._data };
+  }
+}
+
+function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
+  const [student, setStudent] = useState(new Student(initialData));
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditing = Object.keys(initialData).length > 0;
+  const isEditing = initialData && Object.keys(initialData).length > 0;
 
   useEffect(() => {
-    if (isEditing) {
-      setStudentData((prevData) => ({ ...prevData, ...initialData }));
+    if (initialData && Object.keys(initialData).length > 0) {
+      const formattedData = {
+        ...initialData,
+        startDate: initialData.startDate ? initialData.startDate.split('T')[0] : '',
+        endDate: initialData.endDate ? initialData.endDate.split('T')[0] : '',
+      };
+      setStudent(new Student(formattedData));
     }
-  }, [initialData, isEditing]);
+  }, [initialData]);
 
   const handleChange = (e) => {
-    setStudentData({ ...studentData, [e.target.name]: e.target.value });
+    const newStudent = new Student(student.toJSON());
+    newStudent.update(e.target.name, e.target.value);
+    setStudent(newStudent);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // Create a copy of the form data
-    const formattedData = {
-      ...studentData,
-      // Set empty feedback fields to "N/A"
-      concerns: studentData.concerns.trim() || 'N/A',
-      solutions: studentData.solutions.trim() || 'N/A',
-      recommendations: studentData.recommendations.trim() || 'N/A',
-      evaluation: studentData.evaluation.trim() || 'N/A',
-    };
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('No authenticated user found');
+      }
 
-    addStudent(formattedData);
-    setSnackbarMessage(isEditing ? 'Student updated successfully!' : 'Student added successfully!');
-    setOpenSnackbar(true);
+      student.validate();
+      const currentData = student.getAllData();
 
-    if (!isEditing) {
-      setStudentData({
-        name: '',
-        gender: '',
-        program: '',
-        semester: '',
-        schoolYear: '2024-2025',
-        partnerCompany: '',
-        location: '',
-        startDate: '',
-        endDate: '',
-        concerns: '',
-        solutions: '',
-        recommendations: '',
-        evaluation: '',
-      });
+      if (isEditing && docId) {
+        const updateData = {
+          name: currentData.name,
+          gender: currentData.gender,
+          program: currentData.program,
+          semester: currentData.semester,
+          schoolYear: currentData.schoolYear,
+          partnerCompany: currentData.partnerCompany,
+          location: currentData.location,
+          startDate: currentData.startDate,
+          endDate: currentData.endDate,
+          concerns: currentData.concerns || '',
+          solutions: currentData.solutions || '',
+          recommendations: currentData.recommendations || '',
+          evaluation: currentData.evaluation || '',
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser.uid,
+          createdAt: currentData.createdAt,
+          createdBy: currentData.createdBy
+        };
+
+        if (addStudent) {
+          await addStudent(updateData);
+        }
+      } else {
+        const newStudentData = {
+          name: currentData.name,
+          gender: currentData.gender,
+          program: currentData.program,
+          semester: currentData.semester,
+          schoolYear: currentData.schoolYear,
+          partnerCompany: currentData.partnerCompany,
+          location: currentData.location,
+          startDate: currentData.startDate,
+          endDate: currentData.endDate,
+          concerns: currentData.concerns || '',
+          solutions: currentData.solutions || '',
+          recommendations: currentData.recommendations || '',
+          evaluation: currentData.evaluation || '',
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser.uid,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser.uid,
+        };
+        
+        const docRef = await addDoc(collection(db, 'studentData'), newStudentData);
+        setStudent(new Student());
+        
+        if (addStudent) {
+          await addStudent({ ...newStudentData, id: docRef.id });
+        }
+      }
+
+      if (!disableSnackbar) {
+        setSnackbarMessage(isEditing ? 'Student updated successfully' : 'Student added successfully');
+        setOpenSnackbar(true);
+      }
+    } catch (error) {
+      console.error('Error saving student data:', error);
+      if (!disableSnackbar) {
+        setSnackbarMessage('Error: ' + error.message);
+        setOpenSnackbar(true);
+      }
+      throw error;
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -158,7 +288,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 required
                 label="Student Name"
                 name="name"
-                value={studentData.name}
+                value={student.name}
                 onChange={handleChange}
                 size="small"
                 sx={{
@@ -178,7 +308,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 <InputLabel>Gender</InputLabel>
                 <Select
                   name="gender"
-                  value={studentData.gender}
+                  value={student.gender}
                   onChange={handleChange}
                   label="Gender"
                   sx={{
@@ -199,7 +329,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 <InputLabel>Program</InputLabel>
                 <Select
                   name="program"
-                  value={studentData.program}
+                  value={student.program}
                   onChange={handleChange}
                   label="Program"
                 >
@@ -216,7 +346,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                     <InputLabel>Semester</InputLabel>
                     <Select
                       name="semester"
-                      value={studentData.semester}
+                      value={student.semester}
                       onChange={handleChange}
                       label="Semester"
                     >
@@ -231,7 +361,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                     <InputLabel>School Year</InputLabel>
                     <Select
                       name="schoolYear"
-                      value={studentData.schoolYear}
+                      value={student.schoolYear}
                       onChange={handleChange}
                       label="School Year"
                     >
@@ -250,7 +380,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 fullWidth
                 label="Partner Company"
                 name="partnerCompany"
-                value={studentData.partnerCompany}
+                value={student.partnerCompany}
                 onChange={handleChange}
                 required
                 size="small"
@@ -259,7 +389,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 fullWidth
                 label="Location"
                 name="location"
-                value={studentData.location}
+                value={student.location}
                 onChange={handleChange}
                 required
                 size="small"
@@ -271,7 +401,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                     label="Start Date"
                     name="startDate"
                     type="date"
-                    value={studentData.startDate}
+                    value={student.startDate}
                     onChange={handleChange}
                     InputLabelProps={{ shrink: true }}
                     required
@@ -284,7 +414,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                     label="End Date"
                     name="endDate"
                     type="date"
-                    value={studentData.endDate}
+                    value={student.endDate}
                     onChange={handleChange}
                     InputLabelProps={{ shrink: true }}
                     required
@@ -302,7 +432,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 name="concerns"
                 multiline
                 rows={3}
-                value={studentData.concerns}
+                value={student.concerns}
                 onChange={handleChange}
                 size="small"
                 sx={{ mb: 2 }}
@@ -313,7 +443,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 name="solutions"
                 multiline
                 rows={3}
-                value={studentData.solutions}
+                value={student.solutions}
                 onChange={handleChange}
                 size="small"
                 sx={{ mb: 2 }}
@@ -324,7 +454,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 name="recommendations"
                 multiline
                 rows={3}
-                value={studentData.recommendations}
+                value={student.recommendations}
                 onChange={handleChange}
                 size="small"
                 sx={{ mb: 2 }}
@@ -335,7 +465,7 @@ function StudentForm({ addStudent, initialData = {} }) {
                 name="evaluation"
                 multiline
                 rows={3}
-                value={studentData.evaluation}
+                value={student.evaluation}
                 onChange={handleChange}
                 size="small"
               />
@@ -343,23 +473,35 @@ function StudentForm({ addStudent, initialData = {} }) {
           </Grid>
 
           <Box sx={{ mt: 'auto', pt: 3 }}>
-            <Button type="submit" variant="contained" color="primary" fullWidth size="large">
-              {isEditing ? 'Update Student' : 'Add Student'}
+            <Button 
+              type="submit" 
+              variant="contained" 
+              color="primary" 
+              fullWidth 
+              size="large"
+              disabled={isSubmitting}
+            >
+              {isSubmitting 
+                ? 'Saving...' 
+                : (isEditing ? 'Update Student' : 'Add Student')
+              }
             </Button>
           </Box>
         </Box>
       </CardContent>
 
-      <Snackbar
-        open={openSnackbar}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity="success" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
+      {!disableSnackbar && (
+        <Snackbar
+          open={openSnackbar}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity="success" sx={{ width: '100%' }}>
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
+      )}
     </StyledCard>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -18,7 +18,8 @@ import {
   Collapse,
   IconButton,
   Card,
-  Button
+  Button,
+  CircularProgress
 } from '@mui/material';
 import { 
   Warning, 
@@ -30,36 +31,108 @@ import {
   FilterList,
   Clear
 } from '@mui/icons-material';
+import { db } from '../firebase-config';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 
-function ConcernsSolutions({ students }) {
-  const [programFilter, setProgramFilter] = useState('All');
-  const [semesterFilter, setSemesterFilter] = useState('All');
-  const [yearFilter, setYearFilter] = useState('All');
+class ConcernsManager {
+  constructor() {
+    this._students = [];
+    this._filters = {
+      program: 'All',
+      semester: 'All',
+      schoolYear: 'All'
+    };
+  }
+
+  // Getters
+  get students() { return [...this._students]; }
+  get filters() { return { ...this._filters }; }
+  
+  // Get unique values for filters
+  get programs() { return ['All', ...new Set(this._students.map(student => student.program))]; }
+  get semesters() { return ['All', 'First', 'Second', 'Summer']; }
+  get schoolYears() { return ['All', ...new Set(this._students.map(student => student.schoolYear))]; }
+  
+  // Get active filters count
+  get activeFiltersCount() {
+    return Object.values(this._filters).filter(filter => filter !== 'All').length;
+  }
+
+  // Setters
+  set students(data) {
+    this._students = [...data];
+  }
+
+  // Methods
+  setFilter(type, value) {
+    if (type in this._filters) {
+      this._filters[type] = value;
+    }
+  }
+
+  resetFilters() {
+    Object.keys(this._filters).forEach(key => {
+      this._filters[key] = 'All';
+    });
+  }
+
+  getFilteredStudents() {
+    return this._students.filter(student => {
+      // Only include students with feedback data
+      const hasFeedback = student.concerns || student.solutions || 
+                         student.recommendations || student.evaluation;
+      
+      if (!hasFeedback) return false;
+      
+      // Apply filters
+      if (this._filters.program !== 'All' && student.program !== this._filters.program) return false;
+      if (this._filters.semester !== 'All' && student.semester !== this._filters.semester) return false;
+      if (this._filters.schoolYear !== 'All' && student.schoolYear !== this._filters.schoolYear) return false;
+      
+      return true;
+    });
+  }
+}
+
+function ConcernsSolutions() {
+  const [concernsManager] = useState(() => new ConcernsManager());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState(null);
+  const [, forceUpdate] = useState();
 
-  const programs = ['All', ...new Set(students.map(student => student.program))];
-  const semesters = ['All', 'First', 'Second', 'Summer'];
-  const schoolYears = ['All', ...new Set(students.map(student => student.schoolYear))];
+  useEffect(() => {
+    const q = query(collection(db, 'studentData'));
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        const studentsList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        concernsManager.students = studentsList;
+        setLoading(false);
+        forceUpdate({}); // Force re-render when data changes
+      },
+      (error) => {
+        console.error("Error fetching students:", error);
+        setError(error.message);
+        setLoading(false);
+      }
+    );
 
-  const filteredStudents = students.filter(student => {
-    if (programFilter !== 'All' && student.program !== programFilter) return false;
-    if (semesterFilter !== 'All' && student.semester !== semesterFilter) return false;
-    if (yearFilter !== 'All' && student.schoolYear !== yearFilter) return false;
-    return student.concerns || student.solutions || student.recommendations || student.evaluation;
-  });
+    return () => unsubscribe();
+  }, [concernsManager]);
 
-  const resetFilters = () => {
-    setProgramFilter('All');
-    setSemesterFilter('All');
-    setYearFilter('All');
+  const handleFilterChange = (type, value) => {
+    concernsManager.setFilter(type, value);
+    forceUpdate({});
   };
 
-  const activeFiltersCount = [
-    programFilter, 
-    semesterFilter, 
-    yearFilter
-  ].filter(filter => filter !== 'All').length;
+  const resetFilters = () => {
+    concernsManager.resetFilters();
+    forceUpdate({});
+  };
 
   const handleRowClick = (studentId) => {
     setExpandedStudent(expandedStudent === studentId ? null : studentId);
@@ -74,6 +147,24 @@ function ConcernsSolutions({ students }) {
     };
     return icons[type] || null;
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3, color: 'error.main' }}>
+        <Typography>Error: {error}</Typography>
+      </Box>
+    );
+  }
+
+  const filteredStudents = concernsManager.getFilteredStudents();
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -101,7 +192,7 @@ function ConcernsSolutions({ students }) {
           }}
         >
           Filters
-          {activeFiltersCount > 0 && (
+          {concernsManager.activeFiltersCount > 0 && (
             <Box
               sx={{
                 position: 'absolute',
@@ -119,7 +210,7 @@ function ConcernsSolutions({ students }) {
                 fontWeight: 'bold',
               }}
             >
-              {activeFiltersCount}
+              {concernsManager.activeFiltersCount}
             </Box>
           )}
         </Button>
@@ -140,7 +231,7 @@ function ConcernsSolutions({ students }) {
             <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
               Filter Options
             </Typography>
-            {activeFiltersCount > 0 && (
+            {concernsManager.activeFiltersCount > 0 && (
               <Button
                 startIcon={<Clear />}
                 onClick={resetFilters}
@@ -156,11 +247,11 @@ function ConcernsSolutions({ students }) {
               <FormControl fullWidth size="small">
                 <InputLabel>Program</InputLabel>
                 <Select
-                  value={programFilter}
-                  onChange={(e) => setProgramFilter(e.target.value)}
+                  value={concernsManager.filters.program}
+                  onChange={(e) => handleFilterChange('program', e.target.value)}
                   label="Program"
                 >
-                  {programs.map(program => (
+                  {concernsManager.programs.map(program => (
                     <MenuItem key={program} value={program}>{program}</MenuItem>
                   ))}
                 </Select>
@@ -170,11 +261,11 @@ function ConcernsSolutions({ students }) {
               <FormControl fullWidth size="small">
                 <InputLabel>Semester</InputLabel>
                 <Select
-                  value={semesterFilter}
-                  onChange={(e) => setSemesterFilter(e.target.value)}
+                  value={concernsManager.filters.semester}
+                  onChange={(e) => handleFilterChange('semester', e.target.value)}
                   label="Semester"
                 >
-                  {semesters.map(semester => (
+                  {concernsManager.semesters.map(semester => (
                     <MenuItem key={semester} value={semester}>{semester}</MenuItem>
                   ))}
                 </Select>
@@ -184,11 +275,11 @@ function ConcernsSolutions({ students }) {
               <FormControl fullWidth size="small">
                 <InputLabel>School Year</InputLabel>
                 <Select
-                  value={yearFilter}
-                  onChange={(e) => setYearFilter(e.target.value)}
+                  value={concernsManager.filters.schoolYear}
+                  onChange={(e) => handleFilterChange('schoolYear', e.target.value)}
                   label="School Year"
                 >
-                  {schoolYears.map(year => (
+                  {concernsManager.schoolYears.map(year => (
                     <MenuItem key={year} value={year}>{year}</MenuItem>
                   ))}
                 </Select>
