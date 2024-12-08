@@ -114,22 +114,56 @@ class Student {
       'partnerCompany', 'location', 'startDate', 'endDate'
     ];
     
+    // Check if fields are empty after trimming
     for (const field of requiredFields) {
       if (!this._data[field] || this._data[field].trim() === '') {
         throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} is required`);
       }
     }
+
+    // Only validate non-empty values
+    if (this._data.name.trim()) {
+      const nameRegex = /^[a-zA-ZÀ-ÿ\s.\-'(),]+$/;
+      if (!nameRegex.test(this._data.name)) {
+        throw new Error('Name contains invalid characters');
+      }
+    }
+
+    if (this._data.partnerCompany.trim()) {
+      const companyRegex = /^[a-zA-Z0-9À-ÿ\s.\-&'(),/+]+$/;
+      if (!companyRegex.test(this._data.partnerCompany)) {
+        throw new Error('Company name contains invalid characters');
+      }
+    }
+
+    if (this._data.location.trim()) {
+      const locationRegex = /^[a-zA-Z0-9À-ÿ\s.\-,'()#+]+$/;
+      if (!locationRegex.test(this._data.location)) {
+        throw new Error('Location contains invalid characters');
+      }
+    }
+
     return true;
   }
 
   update(field, value) {
     if (field in this._data) {
-      // Ensure we're not setting undefined values
-      this._data[field] = value ?? '';
-      
-      // Trim string values
-      if (typeof this._data[field] === 'string') {
-        this._data[field] = this._data[field].trim();
+      switch (field) {
+        case 'name':
+        case 'partnerCompany':
+        case 'location':
+          // Allow spaces without requiring other characters
+          this._data[field] = value;
+          break;
+        case 'concerns':
+        case 'solutions':
+        case 'recommendations':
+        case 'evaluation':
+          // Allow all characters for text areas
+          this._data[field] = value;
+          break;
+        default:
+          this._data[field] = value;
       }
     }
   }
@@ -143,6 +177,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
   const [student, setStudent] = useState(new Student(initialData));
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEditing = initialData && Object.keys(initialData).length > 0;
@@ -159,9 +194,50 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
   }, [initialData]);
 
   const handleChange = (e) => {
-    const newStudent = new Student(student.toJSON());
-    newStudent.update(e.target.name, e.target.value);
-    setStudent(newStudent);
+    const { name, value } = e.target;
+    
+    try {
+      const newStudent = new Student(student.toJSON());
+      newStudent.update(name, value);
+      
+      // Only validate non-empty values
+      if (value.trim() && ['name', 'partnerCompany', 'location'].includes(name)) {
+        switch (name) {
+          case 'name':
+            if (!/^[a-zA-ZÀ-ÿ\s.\-'(),]*$/.test(value)) {
+              setSnackbarMessage('Please enter a valid name');
+              setSnackbarSeverity('warning');
+              setOpenSnackbar(true);
+              return;
+            }
+            break;
+          case 'partnerCompany':
+            if (!/^[a-zA-Z0-9À-ÿ\s.\-&'(),/+]*$/.test(value)) {
+              setSnackbarMessage('Please enter a valid company name');
+              setSnackbarSeverity('warning');
+              setOpenSnackbar(true);
+              return;
+            }
+            break;
+          case 'location':
+            if (!/^[a-zA-Z0-9À-ÿ\s.\-,'()#+]*$/.test(value)) {
+              setSnackbarMessage('Please enter a valid location');
+              setSnackbarSeverity('warning');
+              setOpenSnackbar(true);
+              return;
+            }
+            break;
+          default:
+            break;
+        }
+      }
+      
+      setStudent(newStudent);
+    } catch (error) {
+      setSnackbarMessage(error.message);
+      setSnackbarSeverity('error');
+      setOpenSnackbar(true);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -497,7 +573,26 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
           onClose={handleCloseSnackbar}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
-          <Alert onClose={handleCloseSnackbar} severity="success" sx={{ width: '100%' }}>
+          <Alert 
+            onClose={handleCloseSnackbar} 
+            severity={snackbarSeverity} 
+            sx={{ 
+              width: '100%',
+              backgroundColor: snackbarSeverity === 'success' ? '#E8F5E9' : 
+                              snackbarSeverity === 'warning' ? '#FFF3E0' : 
+                              snackbarSeverity === 'error' ? '#FFEBEE' : '#E3F2FD',
+              '& .MuiAlert-icon': {
+                color: snackbarSeverity === 'success' ? '#2E7D32' : 
+                       snackbarSeverity === 'warning' ? '#F57C00' : 
+                       snackbarSeverity === 'error' ? '#C62828' : '#1976D2'
+              },
+              color: snackbarSeverity === 'success' ? '#1B5E20' : 
+                     snackbarSeverity === 'warning' ? '#E65100' : 
+                     snackbarSeverity === 'error' ? '#B71C1C' : '#0D47A1',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              borderRadius: 2,
+            }}
+          >
             {snackbarMessage}
           </Alert>
         </Snackbar>
