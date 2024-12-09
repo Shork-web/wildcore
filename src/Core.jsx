@@ -35,16 +35,18 @@ const theme = createTheme({
 });
 
 function Core() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  return (
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        <CoreContent />
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
+
+function CoreContent() {
   const [students, setStudents] = useState([]);
-
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-  };
+  const { currentUser, auth } = useContext(AuthContext);
 
   const updateStudents = useCallback((newStudents) => {
     setStudents(newStudents);
@@ -52,23 +54,19 @@ function Core() {
   }, []);
 
   return (
-    <ThemeProvider theme={theme}>
-      <AuthProvider>
-        <StudentsContext.Provider value={{ students, updateStudents }}>
-          {isLoggedIn ? (
-            <CoreContent handleLogout={handleLogout} />
-          ) : (
-            <LoginFunc onLogin={handleLogin} />
-          )}
-        </StudentsContext.Provider>
-      </AuthProvider>
-    </ThemeProvider>
+    <StudentsContext.Provider value={{ students, updateStudents }}>
+      {currentUser ? (
+        <MainContent />
+      ) : (
+        <LoginFunc />
+      )}
+    </StudentsContext.Provider>
   );
 }
 
-function CoreContent({ handleLogout }) {
+function MainContent() {
   const { students, updateStudents } = useContext(StudentsContext);
-  const { userRole } = useContext(AuthContext);
+  const { userRole, auth } = useContext(AuthContext);
   const navigate = useNavigate();
   const [editingStudent, setEditingStudent] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -115,10 +113,14 @@ function CoreContent({ handleLogout }) {
     setIsLogoutDialogOpen(false);
   };
 
-  const confirmLogout = () => {
-    closeLogoutDialog();
-    handleLogout();
-    navigate('/');
+  const confirmLogout = async () => {
+    try {
+      await auth.signOut();
+      closeLogoutDialog();
+      navigate('/sign-in');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
 
   return (

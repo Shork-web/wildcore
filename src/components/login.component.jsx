@@ -73,7 +73,7 @@ const styles = {
   }
 };
 
-export default function LoginComponent({ onLogin }) {
+export default function LoginComponent() {
   // State management
   const [loginData, setLoginData] = useState({
     email: '',
@@ -108,7 +108,6 @@ export default function LoginComponent({ onLogin }) {
       );
 
       if (result.success) {
-        onLogin();
         // Get the redirect path from location state or default to dashboard
         const from = location.state?.from?.pathname || '/dashboard';
         navigate(from, { replace: true });

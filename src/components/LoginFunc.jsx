@@ -106,17 +106,11 @@ function BackgroundLogo({ isMobile }) {
   );
 }
 
-function LoginFunc({ onLogin }) {
+function LoginFunc() {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const handleLogin = () => {
-    onLogin();
-    const from = location.state?.from?.pathname || '/dashboard';
-    navigate(from, { replace: true });
-  };
 
   return (
     <Box sx={styles.mainContainer}>
@@ -150,7 +144,7 @@ function LoginFunc({ onLogin }) {
               timeout={300}
             >
               <Routes location={location}>
-                <Route path="/sign-in" element={<Login onLogin={handleLogin} />} />
+                <Route path="/sign-in" element={<Login />} />
                 <Route path="/sign-up" element={<SignUp />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/" element={<Navigate to="/sign-in" replace />} />

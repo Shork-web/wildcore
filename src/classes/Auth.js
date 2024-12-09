@@ -37,29 +37,30 @@ export default class Auth {
         userData.password
       );
 
-      // Create user profile
+      // Create user profile with all required fields
       const userProfile = {
         firstName: userData.firstName,
         lastName: userData.lastName,
         email: userData.email,
         idNumber: userData.idNumber,
         phoneNumber: userData.phoneNumber,
-        role: userData.accountType,
-        createdAt: new Date()
+        role: userData.role,
+        createdAt: new Date().toISOString()  // Add createdAt timestamp
       };
 
       // Save user profile to Firestore
       await setDoc(doc(this._db, 'users', userCredential.user.uid), userProfile);
 
       // Create role-specific profile
-      const profilePath = `users/${userCredential.user.uid}/${userData.accountType}Profile/profile`;
+      const profilePath = `users/${userCredential.user.uid}/${userData.role}Profile/profile`;
       await setDoc(doc(this._db, profilePath), userProfile);
 
       this._currentUser = userCredential.user;
-      this._userRole = userData.accountType;
+      this._userRole = userData.role;
 
       return { success: true };
     } catch (error) {
+      console.error('Signup error:', error); // Add error logging
       return { success: false, error: error.message };
     }
   }
