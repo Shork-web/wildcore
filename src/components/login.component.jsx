@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -85,7 +85,6 @@ export default function LoginComponent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const navigate = useNavigate();
-  const location = useLocation();
   const auth = new Auth();
 
   // Event handlers
@@ -108,12 +107,23 @@ export default function LoginComponent() {
       );
 
       if (result.success) {
-        // Get the redirect path from location state or default to dashboard
-        const from = location.state?.from?.pathname || '/dashboard';
-        navigate(from, { replace: true });
+        // Get user role from result
+        const userRole = result.user.role;
+        
+        // Role-based redirection
+        if (userRole === 'admin' && loginData.accountType === 'admin') {
+          navigate('/', { replace: true }); // Root path will handle admin dashboard
+        } else if (userRole === 'instructor' && loginData.accountType === 'instructor') {
+          navigate('/', { replace: true }); // Root path will handle user dashboard
+        }
       } else {
         setMessage({ type: 'error', text: result.error });
       }
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: 'An error occurred during login. Please try again.' 
+      });
     } finally {
       setIsSubmitting(false);
     }

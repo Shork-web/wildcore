@@ -1,5 +1,5 @@
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, browserLocalPersistence, setPersistence } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
 import { app } from '../firebase-config';
 
 const auth = getAuth(app);
@@ -37,40 +37,60 @@ export default class Auth {
         userData.password
       );
 
-      // Create user profile with all required fields
-      const userProfile = {
+      const uid = userCredential.user.uid;
+
+      // Create the base profile document in users collection
+      const profileData = {
         firstName: userData.firstName,
         lastName: userData.lastName,
         email: userData.email,
         idNumber: userData.idNumber,
         phoneNumber: userData.phoneNumber,
         role: userData.role,
-        createdAt: new Date().toISOString()  // Add createdAt timestamp
+        createdAt: userData.createdAt,
+        adminKeyVerified: userData.adminKeyVerified
       };
 
-      // Save user profile to Firestore
-      await setDoc(doc(this._db, 'users', userCredential.user.uid), userProfile);
+      // 1. Save to users collection
+      await setDoc(doc(this._db, 'users', uid), profileData);
 
-      // Create role-specific profile
-      const profilePath = `users/${userCredential.user.uid}/${userData.role}Profile/profile`;
-      await setDoc(doc(this._db, profilePath), userProfile);
+      // 2. Create role-specific profile document
+      const roleProfileData = {
+        ...profileData,
+        accountType: userData.accountType,
+        confirmPassword: userData.confirmPassword
+      };
 
-      this._currentUser = userCredential.user;
-      this._userRole = userData.role;
+      if (userData.accountType === 'admin') {
+        roleProfileData.adminKey = userData.adminKey;
+      }
+
+      // Save to nested role-specific collection (adminProfile or instructorProfile)
+      const rolePath = userData.role === 'admin' ? 'adminProfile' : 'instructorProfile';
+      await setDoc(
+        doc(this._db, 'users', uid, rolePath, 'profile'),
+        roleProfileData
+      );
+
+      // 3. Save to general profile collection
+      await setDoc(doc(this._db, 'profile', uid), roleProfileData);
 
       return { success: true };
     } catch (error) {
-      console.error('Signup error:', error); // Add error logging
+      console.error('Signup error:', error);
       return { success: false, error: error.message };
     }
   }
 
   async signIn(email, password, accountType) {
     try {
-      // First set persistence, then sign in
+      // First set persistence
       await setPersistence(this._auth, browserLocalPersistence);
       
+      // Get user credentials
       const userCredential = await signInWithEmailAndPassword(this._auth, email, password);
+      
+      // Get the user's profile data
       const userDoc = await getDoc(doc(this._db, 'users', userCredential.user.uid));
       
       if (!userDoc.exists()) {
@@ -78,18 +98,27 @@ export default class Auth {
       }
 
       const userData = userDoc.data();
-      if (userData.role !== accountType) {
-        throw new Error(`Invalid account type. This account is not registered as ${accountType}`);
+      
+      // Validate account type based on adminKeyVerified
+      if (accountType === 'admin' && !userData.adminKeyVerified) {
+        await this.signOut(); // Sign out if validation fails
+        return { 
+          success: false, 
+          error: 'This is an instructor account. Please use instructor login.' 
+        };
       }
 
+      if (accountType === 'instructor' && userData.adminKeyVerified) {
+        await this.signOut(); // Sign out if validation fails
+        return { 
+          success: false, 
+          error: 'This is an admin account. Please use admin login.' 
+        };
+      }
+
+      // If validation passes, proceed with login
       this._currentUser = userCredential.user;
       this._userRole = userData.role;
-
-      // Store user data in localStorage for persistence
-      localStorage.setItem('userData', JSON.stringify({
-        uid: userCredential.user.uid,
-        role: userData.role
-      }));
 
       return { 
         success: true, 
@@ -170,5 +199,24 @@ export default class Auth {
     ];
 
     return requiredFields.every(field => userData[field] && userData[field].trim() !== '');
+  }
+
+  async getUserProfile(uid) {
+    try {
+      const userDoc = await getDocs(
+        query(
+          collection(db, 'profile'),
+          where('uid', '==', uid)
+        )
+      );
+
+      if (!userDoc.empty) {
+        return userDoc.docs[0].data();
+      }
+      throw new Error('User profile not found');
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
   }
 } 

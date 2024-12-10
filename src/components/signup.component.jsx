@@ -12,10 +12,11 @@ import {
   Fade,
   Divider,
   Collapse,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey } from '@mui/icons-material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import Auth from '../classes/Auth';
 
 export default function SignUp() {
@@ -28,11 +29,16 @@ export default function SignUp() {
     idNumber: '',
     phoneNumber: '',
     accountType: 'instructor',
-    adminKey: ''
+    adminKey: '',
+    adminKeyVerified: false,
+    role: 'instructor',
+    createdAt: new Date().toISOString()
   });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const navigate = useNavigate();
+  const [openSnackbar, setOpenSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const auth = new Auth();
 
   const validatePasswords = () => {
@@ -42,50 +48,65 @@ export default function SignUp() {
   const validateAdminKey = () => {
     if (userData.accountType === 'admin') {
       // Replace with your actual admin key validation
-      return userData.adminKey === 'your-admin-key';
+      return userData.adminKey === 'CITADMIN';
     }
     return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage({ type: '', text: '' });
-
-    if (!validatePasswords()) {
-      setMessage({ type: 'error', text: 'Passwords do not match' });
-      return;
-    }
-
-    if (!validateAdminKey()) {
-      setMessage({ type: 'error', text: 'Invalid Admin Key' });
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
+      if (!validatePasswords()) {
+        setMessage({ type: 'error', text: 'Passwords do not match' });
+        return;
+      }
+
+      if (!validateAdminKey()) {
+        setMessage({ type: 'error', text: 'Invalid Admin Key' });
+        return;
+      }
+
       const userForAuth = {
-        ...userData,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        password: userData.password,
+        confirmPassword: userData.confirmPassword,
+        idNumber: userData.idNumber,
+        phoneNumber: userData.phoneNumber,
         role: userData.accountType,
-        toJSON: function() {
-          return {
-            firstName: this.firstName,
-            lastName: this.lastName,
-            email: this.email,
-            idNumber: this.idNumber,
-            phoneNumber: this.phoneNumber,
-            role: this.role
-          };
-        }
+        createdAt: new Date().toISOString(),
+        adminKeyVerified: userData.accountType === 'admin',
+        accountType: userData.accountType
       };
 
-      const result = await auth.signUp(userForAuth);
-      if (result.success) {
-        setMessage({ type: 'success', text: 'Account created successfully!' });
-        setTimeout(() => navigate('/login', { replace: true }), 2000);
-      } else {
-        setMessage({ type: 'error', text: result.error });
+      if (userData.accountType === 'admin') {
+        userForAuth.adminKey = userData.adminKey;
       }
+
+      const result = await auth.signUp(userForAuth);
+
+      if (result.success) {
+        setSnackbarSeverity('success');
+        setSnackbarMessage('Account created successfully!');
+        setOpenSnackbar(true);
+        
+        await auth.signOut();
+        
+        setTimeout(() => {
+          window.location.replace('/sign-in');
+        }, 500);
+      } else {
+        setSnackbarSeverity('error');
+        setSnackbarMessage(result.error || 'Failed to create account');
+        setOpenSnackbar(true);
+      }
+    } catch (error) {
+      setSnackbarSeverity('error');
+      setSnackbarMessage(error.message || 'An error occurred');
+      setOpenSnackbar(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -104,6 +125,13 @@ export default function SignUp() {
       accountType: type,
       adminKey: type !== 'admin' ? '' : prev.adminKey
     }));
+  };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setOpenSnackbar(false);
   };
 
   return (
@@ -446,24 +474,7 @@ export default function SignUp() {
               type="submit"
               fullWidth
               variant="contained"
-              disabled={isSubmitting}
-              sx={{
-                mt: 4,
-                mb: 3,
-                py: 2,
-                background: 'linear-gradient(45deg, #800000, #FFD700)',
-                borderRadius: 2,
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                textTransform: 'none',
-                boxShadow: '0 4px 15px rgba(128, 0, 0, 0.2)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #600000, #DFB700)',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 6px 20px rgba(128, 0, 0, 0.3)',
-                },
-              }}
+              sx={{ mt: 3, mb: 2 }}
             >
               {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Button>
@@ -489,6 +500,20 @@ export default function SignUp() {
             </Grid>
           </Box>
         </Paper>
+        <Snackbar 
+          open={openSnackbar} 
+          autoHideDuration={6000} 
+          onClose={handleSnackbarClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert 
+            onClose={handleSnackbarClose} 
+            severity={snackbarSeverity} 
+            sx={{ width: '100%' }}
+          >
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
       </Container>
     </Fade>
   );
