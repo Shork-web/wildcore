@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { 
   AppBar, 
@@ -107,7 +107,6 @@ function BackgroundLogo({ isMobile }) {
 }
 
 function LoginFunc() {
-  const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

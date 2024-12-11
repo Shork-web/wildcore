@@ -46,7 +46,7 @@ function Core() {
 
 function CoreContent() {
   const [students, setStudents] = useState([]);
-  const { currentUser, auth } = useContext(AuthContext);
+  const { currentUser} = useContext(AuthContext);
 
   const updateStudents = useCallback((newStudents) => {
     setStudents(newStudents);

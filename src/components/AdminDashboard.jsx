@@ -203,44 +203,65 @@ function AdminDashboard() {
             {title}
           </Typography>
         </Box>
-        <List dense>
-          {Object.entries(data).map(([key, value], index) => (
-            <React.Fragment key={key}>
-              <ListItem sx={{ py: 1, position: 'relative' }}>
-                <ListItemText 
-                  primary={
-                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                      {key}
-                    </Typography>
-                  }
-                  secondary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {`${value} student${value !== 1 ? 's' : ''}`}
+        <Box 
+          sx={{ 
+            maxHeight: title === "Programs Distribution" ? '300px' : 'none', // Only add maxHeight for programs
+            overflowY: title === "Programs Distribution" ? 'auto' : 'visible', // Only add scroll for programs
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#f1f1f1',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#800000',
+              borderRadius: '4px',
+              '&:hover': {
+                background: '#600000',
+              },
+            },
+          }}
+        >
+          <List dense>
+            {Object.entries(data).map(([key, value], index) => (
+              <React.Fragment key={key}>
+                <ListItem sx={{ py: 1, position: 'relative' }}>
+                  <ListItemText 
+                    primary={
+                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                        {key}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
-                        ({dashboardManager.getPercentage(value, dashboardManager.totalStudents)}%)
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <Box
-                  sx={{
-                    width: `${(value / Math.max(...Object.values(data))) * 100}%`,
-                    height: 3,
-                    background: 'linear-gradient(45deg, #800000, #FFD700)',
-                    borderRadius: 1,
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    transition: 'width 0.6s ease-in-out',
-                  }}
-                />
-              </ListItem>
-              {index < Object.entries(data).length - 1 && <Divider />}
-            </React.Fragment>
-          ))}
-        </List>
+                    }
+                    secondary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {`${value} student${value !== 1 ? 's' : ''}`}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
+                          ({dashboardManager.getPercentage(value, dashboardManager.totalStudents)}%)
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                  <Box
+                    sx={{
+                      width: `${(value / Math.max(...Object.values(data))) * 100}%`,
+                      height: 3,
+                      background: 'linear-gradient(45deg, #800000, #FFD700)',
+                      borderRadius: 1,
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      transition: 'width 0.6s ease-in-out',
+                    }}
+                  />
+                </ListItem>
+                {index < Object.entries(data).length - 1 && <Divider />}
+              </React.Fragment>
+            ))}
+          </List>
+        </Box>
       </CardContent>
     </StyledCard>
   );
