@@ -27,7 +27,9 @@ import {
   IconButton as MuiIconButton,
   Snackbar,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Pagination,
+  Stack
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -48,11 +50,16 @@ class StudentManager {
       schoolYear: 'All',
       company: 'All'
     };
+    this._loading = true;
+    this._error = null;
+    this._subscribers = new Set();
   }
 
   // Getters
   get students() { return [...this._students]; }
   get filters() { return { ...this._filters }; }
+  get loading() { return this._loading; }
+  get error() { return this._error; }
   
   // Get unique values for filters
   get programs() { return ['All', ...new Set(this._students.map(student => student.program))]; }
@@ -67,6 +74,7 @@ class StudentManager {
   setFilter(type, value) {
     if (type in this._filters) {
       this._filters[type] = value;
+      this._notifySubscribers();
     }
   }
 
@@ -74,6 +82,7 @@ class StudentManager {
     Object.keys(this._filters).forEach(key => {
       this._filters[key] = 'All';
     });
+    this._notifySubscribers();
   }
 
   getActiveFiltersCount() {
@@ -137,12 +146,46 @@ class StudentManager {
       throw error;
     }
   }
+
+  // Add subscription methods
+  subscribe(callback) {
+    this._subscribers.add(callback);
+    return () => this._subscribers.delete(callback);
+  }
+
+  _notifySubscribers() {
+    this._subscribers.forEach(callback => callback());
+  }
+
+  // Data fetching method
+  initializeDataFetching() {
+    const q = query(collection(db, 'studentData'));
+    return onSnapshot(q, 
+      (querySnapshot) => {
+        const studentsList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        this._students = studentsList;
+        this._loading = false;
+        this._error = null;
+        this._notifySubscribers();
+      },
+      (error) => {
+        console.error("Error fetching students:", error);
+        this._error = error.message;
+        this._loading = false;
+        this._notifySubscribers();
+      }
+    );
+  }
 }
 
 function StudentList() {
   const studentManager = useRef(new StudentManager()).current;
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [, forceUpdate] = useState();
+  const [page, setPage] = useState(1);
+  const [rowsPerPage] = useState(50);
   const [editingStudent, setEditingStudent] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -151,29 +194,16 @@ function StudentList() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
-  const [, forceUpdate] = useState();
 
-  // Real-time data fetching
+  // Use the new data fetching approach
   useEffect(() => {
-    const q = query(collection(db, 'studentData'));
-    const unsubscribe = onSnapshot(q, 
-      (querySnapshot) => {
-        const studentsList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        studentManager.students = studentsList;
-        setLoading(false);
-        forceUpdate({}); // Force re-render when data changes
-      },
-      (error) => {
-        console.error("Error fetching students:", error);
-        setError(error.message);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
+    const unsubscribe = studentManager.subscribe(() => forceUpdate({}));
+    const unsubscribeSnapshot = studentManager.initializeDataFetching();
+    
+    return () => {
+      unsubscribe();
+      unsubscribeSnapshot();
+    };
   }, [studentManager]);
 
   // Handle filter changes
@@ -277,12 +307,21 @@ function StudentList() {
     setStudentToDelete(null);
   };
 
-  if (loading) {
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const paginatedStudents = filteredStudents.slice(
+    (page - 1) * rowsPerPage,
+    page * rowsPerPage
+  );
+
+  if (studentManager.loading) {
     return <div>Loading...</div>;
   }
 
-  if (error) {
-    return <div>Error: {error}</div>;
+  if (studentManager.error) {
+    return <div>Error: {studentManager.error}</div>;
   }
 
   return (
@@ -429,24 +468,114 @@ function StudentList() {
           background: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          maxHeight: '500px',
+          overflow: 'auto',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+            height: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: '#f1f1f1',
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#800000',
+            borderRadius: '4px',
+            '&:hover': {
+              background: '#600000',
+            },
+          },
         }}
       >
-        <Table>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Name</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Program</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Gender</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Semester</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>School Year</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Company</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Location</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Duration</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold', color: '#800000' }}>Actions</TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Name
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Program
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Gender
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Semester
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                School Year
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Company
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Location
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Duration
+              </TableCell>
+              <TableCell 
+                align="right" 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                }}
+              >
+                Actions
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredStudents.map((student) => (
+            {paginatedStudents.map((student) => (
               <TableRow 
                 key={student.id}
                 sx={{ 
@@ -498,6 +627,44 @@ function StudentList() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Box sx={{ 
+        mt: 3, 
+        display: 'flex', 
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 2
+      }}>
+        <Stack spacing={2} alignItems="center" direction="row">
+          <Typography variant="body2" color="text.secondary">
+            {`${filteredStudents.length} total entries`}
+          </Typography>
+          <Pagination
+            count={Math.ceil(filteredStudents.length / rowsPerPage)}
+            page={page}
+            onChange={handlePageChange}
+            color="primary"
+            sx={{
+              '& .MuiPaginationItem-root': {
+                color: '#800000',
+                '&.Mui-selected': {
+                  backgroundColor: '#800000',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: '#600000',
+                  },
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(128, 0, 0, 0.1)',
+                },
+              },
+            }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {`Page ${page} of ${Math.ceil(filteredStudents.length / rowsPerPage)}`}
+          </Typography>
+        </Stack>
+      </Box>
 
       {/* Edit Dialog */}
       <Dialog
@@ -568,7 +735,7 @@ function StudentList() {
       </Snackbar>
 
       {/* Error state display */}
-      {error && (
+      {studentManager.error && (
         <Paper
           sx={{
             p: 3,
@@ -598,14 +765,14 @@ function StudentList() {
               Error Loading Students
             </Typography>
             <Typography variant="body2" sx={{ color: '#C62828' }}>
-              {error}
+              {studentManager.error}
             </Typography>
           </Box>
         </Paper>
       )}
 
       {/* Loading state */}
-      {loading && (
+      {studentManager.loading && (
         <Paper
           sx={{
             p: 3,
