@@ -47,7 +47,7 @@ export default function SignUp() {
 
   const validateAdminKey = () => {
     if (userData.accountType === 'admin') {
-      // Replace with your actual admin key validation
+      // admin key validation
       return userData.adminKey === 'CITADMIN';
     }
     return true;

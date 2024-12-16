@@ -205,21 +205,12 @@ function AdminDashboard() {
         </Box>
         <Box 
           sx={{ 
-            maxHeight: title === "Programs Distribution" ? '300px' : 'none', // Only add maxHeight for programs
-            overflowY: title === "Programs Distribution" ? 'auto' : 'visible', // Only add scroll for programs
-            '&::-webkit-scrollbar': {
-              width: '8px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: '#f1f1f1',
-              borderRadius: '4px',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: '#800000',
-              borderRadius: '4px',
-              '&:hover': {
-                background: '#600000',
-              },
+            maxHeight: '300px',
+            overflowY: 'auto',
+            msOverflowStyle: 'none',  // Hide scrollbar for IE and Edge
+            scrollbarWidth: 'none',   // Hide scrollbar for Firefox
+            '&::-webkit-scrollbar': { // Hide scrollbar for Chrome, Safari, and Opera
+              display: 'none'
             },
           }}
         >
@@ -322,7 +313,7 @@ function AdminDashboard() {
             label="Total Programs"
           />
 
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <DistributionList 
               title="Programs Distribution" 
               data={dashboardManager.programDistribution}
@@ -330,7 +321,7 @@ function AdminDashboard() {
             />
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <DistributionList 
               title="Semester Distribution" 
               data={dashboardManager.semesterDistribution}
@@ -338,7 +329,7 @@ function AdminDashboard() {
             />
           </Grid>
 
-          <Grid item xs={12}>
+          <Grid item xs={12} md={4}>
             <StyledCard>
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -366,21 +357,12 @@ function AdminDashboard() {
                 </Box>
                 <Box 
                   sx={{ 
-                    maxHeight: '300px', // Fixed height for scrollable area
-                    overflowY: 'auto', // Enable vertical scrolling
-                    '&::-webkit-scrollbar': {
-                      width: '8px',
-                    },
-                    '&::-webkit-scrollbar-track': {
-                      background: '#f1f1f1',
-                      borderRadius: '4px',
-                    },
-                    '&::-webkit-scrollbar-thumb': {
-                      background: '#800000',
-                      borderRadius: '4px',
-                      '&:hover': {
-                        background: '#600000',
-                      },
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    msOverflowStyle: 'none',  // Hide scrollbar for IE and Edge
+                    scrollbarWidth: 'none',   // Hide scrollbar for Firefox
+                    '&::-webkit-scrollbar': { // Hide scrollbar for Chrome, Safari, and Opera
+                      display: 'none'
                     },
                   }}
                 >

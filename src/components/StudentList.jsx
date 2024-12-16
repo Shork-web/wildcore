@@ -325,7 +325,13 @@ function StudentList() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container 
+      maxWidth={false}
+      sx={{ 
+        py: 4,
+        px: { xs: 2, sm: 3, md: 4 },
+      }}
+    >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography 
           variant="h4" 
@@ -383,6 +389,7 @@ function StudentList() {
             background: 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(10px)',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+            width: '100%',
           }}
         >
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -400,7 +407,7 @@ function StudentList() {
               </Button>
             )}
           </Box>
-          <Grid container spacing={2}>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>Program</InputLabel>
@@ -468,11 +475,13 @@ function StudentList() {
           background: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          maxHeight: '500px',
+          maxHeight: '75vh',
+          minHeight: '500px',
           overflow: 'auto',
+          width: '100%',
           '&::-webkit-scrollbar': {
-            width: '8px',
-            height: '8px',
+            width: '10px',
+            height: '10px',
           },
           '&::-webkit-scrollbar-track': {
             background: '#f1f1f1',
@@ -487,7 +496,16 @@ function StudentList() {
           },
         }}
       >
-        <Table stickyHeader>
+        <Table 
+          stickyHeader 
+          sx={{ 
+            minWidth: '100%',
+            '& .MuiTableCell-root': {
+              whiteSpace: 'nowrap',
+              px: 2,
+            },
+          }}
+        >
           <TableHead>
             <TableRow>
               <TableCell 
@@ -495,6 +513,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '15%',
+                  minWidth: '150px',
+                  padding: '16px',
                 }}
               >
                 Name
@@ -504,6 +525,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
                 }}
               >
                 Program
@@ -513,6 +537,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
                 }}
               >
                 Gender
@@ -522,6 +549,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
                 }}
               >
                 Semester
@@ -531,6 +561,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
                 }}
               >
                 School Year
@@ -540,6 +573,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
                 }}
               >
                 Company
@@ -549,6 +585,9 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
                 }}
               >
                 Location
@@ -558,16 +597,22 @@ function StudentList() {
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '8%',
+                  minWidth: '140px',
+                  padding: '16px',
                 }}
               >
                 Duration
               </TableCell>
               <TableCell 
-                align="right" 
+                align="center"
                 sx={{ 
                   fontWeight: 'bold', 
                   color: '#800000',
                   backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  width: '5%',
+                  minWidth: '100px',
+                  padding: '16px',
                 }}
               >
                 Actions
@@ -581,21 +626,96 @@ function StudentList() {
                 sx={{ 
                   '&:hover': { 
                     backgroundColor: 'rgba(128, 0, 0, 0.04)',
-                  }
+                  },
+                  height: '60px',
                 }}
               >
-                <TableCell>{student.name}</TableCell>
-                <TableCell>{student.program}</TableCell>
-                <TableCell>{student.gender}</TableCell>
-                <TableCell>{student.semester}</TableCell>
-                <TableCell>{student.schoolYear}</TableCell>
-                <TableCell>{student.partnerCompany}</TableCell>
-                <TableCell>{student.location}</TableCell>
-                <TableCell>
+                <TableCell sx={{ 
+                  width: '15%',
+                  minWidth: '150px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.name}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.program}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.gender}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.semester}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.schoolYear}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.partnerCompany}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  minWidth: '120px',
+                  padding: '16px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {student.location}
+                </TableCell>
+                <TableCell sx={{ 
+                  width: '8%',
+                  minWidth: '140px',
+                  padding: '16px',
+                }}>
                   {`${new Date(student.startDate).toLocaleDateString()} - ${new Date(student.endDate).toLocaleDateString()}`}
                 </TableCell>
-                <TableCell align="right">
-                  <Box>
+                <TableCell 
+                  align="center"
+                  sx={{ 
+                    width: '5%',
+                    minWidth: '100px',
+                    padding: '16px',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
                     <Tooltip title="Edit">
                       <IconButton 
                         size="small" 

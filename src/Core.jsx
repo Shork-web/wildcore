@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useContext } from 'react';
 import { Container, Dialog, Grid, Button, Box, DialogActions, DialogContent, DialogContentText, DialogTitle, CssBaseline } from '@mui/material';
-import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import StudentForm from './components/StudentForm';
 import StudentList from './components/StudentList';
 import UserDashboard from './components/UserDashboard';
@@ -12,6 +12,7 @@ import logo from './assets/wordlogo.png';
 import ConcernsSolutions from './components/ConcernsSolutions';
 import { AuthContext, AuthProvider, StudentsContext } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Footer from './components/Footer';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -68,9 +69,15 @@ function MainContent() {
   const { students, updateStudents } = useContext(StudentsContext);
   const { userRole, auth } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
   const [editingStudent, setEditingStudent] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+
+  // Function to determine if footer should be shown
+  const shouldShowFooter = () => {
+    return location.pathname === '/' || location.pathname === '/dashboard';
+  };
 
   // Add Student Function
   const addStudent = (student) => {
@@ -124,7 +131,7 @@ function MainContent() {
   };
 
   return (
-    <div style={{ backgroundColor: 'white', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: 'white', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <CssBaseline />
       <AppBar position="static">
         <Toolbar>
@@ -164,10 +171,14 @@ function MainContent() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ mt: 4, backgroundColor: 'white' }}>
+      <Container maxWidth="xl" sx={{ mt: 4, backgroundColor: 'white', flex: 1 }}>
         <Grid container spacing={3}>
           <Routes>
-            <Route path="/" element={userRole === 'admin' ? <AdminDashboard /> : <UserDashboard />} />
+            <Route path="/" element={
+              <>
+                {userRole === 'admin' ? <AdminDashboard /> : <UserDashboard />}
+              </>
+            } />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route
               path="/students"
@@ -301,6 +312,8 @@ function MainContent() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {shouldShowFooter() && <Footer />}
     </div>
   );
 }

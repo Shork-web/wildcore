@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Grid, Typography, Paper, Box, Card, CardContent, IconButton, Divider, Chip } from '@mui/material';
 import { styled } from '@mui/system';
-import { Assignment, History, School, ArrowForward, Notifications, TrendingUp, HelpOutline } from '@mui/icons-material';
+import { Assignment, History, HelpOutline, ArrowForward, Notifications, TrendingUp } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 const DashboardCard = styled(Card)(({ theme }) => ({
@@ -9,10 +9,26 @@ const DashboardCard = styled(Card)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   borderRadius: theme.shape.borderRadius * 2,
-  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  position: 'relative',
+  overflow: 'hidden',
   '&:hover': {
-    transform: 'translateY(-4px)',
-    boxShadow: theme.shadows[8],
+    transform: 'translateY(-8px)',
+    boxShadow: '0 12px 24px rgba(128, 0, 0, 0.1)',
+    '&::after': {
+      opacity: 1,
+    },
+  },
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(180deg, rgba(128, 0, 0, 0.02) 0%, rgba(128, 0, 0, 0) 100%)',
+    opacity: 0,
+    transition: 'opacity 0.3s ease-in-out',
   },
 }));
 
@@ -29,6 +45,11 @@ const IconWrapper = styled(Box)(({ theme }) => ({
   padding: theme.spacing(1),
   display: 'inline-flex',
   marginBottom: theme.spacing(2),
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  transform: 'scale(1)',
+  '&:hover': {
+    transform: 'scale(1.1) rotate(5deg)',
+  },
 }));
 
 function FeatureCard({ icon, title, description, action, path }) {
@@ -45,21 +66,50 @@ function FeatureCard({ icon, title, description, action, path }) {
       <CardContent>
         <IconWrapper>{icon}</IconWrapper>
         <CardTitle variant="h6">{title}</CardTitle>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography 
+          variant="body2" 
+          color="text.secondary" 
+          sx={{ 
+            mb: 2,
+            transition: 'color 0.3s ease',
+            '&:hover': {
+              color: 'text.primary',
+            },
+          }}
+        >
           {description}
         </Typography>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Chip label={action} color="primary" size="small" />
+        <Box 
+          display="flex" 
+          justifyContent="space-between" 
+          alignItems="center"
+          sx={{
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <Chip 
+            label={action} 
+            color="primary" 
+            size="small"
+            sx={{
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'scale(1.05)',
+                backgroundColor: '#600000',
+              },
+            }}
+          />
           <IconButton 
             size="small" 
             color="primary"
             onClick={handleClick}
             sx={{ 
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': { 
-                backgroundColor: 'rgba(128, 0, 0, 0.04)',
-                transform: 'scale(1.1)'
+                backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                transform: 'scale(1.15) rotate(90deg)',
               },
-              transition: 'transform 0.2s ease-in-out'
             }}
           >
             <ArrowForward />
@@ -82,7 +132,17 @@ function UserDashboard() {
             Work Integrated Learning Data Collection and Reporting Engine
           </Typography>
         </Box>
-        <IconButton color="primary" size="large">
+        <IconButton 
+          color="primary" 
+          size="large"
+          sx={{
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              backgroundColor: 'rgba(128, 0, 0, 0.08)',
+              transform: 'rotate(15deg)',
+            },
+          }}
+        >
           <Notifications />
         </IconButton>
       </Box>
@@ -102,33 +162,36 @@ function UserDashboard() {
             <Grid item xs={12} sm={6}>
               <FeatureCard
                 icon={<History />}
-                title="Review Student List"
-                description="Review all previously submitted student records and verify their accuracy."
-                action="View List"
+                title="Student Records"
+                description="View and manage student records. Review, edit, and verify student information."
+                action="View & Edit"
                 path="/students"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FeatureCard
-                icon={<School />}
-                title="Update Records"
-                description="Edit existing records to keep the information up-to-date and accurate."
-                action="Update Records"
-                path="/students"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <FeatureCard
                 icon={<HelpOutline />}
                 title="Need Help?"
-                description="Access user guides, FAQs, and contact support for assistance."
+                description="Access user guides, FAQs, and contact support for assistance. Get detailed information about using the system and managing student records effectively."
                 action="Get Help"
               />
             </Grid>
           </Grid>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Paper elevation={2} sx={{ p: 3, borderRadius: 4, height: '100%' }}>
+          <Paper 
+            elevation={2} 
+            sx={{ 
+              p: 3, 
+              borderRadius: 4, 
+              height: '100%',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              '&:hover': {
+                boxShadow: '0 8px 24px rgba(128, 0, 0, 0.1)',
+                transform: 'translateY(-4px)',
+              },
+            }}
+          >
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6" color="primary" fontWeight="bold">
                 Getting Started
@@ -140,10 +203,7 @@ function UserDashboard() {
               • Click "Add New Student" to create a new internship record with complete student details.
             </Typography>
             <Typography variant="body2" paragraph>
-              • Use "Student List" to access and review all submitted records.
-            </Typography>
-            <Typography variant="body2" paragraph>
-              • Select "Update Records" to modify existing student information.
+              • Use "Student Records" to view, edit and manage all submitted records.
             </Typography>
             <Divider sx={{ my: 2 }} />
             <Typography variant="subtitle2" color="primary" gutterBottom>

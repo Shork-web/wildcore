@@ -10,14 +10,32 @@ import ForgotPassword from './components/forgotpw.component';
 import StudentList from './components/StudentList';
 import StudentForm from './components/StudentForm';
 import ConcernsSolutions from './components/ConcernsSolutions';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, createTheme, ThemeProvider, CssBaseline, GlobalStyles } from '@mui/material';
+import './index.css';
 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <ThemeProvider theme={createTheme()}>
+        <CssBaseline />
+        <GlobalStyles
+          styles={{
+            '*': {
+              msOverflowStyle: 'none',  // Hide scrollbar for IE and Edge
+              scrollbarWidth: 'none',    // Hide scrollbar for Firefox
+            },
+            '*::-webkit-scrollbar': {    // Hide scrollbar for Chrome, Safari, and Opera
+              display: 'none'
+            },
+            'html, body': {
+              overflow: 'auto',
+            },
+          }}
+        />
+        <Router>
+          <AppContent />
+        </Router>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
