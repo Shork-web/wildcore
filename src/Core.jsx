@@ -13,6 +13,7 @@ import ConcernsSolutions from './components/ConcernsSolutions';
 import { AuthContext, AuthProvider, StudentsContext } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Footer from './components/Footer';
+import Analytics from './components/Analytics/AnalyticsExport';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -153,6 +154,9 @@ function MainContent() {
               <Button color="inherit" component={Link} to="/concerns">
                 Concerns & Solutions
               </Button>
+              <Button color="inherit" component={Link} to="/analytics">
+                Analytics
+              </Button>
             </>
           )}
           {userRole === 'instructor' && (
@@ -197,6 +201,14 @@ function MainContent() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <ConcernsSolutions students={students} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Analytics />
                 </ProtectedRoute>
               }
             />
