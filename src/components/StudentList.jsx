@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import {
   Container,
   Typography,
@@ -38,8 +38,9 @@ import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
 import ErrorIcon from '@mui/icons-material/Error';
 import { db, auth } from '../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, getDocs } from 'firebase/firestore';
 import StudentForm from './StudentForm';
+import { AuthContext } from '../context/AuthContext';
 
 class StudentManager {
   constructor() {
@@ -50,7 +51,6 @@ class StudentManager {
       schoolYear: 'All',
       company: 'All'
     };
-    this._loading = true;
     this._error = null;
     this._subscribers = new Set();
   }
@@ -58,9 +58,7 @@ class StudentManager {
   // Getters
   get students() { return [...this._students]; }
   get filters() { return { ...this._filters }; }
-  get loading() { return this._loading; }
-  get error() { return this._error; }
-  
+
   // Get unique values for filters
   get programs() { return ['All', ...new Set(this._students.map(student => student.program))]; }
   get semesters() { return ['All', 'First', 'Second', 'Summer']; }
@@ -167,14 +165,11 @@ class StudentManager {
           ...doc.data()
         }));
         this._students = studentsList;
-        this._loading = false;
-        this._error = null;
         this._notifySubscribers();
       },
       (error) => {
         console.error("Error fetching students:", error);
         this._error = error.message;
-        this._loading = false;
         this._notifySubscribers();
       }
     );
@@ -182,6 +177,7 @@ class StudentManager {
 }
 
 function StudentList() {
+  const { currentUser } = useContext(AuthContext);
   const studentManager = useRef(new StudentManager()).current;
   const [, forceUpdate] = useState();
   const [page, setPage] = useState(1);
@@ -194,30 +190,63 @@ function StudentList() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
+  const [filteredStudents, setFilteredStudents] = useState([]);
 
-  // Use the new data fetching approach
   useEffect(() => {
-    const unsubscribe = studentManager.subscribe(() => forceUpdate({}));
-    const unsubscribeSnapshot = studentManager.initializeDataFetching();
-    
-    return () => {
-      unsubscribe();
-      unsubscribeSnapshot();
-    };
-  }, [studentManager]);
+    const fetchStudents = async () => {
+      try {
+        setLoading(true);
+        let q;
+        
+        if (currentUser?.profile?.role === 'instructor') {
+          q = query(
+            collection(db, 'studentData'),
+            where('college', '==', currentUser.profile.college)
+          );
+        } else {
+          q = collection(db, 'studentData');
+        }
 
-  // Handle filter changes
+        const querySnapshot = await getDocs(q);
+        const fetchedStudents = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        studentManager.students = fetchedStudents;
+        setStudents(fetchedStudents);
+        setFilteredStudents(fetchedStudents);
+      } catch (error) {
+        console.error('Error fetching students:', error);
+        setSnackbarMessage('Error loading students: ' + error.message);
+        setSnackbarSeverity('error');
+        setOpenSnackbar(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudents();
+
+    const unsubscribe = studentManager.subscribe(() => {
+      setFilteredStudents(studentManager.getFilteredStudents());
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, studentManager]);
+
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
-    forceUpdate({}); // Force re-render when filters change
+    setFilteredStudents(studentManager.getFilteredStudents());
   };
 
   const resetFilters = () => {
     studentManager.resetFilters();
-    forceUpdate({});
+    setFilteredStudents(students);
   };
 
-  // Handle student deletion
   const handleDeleteClick = (student) => {
     setStudentToDelete(student);
     setDeleteConfirmOpen(true);
@@ -241,7 +270,6 @@ function StudentList() {
     }
   };
 
-  // Handle student update
   const handleUpdateSuccess = async (updatedData) => {
     try {
       if (!editingStudent?.id) {
@@ -279,11 +307,6 @@ function StudentList() {
     }
   };
 
-  // Get filtered students
-  const filteredStudents = studentManager.getFilteredStudents();
-  const activeFiltersCount = studentManager.getActiveFiltersCount();
-
-  // Handle edit dialog
   const handleEdit = (student) => {
     setEditingStudent(student);
     setIsDialogOpen(true);
@@ -294,7 +317,6 @@ function StudentList() {
     setIsDialogOpen(false);
   };
 
-  // Add snackbar close handler
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') {
       return;
@@ -316,8 +338,12 @@ function StudentList() {
     page * rowsPerPage
   );
 
-  if (studentManager.loading) {
-    return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (studentManager.error) {
@@ -356,7 +382,7 @@ function StudentList() {
           }}
         >
           Filters
-          {activeFiltersCount > 0 && (
+          {studentManager.getActiveFiltersCount() > 0 && (
             <Box
               sx={{
                 position: 'absolute',
@@ -374,7 +400,7 @@ function StudentList() {
                 fontWeight: 'bold',
               }}
             >
-              {activeFiltersCount}
+              {studentManager.getActiveFiltersCount()}
             </Box>
           )}
         </Button>
@@ -396,7 +422,7 @@ function StudentList() {
             <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
               Filter Options
             </Typography>
-            {activeFiltersCount > 0 && (
+            {studentManager.getActiveFiltersCount() > 0 && (
               <Button
                 startIcon={<ClearIcon />}
                 onClick={resetFilters}
@@ -786,7 +812,6 @@ function StudentList() {
         </Stack>
       </Box>
 
-      {/* Edit Dialog */}
       <Dialog
         open={isDialogOpen}
         onClose={handleCloseDialog}
@@ -829,7 +854,6 @@ function StudentList() {
         </Typography>
       )}
 
-      {/* Add Snackbar at the bottom */}
       <Snackbar
         open={openSnackbar}
         autoHideDuration={6000}
@@ -854,66 +878,6 @@ function StudentList() {
         </Alert>
       </Snackbar>
 
-      {/* Error state display */}
-      {studentManager.error && (
-        <Paper
-          sx={{
-            p: 3,
-            mt: 3,
-            backgroundColor: '#FFEBEE',
-            borderRadius: 2,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-          }}
-        >
-          <Box
-            sx={{
-              backgroundColor: '#FFCDD2',
-              borderRadius: '50%',
-              p: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ErrorIcon sx={{ color: '#C62828' }} />
-          </Box>
-          <Box>
-            <Typography variant="h6" sx={{ color: '#B71C1C', mb: 0.5 }}>
-              Error Loading Students
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#C62828' }}>
-              {studentManager.error}
-            </Typography>
-          </Box>
-        </Paper>
-      )}
-
-      {/* Loading state */}
-      {studentManager.loading && (
-        <Paper
-          sx={{
-            p: 3,
-            mt: 3,
-            backgroundColor: '#E3F2FD',
-            borderRadius: 2,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-          }}
-        >
-          <CircularProgress size={24} sx={{ color: '#1976D2' }} />
-          <Typography variant="h6" sx={{ color: '#1565C0' }}>
-            Loading Students...
-          </Typography>
-        </Paper>
-      )}
-
-      {/* Add Delete Confirmation Dialog */}
       <Dialog
         open={deleteConfirmOpen}
         onClose={handleDeleteCancel}

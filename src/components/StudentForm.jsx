@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   TextField,
   Button,
@@ -16,7 +16,9 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../firebase-config';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import { AuthContext } from '../context/AuthContext';
+import { getProgramsByCollege } from '../utils/collegePrograms';
 
 const maroon = '#800000';
 
@@ -66,6 +68,7 @@ class Student {
       solutions: data.solutions || '',
       recommendations: data.recommendations || '',
       evaluation: data.evaluation || '',
+      college: data.college || '',
       createdAt: data.createdAt || null,
       createdBy: data.createdBy || null,
       updatedAt: data.updatedAt || null,
@@ -87,6 +90,7 @@ class Student {
   get solutions() { return this._data.solutions; }
   get recommendations() { return this._data.recommendations; }
   get evaluation() { return this._data.evaluation; }
+  get college() { return this._data.college; }
 
   // Setters
   set name(value) { this._data.name = value; }
@@ -102,6 +106,7 @@ class Student {
   set solutions(value) { this._data.solutions = value; }
   set recommendations(value) { this._data.recommendations = value; }
   set evaluation(value) { this._data.evaluation = value; }
+  set college(value) { this._data.college = value; }
 
   // Methods
   toJSON() {
@@ -174,11 +179,13 @@ class Student {
 }
 
 function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
+  const { currentUser } = useContext(AuthContext);
   const [student, setStudent] = useState(new Student(initialData));
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availablePrograms, setAvailablePrograms] = useState([]);
 
   const isEditing = initialData && Object.keys(initialData).length > 0;
 
@@ -191,7 +198,20 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
       };
       setStudent(new Student(formattedData));
     }
-  }, [initialData]);
+
+    if (currentUser?.profile?.college && !initialData?.college) {
+      const newStudent = new Student({
+        ...student.toJSON(),
+        college: currentUser.profile.college
+      });
+      setStudent(newStudent);
+    }
+
+    if (currentUser?.profile?.college) {
+      const programs = getProgramsByCollege(currentUser.profile.college);
+      setAvailablePrograms(programs);
+    }
+  }, [currentUser, initialData]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -250,70 +270,49 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
         throw new Error('No authenticated user found');
       }
 
+      // Get user document from Firestore to ensure we have the latest data
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (!userDoc.exists()) {
+        throw new Error('User profile not found');
+      }
+
+      const userData = userDoc.data();
+      
       student.validate();
       const currentData = student.getAllData();
 
-      if (isEditing && docId) {
-        const updateData = {
-          name: currentData.name,
-          gender: currentData.gender,
-          program: currentData.program,
-          semester: currentData.semester,
-          schoolYear: currentData.schoolYear,
-          partnerCompany: currentData.partnerCompany,
-          location: currentData.location,
-          startDate: currentData.startDate,
-          endDate: currentData.endDate,
-          concerns: currentData.concerns || '',
-          solutions: currentData.solutions || '',
-          recommendations: currentData.recommendations || '',
-          evaluation: currentData.evaluation || '',
-          updatedAt: new Date().toISOString(),
-          updatedBy: currentUser.uid,
-          createdAt: currentData.createdAt,
-          createdBy: currentData.createdBy
-        };
+      const studentData = {
+        ...currentData,
+        college: userData.college, // Get college directly from Firestore document
+        createdAt: isEditing ? currentData.createdAt : new Date().toISOString(),
+        createdBy: isEditing ? currentData.createdBy : currentUser.uid,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser.uid,
+      };
 
+      if (isEditing && docId) {
         if (addStudent) {
-          await addStudent(updateData);
+          await addStudent(studentData);
         }
       } else {
-        const newStudentData = {
-          name: currentData.name,
-          gender: currentData.gender,
-          program: currentData.program,
-          semester: currentData.semester,
-          schoolYear: currentData.schoolYear,
-          partnerCompany: currentData.partnerCompany,
-          location: currentData.location,
-          startDate: currentData.startDate,
-          endDate: currentData.endDate,
-          concerns: currentData.concerns || '',
-          solutions: currentData.solutions || '',
-          recommendations: currentData.recommendations || '',
-          evaluation: currentData.evaluation || '',
-          createdAt: new Date().toISOString(),
-          createdBy: currentUser.uid,
-          updatedAt: new Date().toISOString(),
-          updatedBy: currentUser.uid,
-        };
-        
-        const docRef = await addDoc(collection(db, 'studentData'), newStudentData);
+        const docRef = await addDoc(collection(db, 'studentData'), studentData);
         setStudent(new Student());
         
         if (addStudent) {
-          await addStudent({ ...newStudentData, id: docRef.id });
+          await addStudent({ ...studentData, id: docRef.id });
         }
       }
 
       if (!disableSnackbar) {
         setSnackbarMessage(isEditing ? 'Student updated successfully' : 'Student added successfully');
+        setSnackbarSeverity('success');
         setOpenSnackbar(true);
       }
     } catch (error) {
       console.error('Error saving student data:', error);
       if (!disableSnackbar) {
         setSnackbarMessage('Error: ' + error.message);
+        setSnackbarSeverity('error');
         setOpenSnackbar(true);
       }
       throw error;
@@ -328,25 +327,6 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
     }
     setOpenSnackbar(false);
   };
-
-  // Define available programs
-  const programs = [
-    'BSIT',
-    'BSCS',
-    'BSIS',
-    'BSEMC',
-    'BSCpE',
-    'BSCE',
-    'BSEE',
-    'BSME',
-    'BSA',
-    'BSBA',
-    'BSN',
-    'BSMT',
-    'BSPT',
-    'BSPharma',
-    'BSRT'
-  ];
 
   return (
     <StyledCard elevation={0}>
@@ -409,7 +389,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                   onChange={handleChange}
                   label="Program"
                 >
-                  {programs.map((program) => (
+                  {availablePrograms.map((program) => (
                     <MenuItem key={program} value={program}>
                       {program}
                     </MenuItem>

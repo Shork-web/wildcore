@@ -16,44 +16,33 @@ export const AuthProvider = ({ children }) => {
   const firebaseAuth = getAuth();
 
   useEffect(() => {
-    // Try to restore user data from localStorage
-    const storedUserData = localStorage.getItem('userData');
-    if (storedUserData) {
-      const { role } = JSON.parse(storedUserData);
-      setUserRole(role);
-    }
-
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
       try {
         if (user) {
-          // Get user role from Firestore
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            setCurrentUser(user);
+            const userWithProfile = {
+              ...user,
+              profile: userData
+            };
+            setCurrentUser(userWithProfile);
             setUserRole(userData.role);
             
-            // Update localStorage
             localStorage.setItem('userData', JSON.stringify({
               uid: user.uid,
-              role: userData.role
+              role: userData.role,
+              college: userData.college
             }));
           } else {
-            console.error('User document not found');
-            setCurrentUser(null);
-            setUserRole(null);
-            localStorage.removeItem('userData');
+            handleSignOut();
           }
         } else {
-          setCurrentUser(null);
-          setUserRole(null);
-          localStorage.removeItem('userData');
+          handleSignOut();
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        setCurrentUser(null);
-        setUserRole(null);
-        localStorage.removeItem('userData');
+        handleSignOut();
       } finally {
         setLoading(false);
       }
@@ -62,13 +51,17 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, [firebaseAuth]);
 
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    setUserRole(null);
+    localStorage.removeItem('userData');
+  };
+
   const value = {
     auth,
     currentUser,
     userRole,
-    loading,
-    setCurrentUser,
-    setUserRole
+    loading
   };
 
   if (loading) {
@@ -88,7 +81,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }; 

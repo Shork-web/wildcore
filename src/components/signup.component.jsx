@@ -16,8 +16,53 @@ import {
   Snackbar
 } from '@mui/material';
 import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey } from '@mui/icons-material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import Auth from '../classes/Auth';
+
+const COLLEGES = {
+  'COLLEGE OF ENGINEERING AND ARCHITECTURE': [
+    'BS Architecture',
+    'BS Chemical Engineering',
+    'BS Civil Engineering',
+    'BS Computer Engineering',
+    'BS Electrical Engineering',
+    'BS Electronics Engineering',
+    'BS Industrial Engineering',
+    'BS Mechanical Engineering',
+    'BS Mining Engineering'
+  ],
+  'COLLEGE OF MANAGEMENT, BUSINESS & ACCOUNTANCY': [
+    'BS Accountancy',
+    'BS Accounting Information Systems',
+    'BS Management Accounting',
+    'BS Business Administration',
+    'BS Hospitality Management',
+    'BS Tourism Management',
+    'BS Office Administration',
+    'Bachelor in Public Administration'
+  ],
+  'COLLEGE OF ARTS, SCIENCES, & EDUCATION': [
+    'AB Communication',
+    'AB English with Applied Linguistics',
+    'Bachelor of Elementary Education',
+    'Bachelor of Secondary Education',
+    'Bachelor of Multimedia Arts',
+    'BS Biology',
+    'BS Math with Applied Industrial Mathematics',
+    'BS Psychology'
+  ],
+  'COLLEGE OF NURSING & ALLIED HEALTH SCIENCES': [
+    'BS Nursing',
+    'BS Pharmacy'
+  ],
+  'COLLEGE OF COMPUTER STUDIES': [
+    'BS Computer Science',
+    'BS Information Technology'
+  ],
+  'COLLEGE OF CRIMINAL JUSTICE': [
+    'BS Criminology'
+  ]
+};
 
 export default function SignUp() {
   const [userData, setUserData] = useState({
@@ -32,6 +77,7 @@ export default function SignUp() {
     adminKey: '',
     adminKeyVerified: false,
     role: 'instructor',
+    college: '',
     createdAt: new Date().toISOString()
   });
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -40,6 +86,7 @@ export default function SignUp() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const auth = new Auth();
+  const navigate = useNavigate();
 
   const validatePasswords = () => {
     return userData.password === userData.confirmPassword;
@@ -48,7 +95,7 @@ export default function SignUp() {
   const validateAdminKey = () => {
     if (userData.accountType === 'admin') {
       // admin key validation
-      return userData.adminKey === 'CITADMIN';
+      return userData.adminKey === "CITADMIN";
     }
     return true;
   };
@@ -56,6 +103,7 @@ export default function SignUp() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setMessage({ type: '', text: '' });
 
     try {
       if (!validatePasswords()) {
@@ -68,6 +116,12 @@ export default function SignUp() {
         return;
       }
 
+      if (userData.accountType === 'instructor' && !userData.college) {
+        setMessage({ type: 'error', text: 'Please select a college' });
+        setIsSubmitting(false);
+        return;
+      }
+
       const userForAuth = {
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -77,9 +131,9 @@ export default function SignUp() {
         idNumber: userData.idNumber,
         phoneNumber: userData.phoneNumber,
         role: userData.accountType,
+        college: userData.college,
         createdAt: new Date().toISOString(),
-        adminKeyVerified: userData.accountType === 'admin',
-        accountType: userData.accountType
+        adminKeyVerified: userData.accountType === 'admin'
       };
 
       if (userData.accountType === 'admin') {
@@ -96,7 +150,7 @@ export default function SignUp() {
         await auth.signOut();
         
         setTimeout(() => {
-          window.location.replace('/sign-in');
+          navigate('/sign-in');
         }, 500);
       } else {
         setSnackbarSeverity('error');
@@ -123,7 +177,8 @@ export default function SignUp() {
     setUserData(prev => ({
       ...prev,
       accountType: type,
-      adminKey: type !== 'admin' ? '' : prev.adminKey
+      adminKey: type !== 'admin' ? '' : prev.adminKey,
+      college: type === 'instructor' ? '' : prev.college
     }));
   };
 
@@ -342,6 +397,47 @@ export default function SignUp() {
                   }}
                 />
               </Grid>
+              {userData.accountType === 'instructor' && (
+                <Grid item xs={12}>
+                  <TextField
+                    select
+                    required
+                    fullWidth
+                    name="college"
+                    label="College"
+                    value={userData.college}
+                    onChange={handleChange}
+                    SelectProps={{
+                      native: true,
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        height: '56px',
+                        '&:hover fieldset': {
+                          borderColor: '#800000',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#800000',
+                        },
+                      },
+                    }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <School sx={{ color: '#800000' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  >
+                    <option value="">Select a College</option>
+                    {Object.keys(COLLEGES).map((college) => (
+                      <option key={college} value={college}>
+                        {college}
+                      </option>
+                    ))}
+                  </TextField>
+                </Grid>
+              )}
             </Grid>
 
             <Divider sx={{ my: 3 }} />
@@ -439,9 +535,9 @@ export default function SignUp() {
               </Grid>
             </Grid>
 
-            <Collapse in={userData.accountType === 'admin'}>
+            {userData.accountType === 'admin' && (
               <TextField
-                required={userData.accountType === 'admin'}
+                required
                 fullWidth
                 name="adminKey"
                 label="Admin Key"
@@ -468,7 +564,7 @@ export default function SignUp() {
                   ),
                 }}
               />
-            </Collapse>
+            )}
 
             <Button
               type="submit"

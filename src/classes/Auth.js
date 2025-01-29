@@ -31,6 +31,7 @@ export default class Auth {
   // Authentication methods
   async signUp(userData) {
     try {
+      // Create auth user
       const userCredential = await createUserWithEmailAndPassword(
         this._auth,
         userData.email,
@@ -39,7 +40,7 @@ export default class Auth {
 
       const uid = userCredential.user.uid;
 
-      // Create the base profile document in users collection
+      // Create the base profile document
       const profileData = {
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -47,33 +48,31 @@ export default class Auth {
         idNumber: userData.idNumber,
         phoneNumber: userData.phoneNumber,
         role: userData.role,
-        createdAt: userData.createdAt,
-        adminKeyVerified: userData.adminKeyVerified
+        createdAt: userData.createdAt
       };
 
-      // 1. Save to users collection
-      await setDoc(doc(this._db, 'users', uid), profileData);
-
-      // 2. Create role-specific profile document
-      const roleProfileData = {
-        ...profileData,
-        accountType: userData.accountType,
-        confirmPassword: userData.confirmPassword
-      };
-
-      if (userData.accountType === 'admin') {
-        roleProfileData.adminKey = userData.adminKey;
+      // Add role-specific fields
+      if (userData.role === 'admin') {
+        profileData.adminKeyVerified = true;
+      } else if (userData.role === 'instructor') {
+        profileData.college = userData.college;
       }
 
-      // Save to nested role-specific collection (adminProfile or instructorProfile)
+      // Save to users collection
+      await setDoc(doc(this._db, 'users', uid), profileData);
+
+      // Create role-specific profile
+      const roleProfileData = {
+        ...profileData,
+        accountType: userData.role
+      };
+
+      // Save to nested role-specific collection
       const rolePath = userData.role === 'admin' ? 'adminProfile' : 'instructorProfile';
       await setDoc(
         doc(this._db, 'users', uid, rolePath, 'profile'),
         roleProfileData
       );
-
-      // 3. Save to general profile collection
-      await setDoc(doc(this._db, 'profile', uid), roleProfileData);
 
       return { success: true };
     } catch (error) {
@@ -161,9 +160,16 @@ export default class Auth {
       if (user) {
         const userDoc = await getDoc(doc(this._db, 'users', user.uid));
         if (userDoc.exists()) {
+          const userData = userDoc.data();
           this._currentUser = user;
-          this._userRole = userDoc.data().role;
-          callback({ user, role: userDoc.data().role });
+          this._userRole = userData.role;
+          // Include all user data in callback
+          callback({ 
+            user, 
+            role: userData.role,
+            college: userData.college, // Include college
+            profile: userData 
+          });
         }
       } else {
         this._currentUser = null;
@@ -197,6 +203,11 @@ export default class Auth {
       'idNumber',
       'phoneNumber'
     ];
+
+    // Add college validation for instructors
+    if (userData.role === 'instructor') {
+      requiredFields.push('college');
+    }
 
     return requiredFields.every(field => userData[field] && userData[field].trim() !== '');
   }
