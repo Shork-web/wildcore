@@ -211,7 +211,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
       const programs = getProgramsByCollege(currentUser.profile.college);
       setAvailablePrograms(programs);
     }
-  }, [currentUser, initialData]);
+  }, [currentUser, initialData, student]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

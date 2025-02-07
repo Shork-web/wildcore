@@ -36,11 +36,11 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
-import ErrorIcon from '@mui/icons-material/Error';
 import { db, auth } from '../firebase-config';
 import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, getDocs } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../context/AuthContext';
+import { exportStudentsToExcel } from '../utils/studentExport';
 
 class StudentManager {
   constructor() {
@@ -179,7 +179,6 @@ class StudentManager {
 function StudentList() {
   const { currentUser } = useContext(AuthContext);
   const studentManager = useRef(new StudentManager()).current;
-  const [, forceUpdate] = useState();
   const [page, setPage] = useState(1);
   const [rowsPerPage] = useState(50);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -193,6 +192,7 @@ function StudentList() {
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
+  const userRole = currentUser?.profile?.role || 'student';
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -371,39 +371,57 @@ function StudentList() {
         >
           Student List
         </Typography>
-        <Button
-          startIcon={<FilterListIcon />}
-          onClick={() => setShowFilters(!showFilters)}
-          variant={showFilters ? "contained" : "outlined"}
-          color="primary"
-          sx={{ 
-            borderRadius: 2,
-            position: 'relative'
-          }}
-        >
-          Filters
-          {studentManager.getActiveFiltersCount() > 0 && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: -8,
-                right: -8,
-                backgroundColor: '#FFD700',
-                color: '#800000',
-                borderRadius: '50%',
-                width: 20,
-                height: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.75rem',
-                fontWeight: 'bold',
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Button
+            startIcon={<FilterListIcon />}
+            onClick={() => setShowFilters(!showFilters)}
+            variant={showFilters ? "contained" : "outlined"}
+            color="primary"
+            sx={{ 
+              borderRadius: 2,
+              position: 'relative'
+            }}
+          >
+            Filters
+            {studentManager.getActiveFiltersCount() > 0 && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  backgroundColor: '#FFD700',
+                  color: '#800000',
+                  borderRadius: '50%',
+                  width: 20,
+                  height: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                }}
+              >
+                {studentManager.getActiveFiltersCount()}
+              </Box>
+            )}
+          </Button>
+
+          {userRole === 'admin' && (
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={() => exportStudentsToExcel(filteredStudents, userRole)}
+              sx={{ 
+                background: 'linear-gradient(45deg, #800000, #FFD700)',
+                '&:hover': {
+                  background: 'linear-gradient(45deg, #600000, #DFB700)'
+                }
               }}
             >
-              {studentManager.getActiveFiltersCount()}
-            </Box>
+              Export to Excel
+            </Button>
           )}
-        </Button>
+        </Box>
       </Box>
 
       <Collapse in={showFilters}>

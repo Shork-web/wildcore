@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { db } from '../firebase-config';
 import { collection, query, onSnapshot } from 'firebase/firestore';
+import { exportConcernsToExcel } from '../utils/concernsExport';
 
 class ConcernsManager {
   constructor() {
@@ -181,39 +182,55 @@ function ConcernsSolutions() {
         >
           Concerns & Solutions
         </Typography>
-        <Button
-          startIcon={<FilterList />}
-          onClick={() => setShowFilters(!showFilters)}
-          variant={showFilters ? "contained" : "outlined"}
-          color="primary"
-          sx={{ 
-            borderRadius: 2,
-            position: 'relative'
-          }}
-        >
-          Filters
-          {concernsManager.activeFiltersCount > 0 && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: -8,
-                right: -8,
-                backgroundColor: '#FFD700',
-                color: '#800000',
-                borderRadius: '50%',
-                width: 20,
-                height: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.75rem',
-                fontWeight: 'bold',
-              }}
-            >
-              {concernsManager.activeFiltersCount}
-            </Box>
-          )}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Button
+            startIcon={<FilterList />}
+            onClick={() => setShowFilters(!showFilters)}
+            variant={showFilters ? "contained" : "outlined"}
+            color="primary"
+            sx={{ 
+              borderRadius: 2,
+              position: 'relative'
+            }}
+          >
+            Filters
+            {concernsManager.activeFiltersCount > 0 && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  backgroundColor: '#FFD700',
+                  color: '#800000',
+                  borderRadius: '50%',
+                  width: 20,
+                  height: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                }}
+              >
+                {concernsManager.activeFiltersCount}
+              </Box>
+            )}
+          </Button>
+
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={() => exportConcernsToExcel(filteredStudents)}
+            sx={{ 
+              background: 'linear-gradient(45deg, #800000, #FFD700)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #600000, #DFB700)'
+              }
+            }}
+          >
+            Export to Excel
+          </Button>
+        </Box>
       </Box>
 
       <Collapse in={showFilters}>
