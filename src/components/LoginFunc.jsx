@@ -69,8 +69,12 @@ const styles = {
 
 // Animation
 const rotate = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 `;
 
 function BackgroundLogo({ isMobile }) {
@@ -84,21 +88,24 @@ function BackgroundLogo({ isMobile }) {
     <Box
       sx={{
         position: 'fixed',
-        bottom: isMobile ? '-100px' : '-150px',
-        left: isMobile ? '-60px' : '-80px',
-        opacity: 0.8,
-        zIndex: 2,
+        bottom: { xs: '-100px', sm: '-120px', md: '-150px' },
+        left: { xs: '-60px', sm: '-70px', md: '-80px' },
+        opacity: 0.5,
+        zIndex: 1,
         animation: `${rotate} 20s linear infinite`,
-        transform: isMobile ? 'scale(0.7)' : 'scale(1)',
-        transition: 'transform 0.3s ease-in-out',
+        transition: 'all 0.3s ease-in-out',
         pointerEvents: 'none',
+        width: { xs: '200px', sm: '300px', md: '400px' },
+        height: { xs: '200px', sm: '300px', md: '400px' },
       }}
     >
       <img
         src={citLogo}
         alt="CIT University Logo"
         style={{
-          width: '400px',
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
           filter: 'grayscale(40%) blur(1px)',
         }}
       />
