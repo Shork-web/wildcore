@@ -1,328 +1,221 @@
-import React, { useState } from 'react';
-import { Grid, Box, Typography, Card, CardContent, Divider, FormControl, InputLabel, Select, MenuItem, Paper } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Grid, Box, Typography, Card, CardContent, Divider, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, LineChart, Line, RadarChart, 
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell
 } from 'recharts';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase-config';
 
 function CompanyMetrics() {
-  // Add state for selected company
-  const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedCompany, setSelectedCompany] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
+  const [companies, setCompanies] = useState([]);
+  const [evaluationsData, setEvaluationsData] = useState({});
+  const [years, setYears] = useState([]);
+  const [semesters] = useState(['1st', '2nd', 'Summer']);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Sample company list
-  const companies = [
-    { id: 'company1', name: 'Tech Solutions Inc.' },
-    { id: 'company2', name: 'Digital Innovations LLC' },
-    { id: 'company3', name: 'Future Systems Corp' },
-    { id: 'company4', name: 'Data Dynamics' },
-  ];
+  useEffect(() => {
+    let isMounted = true;
 
-  // Company-specific data with full mock data for each company
-  const companyData = {
-    'company1': {
-      workEnvironmentData: [
-        { aspect: 'Learning Environment', rating: 4.5, description: 'Company fosters enthusiasm and eagerness to learn', category: 'Culture' },
-        { aspect: 'Team Collaboration', rating: 4.7, description: 'Encourages cooperation and effective teamwork', category: 'Interaction' },
-        { aspect: 'Workplace Adaptability', rating: 4.3, description: 'Promotes flexibility and positive social interaction', category: 'Culture' },
-        { aspect: 'Employee Initiative', rating: 4.6, description: 'Supports self-motivation and proactive behavior', category: 'Performance' },
-        { aspect: 'Task Ownership', rating: 4.8, description: 'Encourages responsibility and accountability', category: 'Performance' },
-        { aspect: 'Work Focus', rating: 4.4, description: 'Maintains environment for concentration and productivity', category: 'Performance' },
-        { aspect: 'Professional Conduct', rating: 4.9, description: 'Upholds high standards of professionalism', category: 'Culture' },
-        { aspect: 'Attendance & Punctuality', rating: 4.7, description: 'Values consistent attendance and timeliness', category: 'Performance' }
-      ],
-      performanceData: [
-        { aspect: 'Skill Alignment', rating: 4.6, description: 'Tasks match skill level and promote growth', category: 'Development' },
-        { aspect: 'Work-Life Balance', rating: 4.4, description: 'Reasonable workload with clear expectations', category: 'Wellbeing' },
-        { aspect: 'Workplace Safety', rating: 4.9, description: 'Maintains high safety standards and protocols', category: 'Environment' },
-        { aspect: 'Resource Efficiency', rating: 4.5, description: 'Promotes efficient resource utilization', category: 'Operations' },
-        { aspect: 'Quality Standards', rating: 4.7, description: 'Emphasizes quality over quantity in deliverables', category: 'Standards' }
-      ],
-      experienceData: [
-        { aspect: 'Employee Recognition', rating: 4.8, description: 'Feels valued and appreciated by the company', category: 'Satisfaction' },
-        { aspect: 'Career Development', rating: 4.7, description: 'Opportunities for professional advancement', category: 'Growth' },
-        { aspect: 'Work Culture', rating: 4.6, description: 'Positive, inclusive, and respectful environment', category: 'Environment' },
-        { aspect: 'Program Success', rating: 4.8, description: 'Likelihood to recommend to other students', category: 'Impact' }
-      ],
-      trendData: [
-        { month: 'January', satisfaction: 4.5, engagement: 4.3 },
-        { month: 'February', satisfaction: 4.6, engagement: 4.4 },
-        { month: 'March', satisfaction: 4.7, engagement: 4.6 },
-        { month: 'April', satisfaction: 4.8, engagement: 4.7 }
-      ]
-    },
-    'company2': {
-      workEnvironmentData: [
-        { aspect: 'Learning Environment', rating: 4.2, description: 'Company fosters enthusiasm and eagerness to learn', category: 'Culture' },
-        { aspect: 'Team Collaboration', rating: 4.0, description: 'Encourages cooperation and effective teamwork', category: 'Interaction' },
-        { aspect: 'Workplace Adaptability', rating: 4.1, description: 'Promotes flexibility and positive social interaction', category: 'Culture' },
-        { aspect: 'Employee Initiative', rating: 4.3, description: 'Supports self-motivation and proactive behavior', category: 'Performance' },
-        { aspect: 'Task Ownership', rating: 4.4, description: 'Encourages responsibility and accountability', category: 'Performance' },
-        { aspect: 'Work Focus', rating: 4.2, description: 'Maintains environment for concentration and productivity', category: 'Performance' },
-        { aspect: 'Professional Conduct', rating: 4.5, description: 'Upholds high standards of professionalism', category: 'Culture' },
-        { aspect: 'Attendance & Punctuality', rating: 4.3, description: 'Values consistent attendance and timeliness', category: 'Performance' }
-      ],
-      performanceData: [
-        { aspect: 'Skill Alignment', rating: 4.1, description: 'Tasks match skill level and promote growth', category: 'Development' },
-        { aspect: 'Work-Life Balance', rating: 4.3, description: 'Reasonable workload with clear expectations', category: 'Wellbeing' },
-        { aspect: 'Workplace Safety', rating: 4.6, description: 'Maintains high safety standards and protocols', category: 'Environment' },
-        { aspect: 'Resource Efficiency', rating: 4.2, description: 'Promotes efficient resource utilization', category: 'Operations' },
-        { aspect: 'Quality Standards', rating: 4.4, description: 'Emphasizes quality over quantity in deliverables', category: 'Standards' }
-      ],
-      experienceData: [
-        { aspect: 'Employee Recognition', rating: 4.2, description: 'Feels valued and appreciated by the company', category: 'Satisfaction' },
-        { aspect: 'Career Development', rating: 4.3, description: 'Opportunities for professional advancement', category: 'Growth' },
-        { aspect: 'Work Culture', rating: 4.1, description: 'Positive, inclusive, and respectful environment', category: 'Environment' },
-        { aspect: 'Program Success', rating: 4.4, description: 'Likelihood to recommend to other students', category: 'Impact' }
-      ],
-      trendData: [
-        { month: 'January', satisfaction: 4.0, engagement: 3.8 },
-        { month: 'February', satisfaction: 4.1, engagement: 4.0 },
-        { month: 'March', satisfaction: 4.3, engagement: 4.2 },
-        { month: 'April', satisfaction: 4.4, engagement: 4.3 }
-      ]
-    },
-    'company3': {
-      workEnvironmentData: [
-        { aspect: 'Learning Environment', rating: 4.8, description: 'Company fosters enthusiasm and eagerness to learn', category: 'Culture' },
-        { aspect: 'Team Collaboration', rating: 4.9, description: 'Encourages cooperation and effective teamwork', category: 'Interaction' },
-        { aspect: 'Workplace Adaptability', rating: 4.7, description: 'Promotes flexibility and positive social interaction', category: 'Culture' },
-        { aspect: 'Employee Initiative', rating: 4.8, description: 'Supports self-motivation and proactive behavior', category: 'Performance' },
-        { aspect: 'Task Ownership', rating: 4.9, description: 'Encourages responsibility and accountability', category: 'Performance' },
-        { aspect: 'Work Focus', rating: 4.7, description: 'Maintains environment for concentration and productivity', category: 'Performance' },
-        { aspect: 'Professional Conduct', rating: 4.8, description: 'Upholds high standards of professionalism', category: 'Culture' },
-        { aspect: 'Attendance & Punctuality', rating: 4.9, description: 'Values consistent attendance and timeliness', category: 'Performance' }
-      ],
-      performanceData: [
-        { aspect: 'Skill Alignment', rating: 4.8, description: 'Tasks match skill level and promote growth', category: 'Development' },
-        { aspect: 'Work-Life Balance', rating: 4.7, description: 'Reasonable workload with clear expectations', category: 'Wellbeing' },
-        { aspect: 'Workplace Safety', rating: 4.9, description: 'Maintains high safety standards and protocols', category: 'Environment' },
-        { aspect: 'Resource Efficiency', rating: 4.8, description: 'Promotes efficient resource utilization', category: 'Operations' },
-        { aspect: 'Quality Standards', rating: 4.9, description: 'Emphasizes quality over quantity in deliverables', category: 'Standards' }
-      ],
-      experienceData: [
-        { aspect: 'Employee Recognition', rating: 4.9, description: 'Feels valued and appreciated by the company', category: 'Satisfaction' },
-        { aspect: 'Career Development', rating: 4.8, description: 'Opportunities for professional advancement', category: 'Growth' },
-        { aspect: 'Work Culture', rating: 4.9, description: 'Positive, inclusive, and respectful environment', category: 'Environment' },
-        { aspect: 'Program Success', rating: 4.9, description: 'Likelihood to recommend to other students', category: 'Impact' }
-      ],
-      trendData: [
-        { month: 'January', satisfaction: 4.7, engagement: 4.6 },
-        { month: 'February', satisfaction: 4.8, engagement: 4.7 },
-        { month: 'March', satisfaction: 4.9, engagement: 4.8 },
-        { month: 'April', satisfaction: 4.9, engagement: 4.9 }
-      ]
-    },
-    'company4': {
-      workEnvironmentData: [
-        { aspect: 'Learning Environment', rating: 4.1, description: 'Company fosters enthusiasm and eagerness to learn', category: 'Culture' },
-        { aspect: 'Team Collaboration', rating: 3.9, description: 'Encourages cooperation and effective teamwork', category: 'Interaction' },
-        { aspect: 'Workplace Adaptability', rating: 4.0, description: 'Promotes flexibility and positive social interaction', category: 'Culture' },
-        { aspect: 'Employee Initiative', rating: 4.2, description: 'Supports self-motivation and proactive behavior', category: 'Performance' },
-        { aspect: 'Task Ownership', rating: 4.3, description: 'Encourages responsibility and accountability', category: 'Performance' },
-        { aspect: 'Work Focus', rating: 4.1, description: 'Maintains environment for concentration and productivity', category: 'Performance' },
-        { aspect: 'Professional Conduct', rating: 4.4, description: 'Upholds high standards of professionalism', category: 'Culture' },
-        { aspect: 'Attendance & Punctuality', rating: 4.2, description: 'Values consistent attendance and timeliness', category: 'Performance' }
-      ],
-      performanceData: [
-        { aspect: 'Skill Alignment', rating: 4.0, description: 'Tasks match skill level and promote growth', category: 'Development' },
-        { aspect: 'Work-Life Balance', rating: 4.2, description: 'Reasonable workload with clear expectations', category: 'Wellbeing' },
-        { aspect: 'Workplace Safety', rating: 4.5, description: 'Maintains high safety standards and protocols', category: 'Environment' },
-        { aspect: 'Resource Efficiency', rating: 4.1, description: 'Promotes efficient resource utilization', category: 'Operations' },
-        { aspect: 'Quality Standards', rating: 4.3, description: 'Emphasizes quality over quantity in deliverables', category: 'Standards' }
-      ],
-      experienceData: [
-        { aspect: 'Employee Recognition', rating: 4.1, description: 'Feels valued and appreciated by the company', category: 'Satisfaction' },
-        { aspect: 'Career Development', rating: 4.2, description: 'Opportunities for professional advancement', category: 'Growth' },
-        { aspect: 'Work Culture', rating: 4.0, description: 'Positive, inclusive, and respectful environment', category: 'Environment' },
-        { aspect: 'Program Success', rating: 4.3, description: 'Likelihood to recommend to other students', category: 'Impact' }
-      ],
-      trendData: [
-        { month: 'January', satisfaction: 3.9, engagement: 3.7 },
-        { month: 'February', satisfaction: 4.0, engagement: 3.9 },
-        { month: 'March', satisfaction: 4.2, engagement: 4.1 },
-        { month: 'April', satisfaction: 4.3, engagement: 4.2 }
-      ]
-    }
+    const fetchData = async () => {
+      try {
+        if (!db) {
+          console.log('Waiting for database initialization...');
+          return;
+        }
+
+        const evaluationsRef = collection(db, 'companyEvaluations');
+        const snapshot = await getDocs(evaluationsRef);
+        
+        if (!isMounted) return;
+
+        const data = {
+          companies: new Set(),
+          years: new Set(),
+          evaluations: {}
+        };
+
+        snapshot.docs.forEach(doc => {
+          const evaluation = doc.data();
+          
+          if (evaluation.status !== 'submitted') return;
+
+          const { companyName, schoolYear, semester } = evaluation;
+
+          data.companies.add(companyName);
+          data.years.add(schoolYear);
+
+          if (!data.evaluations[companyName]) {
+            data.evaluations[companyName] = {};
+          }
+          if (!data.evaluations[companyName][schoolYear]) {
+            data.evaluations[companyName][schoolYear] = {};
+          }
+          if (!data.evaluations[companyName][schoolYear][semester]) {
+            data.evaluations[companyName][schoolYear][semester] = [];
+          }
+
+          // Store evaluation with exact database structure
+          data.evaluations[companyName][schoolYear][semester].push({
+            workEnvironmentData: [
+              { aspect: 'Workstation', rating: evaluation.workEnvironment?.workstation || 0, category: 'Environment' },
+              { aspect: 'Resources', rating: evaluation.workEnvironment?.resources || 0, category: 'Support' },
+              { aspect: 'Safety', rating: evaluation.workEnvironment?.safety || 0, category: 'Environment' },
+              { aspect: 'Workload', rating: evaluation.workEnvironment?.workload || 0, category: 'Management' }
+            ],
+            performanceData: [
+              { aspect: 'Supervision', rating: evaluation.performanceSupport?.supervision || 0, category: 'Support' },
+              { aspect: 'Feedback', rating: evaluation.performanceSupport?.feedback || 0, category: 'Development' },
+              { aspect: 'Training', rating: evaluation.performanceSupport?.training || 0, category: 'Development' },
+              { aspect: 'Mentorship', rating: evaluation.performanceSupport?.mentorship || 0, category: 'Support' }
+            ],
+            experienceData: [
+              { aspect: 'Relevance', rating: evaluation.experienceQuality?.relevance || 0, category: 'Value' },
+              { aspect: 'Skills', rating: evaluation.experienceQuality?.skills || 0, category: 'Growth' },
+              { aspect: 'Growth', rating: evaluation.experienceQuality?.growth || 0, category: 'Development' },
+              { aspect: 'Satisfaction', rating: evaluation.experienceQuality?.satisfaction || 0, category: 'Experience' }
+            ],
+            trendData: [{
+              month: new Date(evaluation.submittedAt?.toDate()).toLocaleString('default', { month: 'long' }),
+              satisfaction: evaluation.overall?.averageRating || 0,
+              engagement: (evaluation.overall?.totalScore || 0) / (evaluation.overall?.maxPossibleScore || 60) * 5
+            }]
+          });
+        });
+
+        if (isMounted) {
+          setCompanies(Array.from(data.companies).map(name => ({ id: name, name })));
+          setEvaluationsData(data.evaluations);
+          setYears(Array.from(data.years).sort());
+          
+          const latestYear = Array.from(data.years).sort().pop();
+          const firstCompany = Array.from(data.companies)[0];
+          setSelectedYear(latestYear || '');
+          setSelectedCompany(firstCompany || '');
+          setSelectedSemester('1st');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        if (isMounted) {
+          setError(error.message);
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Update the getFilteredData function
+  const getFilteredData = (dataType) => {
+    if (!selectedCompany || !selectedYear || !selectedSemester) return [];
+    
+    const evaluations = evaluationsData[selectedCompany]?.[selectedYear]?.[selectedSemester] || [];
+    if (evaluations.length === 0) return [];
+
+    // Get the first evaluation's data for the selected type
+    const data = evaluations[0]?.[dataType];
+    if (!data) return [];
+
+    return data;
   };
 
-  // Add company selector component
+  // Update the CompanySelector to remove "All Companies" option
   const CompanySelector = () => (
     <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-      <FormControl fullWidth>
-        <InputLabel id="company-select-label">Select Company</InputLabel>
-        <Select
-          labelId="company-select-label"
-          id="company-select"
-          value={selectedCompany}
-          label="Select Company"
-          onChange={(e) => setSelectedCompany(e.target.value)}
-          sx={{
-            '& .MuiSelect-select': { color: '#800000' },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#800000',
-            },
-          }}
-        >
-          <MenuItem value="all">All Companies (Average)</MenuItem>
-          {companies.map((company) => (
-            <MenuItem key={company.id} value={company.id}>
-              {company.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      
-      {selectedCompany !== 'all' && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle1" color="textSecondary">
-            Viewing metrics for: {companies.find(c => c.id === selectedCompany)?.name}
-          </Typography>
-        </Box>
-      )}
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth>
+            <InputLabel id="company-select-label">Select Company</InputLabel>
+            <Select
+              labelId="company-select-label"
+              id="company-select"
+              value={selectedCompany}
+              label="Select Company"
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              sx={{
+                '& .MuiSelect-select': { color: '#800000' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#800000',
+                },
+              }}
+            >
+              {companies.map((company) => (
+                <MenuItem key={company.id} value={company.id}>
+                  {company.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth>
+            <InputLabel>School Year</InputLabel>
+            <Select
+              value={selectedYear}
+              label="School Year"
+              onChange={(e) => setSelectedYear(e.target.value)}
+              sx={{
+                '& .MuiSelect-select': { color: '#800000' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#800000',
+                },
+              }}
+            >
+              {years.map((year) => (
+                <MenuItem key={year} value={year}>{year}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth>
+            <InputLabel>Semester</InputLabel>
+            <Select
+              value={selectedSemester}
+              label="Semester"
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              sx={{
+                '& .MuiSelect-select': { color: '#800000' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#800000',
+                },
+              }}
+            >
+              {semesters.map((sem) => (
+                <MenuItem key={sem} value={sem}>{sem}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        {selectedCompany && (
+          <Grid item xs={12}>
+            <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="subtitle1" sx={{ color: '#800000', fontWeight: 'bold' }}>
+                {companies.find(c => c.id === selectedCompany)?.name}
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                {selectedYear} - {selectedSemester} Semester
+              </Typography>
+            </Box>
+          </Grid>
+        )}
+      </Grid>
     </Paper>
   );
-
-  // Function to get data based on selected company
-  const getFilteredData = (dataType) => {
-    if (selectedCompany === 'all') {
-      switch(dataType) {
-        case 'workEnvironmentData':
-          return workEnvironmentData;
-        case 'performanceData':
-          return performanceData;
-        case 'experienceData':
-          return experienceData;
-        case 'trendData':
-          return trendData;
-        default:
-          return [];
-      }
-    }
-    return companyData[selectedCompany]?.[dataType] || [];
-  };
-
-  // Work Environment metrics with clear categorization and descriptions
-  const workEnvironmentData = [
-    { 
-      aspect: 'Learning Environment',
-      rating: 4.5,
-      description: 'Company fosters enthusiasm and eagerness to learn',
-      category: 'Culture'
-    },
-    { 
-      aspect: 'Team Collaboration',
-      rating: 4.3,
-      description: 'Encourages cooperation and effective teamwork',
-      category: 'Interaction'
-    },
-    { 
-      aspect: 'Workplace Adaptability',
-      rating: 4.2,
-      description: 'Promotes flexibility and positive social interaction',
-      category: 'Culture'
-    },
-    { 
-      aspect: 'Employee Initiative',
-      rating: 4.4,
-      description: 'Supports self-motivation and proactive behavior',
-      category: 'Performance'
-    },
-    { 
-      aspect: 'Task Ownership',
-      rating: 4.6,
-      description: 'Encourages responsibility and accountability',
-      category: 'Performance'
-    },
-    { 
-      aspect: 'Work Focus',
-      rating: 4.3,
-      description: 'Maintains environment for concentration and productivity',
-      category: 'Performance'
-    },
-    { 
-      aspect: 'Professional Conduct',
-      rating: 4.5,
-      description: 'Upholds high standards of professionalism',
-      category: 'Culture'
-    },
-    { 
-      aspect: 'Attendance & Punctuality',
-      rating: 4.7,
-      description: 'Values consistent attendance and timeliness',
-      category: 'Performance'
-    }
-  ];
-
-  // Work Performance metrics with detailed descriptions
-  const performanceData = [
-    { 
-      aspect: 'Skill Alignment',
-      rating: 4.4,
-      description: 'Tasks match skill level and promote growth',
-      category: 'Development'
-    },
-    { 
-      aspect: 'Work-Life Balance',
-      rating: 4.2,
-      description: 'Reasonable workload with clear expectations',
-      category: 'Wellbeing'
-    },
-    { 
-      aspect: 'Workplace Safety',
-      rating: 4.8,
-      description: 'Maintains high safety standards and protocols',
-      category: 'Environment'
-    },
-    { 
-      aspect: 'Resource Efficiency',
-      rating: 4.3,
-      description: 'Promotes efficient resource utilization',
-      category: 'Operations'
-    },
-    { 
-      aspect: 'Quality Standards',
-      rating: 4.5,
-      description: 'Emphasizes quality over quantity in deliverables',
-      category: 'Standards'
-    }
-  ];
-
-  // Overall Experience metrics with meaningful insights
-  const experienceData = [
-    { 
-      aspect: 'Employee Recognition',
-      rating: 4.6,
-      description: 'Feels valued and appreciated by the company',
-      category: 'Satisfaction'
-    },
-    { 
-      aspect: 'Career Development',
-      rating: 4.5,
-      description: 'Opportunities for professional advancement',
-      category: 'Growth'
-    },
-    { 
-      aspect: 'Work Culture',
-      rating: 4.4,
-      description: 'Positive, inclusive, and respectful environment',
-      category: 'Environment'
-    },
-    { 
-      aspect: 'Program Success',
-      rating: 4.7,
-      description: 'Likelihood to recommend to other students',
-      category: 'Impact'
-    }
-  ];
-
-  // Monthly trend data with clear metrics
-  const trendData = [
-    { month: 'January', satisfaction: 4.2, engagement: 4.0 },
-    { month: 'February', satisfaction: 4.3, engagement: 4.2 },
-    { month: 'March', satisfaction: 4.5, engagement: 4.4 },
-    { month: 'April', satisfaction: 4.4, engagement: 4.5 }
-  ];
 
   // Enhanced tooltip component with better formatting
   const CustomTooltip = ({ active, payload, label }) => {
@@ -348,6 +241,22 @@ function CompanyMetrics() {
     }
     return null;
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3, color: 'error.main' }}>
+        <Typography>Error: {error}</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Grid container spacing={3}>

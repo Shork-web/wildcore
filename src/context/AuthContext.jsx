@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase-config';
@@ -15,6 +15,16 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const firebaseAuth = getAuth();
 
+  const handleSignOut = useCallback(async () => {
+    try {
+      await auth.signOut();
+      setCurrentUser(null);
+      setUserRole(null);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  }, [auth]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
       try {
@@ -22,18 +32,12 @@ export const AuthProvider = ({ children }) => {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            const userWithProfile = {
+            setCurrentUser({
               ...user,
-              profile: userData
-            };
-            setCurrentUser(userWithProfile);
+              profile: userData,
+              role: userData.role
+            });
             setUserRole(userData.role);
-            
-            localStorage.setItem('userData', JSON.stringify({
-              uid: user.uid,
-              role: userData.role,
-              college: userData.college
-            }));
           } else {
             handleSignOut();
           }
@@ -49,31 +53,24 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [firebaseAuth]);
-
-  const handleSignOut = () => {
-    setCurrentUser(null);
-    setUserRole(null);
-    localStorage.removeItem('userData');
-  };
+  }, [firebaseAuth, handleSignOut]);
 
   const value = {
     auth,
     currentUser,
     userRole,
-    loading
+    loading,
+    handleSignOut
   };
 
   if (loading) {
     return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          height: '100vh' 
-        }}
-      >
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
         <CircularProgress />
       </Box>
     );

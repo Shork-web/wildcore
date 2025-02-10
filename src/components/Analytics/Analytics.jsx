@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Container, Typography, Box, Tabs, Tab, Paper } from '@mui/material';
 import StudentMetrics from './StudentMetrics';
 import CompanyMetrics from './CompanyMetrics';
+import OJTAdviser from './OJTAdviser';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -48,6 +49,7 @@ function Analytics() {
         >
           <Tab label="Student Metrics" />
           <Tab label="Company Metrics" />
+          <Tab label="OJT Advisers" />
         </Tabs>
       </Paper>
 
@@ -56,6 +58,9 @@ function Analytics() {
       </TabPanel>
       <TabPanel value={tab} index={1}>
         <CompanyMetrics />
+      </TabPanel>
+      <TabPanel value={tab} index={2}>
+        <OJTAdviser />
       </TabPanel>
     </Container>
   );

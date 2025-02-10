@@ -48,11 +48,11 @@ function Core() {
 
 function CoreContent() {
   const [students, setStudents] = useState([]);
-  const { currentUser} = useContext(AuthContext);
+  const { currentUser } = useContext(AuthContext);
 
+  // Remove localStorage usage from updateStudents
   const updateStudents = useCallback((newStudents) => {
     setStudents(newStudents);
-    localStorage.setItem('students', JSON.stringify(newStudents));
   }, []);
 
   return (
