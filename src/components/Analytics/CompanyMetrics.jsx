@@ -121,13 +121,20 @@ function CompanyMetrics() {
     if (!selectedCompany || !selectedYear || !selectedSemester) return [];
     
     const evaluations = evaluationsData[selectedCompany]?.[selectedYear]?.[selectedSemester] || [];
+    
     if (evaluations.length === 0) return [];
 
-    // Get the first evaluation's data for the selected type
-    const data = evaluations[0]?.[dataType];
-    if (!data) return [];
+    // Calculate averages for multiple evaluations
+    const averagedData = evaluations.reduce((acc, evaluation, index) => {
+      if (index === 0) return evaluation[dataType];
 
-    return data;
+      return evaluation[dataType].map((item, i) => ({
+        ...item,
+        rating: (acc[i].rating + item.rating) / 2
+      }));
+    }, []);
+
+    return averagedData;
   };
 
   // Update the CompanySelector to remove "All Companies" option
