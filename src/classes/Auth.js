@@ -1,4 +1,4 @@
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, browserLocalPersistence, setPersistence } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
 import { app } from '../firebase-config';
 
@@ -11,12 +11,6 @@ export default class Auth {
     this._db = db;
     this._currentUser = null;
     this._userRole = null;
-    
-    // Set persistence when class is instantiated
-    setPersistence(this._auth, browserLocalPersistence)
-      .catch((error) => {
-        console.error("Auth persistence error:", error);
-      });
   }
 
   // Getters
@@ -61,19 +55,6 @@ export default class Auth {
       // Save to users collection
       await setDoc(doc(this._db, 'users', uid), profileData);
 
-      // Create role-specific profile
-      const roleProfileData = {
-        ...profileData,
-        accountType: userData.role
-      };
-
-      // Save to nested role-specific collection
-      const rolePath = userData.role === 'admin' ? 'adminProfile' : 'instructorProfile';
-      await setDoc(
-        doc(this._db, 'users', uid, rolePath, 'profile'),
-        roleProfileData
-      );
-
       return { success: true };
     } catch (error) {
       console.error('Signup error:', error);
@@ -83,9 +64,6 @@ export default class Auth {
 
   async signIn(email, password, accountType) {
     try {
-      // First set persistence
-      await setPersistence(this._auth, browserLocalPersistence);
-      
       // Get user credentials
       const userCredential = await signInWithEmailAndPassword(this._auth, email, password);
       
@@ -100,7 +78,7 @@ export default class Auth {
       
       // Validate account type based on adminKeyVerified
       if (accountType === 'admin' && !userData.adminKeyVerified) {
-        await this.signOut(); // Sign out if validation fails
+        await this.signOut();
         return { 
           success: false, 
           error: 'This is an instructor account. Please use instructor login.' 
@@ -108,7 +86,7 @@ export default class Auth {
       }
 
       if (accountType === 'instructor' && userData.adminKeyVerified) {
-        await this.signOut(); // Sign out if validation fails
+        await this.signOut();
         return { 
           success: false, 
           error: 'This is an admin account. Please use admin login.' 
@@ -132,22 +110,20 @@ export default class Auth {
     }
   }
 
-  async resetPassword(email) {
+  async signOut() {
     try {
-      await sendPasswordResetEmail(this._auth, email);
+      await signOut(this._auth);
+      this._currentUser = null;
+      this._userRole = null;
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  async signOut() {
+  async resetPassword(email) {
     try {
-      await this._auth.signOut();
-      this._currentUser = null;
-      this._userRole = null;
-      // Clear stored user data
-      localStorage.removeItem('userData');
+      await sendPasswordResetEmail(this._auth, email);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
