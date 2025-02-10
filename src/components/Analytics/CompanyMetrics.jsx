@@ -63,22 +63,82 @@ function CompanyMetrics() {
           // Store evaluation with exact database structure
           data.evaluations[companyName][schoolYear][semester].push({
             workEnvironmentData: [
-              { aspect: 'Workstation', rating: evaluation.workEnvironment?.workstation || 0, category: 'Environment' },
-              { aspect: 'Resources', rating: evaluation.workEnvironment?.resources || 0, category: 'Support' },
-              { aspect: 'Safety', rating: evaluation.workEnvironment?.safety || 0, category: 'Environment' },
-              { aspect: 'Workload', rating: evaluation.workEnvironment?.workload || 0, category: 'Management' }
+              {
+                aspect: 'Workstation',
+                rating: evaluation.workEnvironment?.workstation || 0,
+                category: 'Environment',
+                description: 'Evaluation of ergonomic design, space allocation, and overall functionality of assigned work areas'
+              },
+              {
+                aspect: 'Resources',
+                rating: evaluation.workEnvironment?.resources || 0,
+                category: 'Support',
+                description: 'Assessment of availability, quality, and accessibility of essential tools and equipment for task execution'
+              },
+              {
+                aspect: 'Safety',
+                rating: evaluation.workEnvironment?.safety || 0,
+                category: 'Environment',
+                description: 'Analysis of implemented safety protocols, emergency preparedness, and workplace hazard mitigation'
+              },
+              {
+                aspect: 'Workload',
+                rating: evaluation.workEnvironment?.workload || 0,
+                category: 'Management',
+                description: 'Measurement of task distribution balance, time management requirements, and work intensity levels'
+              }
             ],
             performanceData: [
-              { aspect: 'Supervision', rating: evaluation.performanceSupport?.supervision || 0, category: 'Support' },
-              { aspect: 'Feedback', rating: evaluation.performanceSupport?.feedback || 0, category: 'Development' },
-              { aspect: 'Training', rating: evaluation.performanceSupport?.training || 0, category: 'Development' },
-              { aspect: 'Mentorship', rating: evaluation.performanceSupport?.mentorship || 0, category: 'Support' }
+              {
+                aspect: 'Supervision',
+                rating: evaluation.performanceSupport?.supervision || 0,
+                category: 'Support',
+                description: 'Evaluation of leadership effectiveness, guidance quality, and managerial support provided'
+              },
+              {
+                aspect: 'Feedback',
+                rating: evaluation.performanceSupport?.feedback || 0,
+                category: 'Development',
+                description: 'Assessment of constructive criticism frequency, clarity, and actionable insights provided'
+              },
+              {
+                aspect: 'Training',
+                rating: evaluation.performanceSupport?.training || 0,
+                category: 'Development',
+                description: 'Analysis of professional development opportunities, skill enhancement programs, and training effectiveness'
+              },
+              {
+                aspect: 'Mentorship',
+                rating: evaluation.performanceSupport?.mentorship || 0,
+                category: 'Support',
+                description: 'Evaluation of career guidance quality, knowledge transfer effectiveness, and professional relationship building'
+              }
             ],
             experienceData: [
-              { aspect: 'Relevance', rating: evaluation.experienceQuality?.relevance || 0, category: 'Value' },
-              { aspect: 'Skills', rating: evaluation.experienceQuality?.skills || 0, category: 'Growth' },
-              { aspect: 'Growth', rating: evaluation.experienceQuality?.growth || 0, category: 'Development' },
-              { aspect: 'Satisfaction', rating: evaluation.experienceQuality?.satisfaction || 0, category: 'Experience' }
+              {
+                aspect: 'Relevance',
+                rating: evaluation.experienceQuality?.relevance || 0,
+                category: 'Value',
+                description: 'Assessment of alignment between internship tasks and academic/career development objectives'
+              },
+              {
+                aspect: 'Skills',
+                rating: evaluation.experienceQuality?.skills || 0,
+                category: 'Growth',
+                description: 'Measurement of technical and soft skill acquisition through practical application and professional exposure'
+              },
+              {
+                aspect: 'Growth',
+                rating: evaluation.experienceQuality?.growth || 0,
+                category: 'Development',
+                description: 'Evaluation of personal and professional development opportunities and career advancement potential'
+              },
+              {
+                aspect: 'Satisfaction',
+                rating: evaluation.experienceQuality?.satisfaction || 0,
+                category: 'Experience',
+                description: 'Comprehensive assessment of overall internship experience quality and professional fulfillment'
+              }
             ],
             trendData: [{
               month: new Date(evaluation.submittedAt?.toDate()).toLocaleString('default', { month: 'long' }),
