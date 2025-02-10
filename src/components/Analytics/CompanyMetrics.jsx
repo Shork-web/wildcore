@@ -5,7 +5,7 @@ import {
   Tooltip, ResponsiveContainer, LineChart, Line, RadarChart, 
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell
 } from 'recharts';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase-config';
 
 function CompanyMetrics() {
@@ -21,8 +21,9 @@ function CompanyMetrics() {
 
   useEffect(() => {
     let isMounted = true;
+    let unsubscribe;
 
-    const fetchData = async () => {
+    const setupRealtimeListener = () => {
       try {
         if (!db) {
           console.log('Waiting for database initialization...');
@@ -30,138 +31,158 @@ function CompanyMetrics() {
         }
 
         const evaluationsRef = collection(db, 'companyEvaluations');
-        const snapshot = await getDocs(evaluationsRef);
         
-        if (!isMounted) return;
+        unsubscribe = onSnapshot(evaluationsRef, (snapshot) => {
+          if (!isMounted) return;
 
-        const data = {
-          companies: new Set(),
-          years: new Set(),
-          evaluations: {}
-        };
+          const data = {
+            companies: new Set(),
+            years: new Set(),
+            evaluations: {}
+          };
 
-        snapshot.docs.forEach(doc => {
-          const evaluation = doc.data();
-          
-          if (evaluation.status !== 'submitted') return;
+          snapshot.docs.forEach(doc => {
+            const evaluation = doc.data();
+            
+            if (evaluation.status !== 'submitted') return;
 
-          const { companyName, schoolYear, semester } = evaluation;
+            const { companyName, schoolYear, semester } = evaluation;
 
-          data.companies.add(companyName);
-          data.years.add(schoolYear);
+            data.companies.add(companyName);
+            data.years.add(schoolYear);
 
-          if (!data.evaluations[companyName]) {
-            data.evaluations[companyName] = {};
-          }
-          if (!data.evaluations[companyName][schoolYear]) {
-            data.evaluations[companyName][schoolYear] = {};
-          }
-          if (!data.evaluations[companyName][schoolYear][semester]) {
-            data.evaluations[companyName][schoolYear][semester] = [];
-          }
+            if (!data.evaluations[companyName]) {
+              data.evaluations[companyName] = {};
+            }
+            if (!data.evaluations[companyName][schoolYear]) {
+              data.evaluations[companyName][schoolYear] = {};
+            }
+            if (!data.evaluations[companyName][schoolYear][semester]) {
+              data.evaluations[companyName][schoolYear][semester] = [];
+            }
 
-          // Store evaluation with exact database structure
-          data.evaluations[companyName][schoolYear][semester].push({
-            workEnvironmentData: [
-              {
-                aspect: 'Workstation',
-                rating: evaluation.workEnvironment?.workstation || 0,
-                category: 'Environment',
-                description: 'Evaluation of ergonomic design, space allocation, and overall functionality of assigned work areas'
-              },
-              {
-                aspect: 'Resources',
-                rating: evaluation.workEnvironment?.resources || 0,
-                category: 'Support',
-                description: 'Assessment of availability, quality, and accessibility of essential tools and equipment for task execution'
-              },
-              {
-                aspect: 'Safety',
-                rating: evaluation.workEnvironment?.safety || 0,
-                category: 'Environment',
-                description: 'Analysis of implemented safety protocols, emergency preparedness, and workplace hazard mitigation'
-              },
-              {
-                aspect: 'Workload',
-                rating: evaluation.workEnvironment?.workload || 0,
-                category: 'Management',
-                description: 'Measurement of task distribution balance, time management requirements, and work intensity levels'
-              }
-            ],
-            performanceData: [
-              {
-                aspect: 'Supervision',
-                rating: evaluation.performanceSupport?.supervision || 0,
-                category: 'Support',
-                description: 'Evaluation of leadership effectiveness, guidance quality, and managerial support provided'
-              },
-              {
-                aspect: 'Feedback',
-                rating: evaluation.performanceSupport?.feedback || 0,
-                category: 'Development',
-                description: 'Assessment of constructive criticism frequency, clarity, and actionable insights provided'
-              },
-              {
-                aspect: 'Training',
-                rating: evaluation.performanceSupport?.training || 0,
-                category: 'Development',
-                description: 'Analysis of professional development opportunities, skill enhancement programs, and training effectiveness'
-              },
-              {
-                aspect: 'Mentorship',
-                rating: evaluation.performanceSupport?.mentorship || 0,
-                category: 'Support',
-                description: 'Evaluation of career guidance quality, knowledge transfer effectiveness, and professional relationship building'
-              }
-            ],
-            experienceData: [
-              {
-                aspect: 'Relevance',
-                rating: evaluation.experienceQuality?.relevance || 0,
-                category: 'Value',
-                description: 'Assessment of alignment between internship tasks and academic/career development objectives'
-              },
-              {
-                aspect: 'Skills',
-                rating: evaluation.experienceQuality?.skills || 0,
-                category: 'Growth',
-                description: 'Measurement of technical and soft skill acquisition through practical application and professional exposure'
-              },
-              {
-                aspect: 'Growth',
-                rating: evaluation.experienceQuality?.growth || 0,
-                category: 'Development',
-                description: 'Evaluation of personal and professional development opportunities and career advancement potential'
-              },
-              {
-                aspect: 'Satisfaction',
-                rating: evaluation.experienceQuality?.satisfaction || 0,
-                category: 'Experience',
-                description: 'Comprehensive assessment of overall internship experience quality and professional fulfillment'
-              }
-            ],
-            trendData: [{
-              month: new Date(evaluation.submittedAt?.toDate()).toLocaleString('default', { month: 'long' }),
-              satisfaction: evaluation.overall?.averageRating || 0,
-              engagement: (evaluation.overall?.totalScore || 0) / (evaluation.overall?.maxPossibleScore || 60) * 5
-            }]
+            // Store evaluation with exact database structure
+            data.evaluations[companyName][schoolYear][semester].push({
+              workEnvironmentData: [
+                {
+                  aspect: 'Workstation',
+                  rating: evaluation.workEnvironment?.workstation || 0,
+                  category: 'Environment',
+                  description: 'Evaluation of ergonomic design, space allocation, and overall functionality of assigned work areas'
+                },
+                {
+                  aspect: 'Resources',
+                  rating: evaluation.workEnvironment?.resources || 0,
+                  category: 'Support',
+                  description: 'Assessment of availability, quality, and accessibility of essential tools and equipment for task execution'
+                },
+                {
+                  aspect: 'Safety',
+                  rating: evaluation.workEnvironment?.safety || 0,
+                  category: 'Environment',
+                  description: 'Analysis of implemented safety protocols, emergency preparedness, and workplace hazard mitigation'
+                },
+                {
+                  aspect: 'Workload',
+                  rating: evaluation.workEnvironment?.workload || 0,
+                  category: 'Management',
+                  description: 'Measurement of task distribution balance, time management requirements, and work intensity levels'
+                }
+              ],
+              performanceData: [
+                {
+                  aspect: 'Supervision',
+                  rating: evaluation.performanceSupport?.supervision || 0,
+                  category: 'Support',
+                  description: 'Evaluation of leadership effectiveness, guidance quality, and managerial support provided'
+                },
+                {
+                  aspect: 'Feedback',
+                  rating: evaluation.performanceSupport?.feedback || 0,
+                  category: 'Development',
+                  description: 'Assessment of constructive criticism frequency, clarity, and actionable insights provided'
+                },
+                {
+                  aspect: 'Training',
+                  rating: evaluation.performanceSupport?.training || 0,
+                  category: 'Development',
+                  description: 'Analysis of professional development opportunities, skill enhancement programs, and training effectiveness'
+                },
+                {
+                  aspect: 'Mentorship',
+                  rating: evaluation.performanceSupport?.mentorship || 0,
+                  category: 'Support',
+                  description: 'Evaluation of career guidance quality, knowledge transfer effectiveness, and professional relationship building'
+                }
+              ],
+              experienceData: [
+                {
+                  aspect: 'Relevance',
+                  rating: evaluation.experienceQuality?.relevance || 0,
+                  category: 'Value',
+                  description: 'Assessment of alignment between internship tasks and academic/career development objectives'
+                },
+                {
+                  aspect: 'Skills',
+                  rating: evaluation.experienceQuality?.skills || 0,
+                  category: 'Growth',
+                  description: 'Measurement of technical and soft skill acquisition through practical application and professional exposure'
+                },
+                {
+                  aspect: 'Growth',
+                  rating: evaluation.experienceQuality?.growth || 0,
+                  category: 'Development',
+                  description: 'Evaluation of personal and professional development opportunities and career advancement potential'
+                },
+                {
+                  aspect: 'Satisfaction',
+                  rating: evaluation.experienceQuality?.satisfaction || 0,
+                  category: 'Experience',
+                  description: 'Comprehensive assessment of overall internship experience quality and professional fulfillment'
+                }
+              ],
+              trendData: [{
+                month: new Date(evaluation.submittedAt?.toDate()).toLocaleString('default', { month: 'long' }),
+                satisfaction: evaluation.overall?.averageRating || 0,
+                engagement: (evaluation.overall?.totalScore || 0) / (evaluation.overall?.maxPossibleScore || 60) * 5
+              }]
+            });
           });
-        });
 
-        if (isMounted) {
-          setCompanies(Array.from(data.companies).map(name => ({ id: name, name })));
-          setEvaluationsData(data.evaluations);
-          setYears(Array.from(data.years).sort());
-          
-          const latestYear = Array.from(data.years).sort().pop();
-          const firstCompany = Array.from(data.companies)[0];
-          setSelectedYear(latestYear || '');
-          setSelectedCompany(firstCompany || '');
-          setSelectedSemester('1st');
-          setLoading(false);
-        }
+          if (isMounted) {
+            setCompanies(Array.from(data.companies).map(name => ({ id: name, name })));
+            setEvaluationsData(data.evaluations);
+            setYears(Array.from(data.years).sort());
+            
+            const yearsArray = Array.from(data.years).sort();
+            const companiesArray = Array.from(data.companies);
+
+            // Set initial values only if needed
+            if (!selectedYear || !yearsArray.includes(selectedYear)) {
+              const latestYear = yearsArray.pop();
+              setSelectedYear(latestYear || '');
+            }
+            
+            if (!selectedCompany || !companiesArray.includes(selectedCompany)) {
+              const firstCompany = companiesArray[0];
+              setSelectedCompany(firstCompany || '');
+            }
+
+            if (!selectedSemester) {
+              setSelectedSemester('1st');
+            }
+            
+            setLoading(false);
+          }
+        }, (error) => {
+          console.error('Error in real-time listener:', error);
+          if (isMounted) {
+            setError(error.message);
+            setLoading(false);
+          }
+        });
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error setting up listener:', error);
         if (isMounted) {
           setError(error.message);
           setLoading(false);
@@ -169,12 +190,15 @@ function CompanyMetrics() {
       }
     };
 
-    fetchData();
+    setupRealtimeListener();
 
     return () => {
       isMounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, []);
+  }, [selectedYear, selectedCompany, selectedSemester]);
 
   // Update the getFilteredData function
   const getFilteredData = (dataType) => {
