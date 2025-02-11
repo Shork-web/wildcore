@@ -37,7 +37,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
 import { db, auth } from '../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, getDocs } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../context/AuthContext';
 import { exportStudentsToExcel } from '../utils/studentExport';
@@ -45,6 +45,7 @@ import { exportStudentsToExcel } from '../utils/studentExport';
 class StudentManager {
   constructor() {
     this._students = [];
+    this._subscribers = new Set();
     this._filters = {
       program: 'All',
       semester: 'All',
@@ -52,7 +53,7 @@ class StudentManager {
       company: 'All'
     };
     this._error = null;
-    this._subscribers = new Set();
+    this.initializeDataFetching();
   }
 
   // Getters
@@ -99,8 +100,8 @@ class StudentManager {
 
   async deleteStudent(studentId) {
     try {
-      const studentRef = doc(db, 'studentData', studentId);
-      await deleteDoc(studentRef);
+      await deleteDoc(doc(db, 'studentData', studentId));
+      // No need to manually update state as onSnapshot will handle it
       return true;
     } catch (error) {
       console.error('Error deleting student:', error);
@@ -195,47 +196,15 @@ function StudentList() {
   const userRole = currentUser?.profile?.role || 'student';
 
   useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        setLoading(true);
-        let q;
-        
-        if (currentUser?.profile?.role === 'instructor') {
-          q = query(
-            collection(db, 'studentData'),
-            where('college', '==', currentUser.profile.college)
-          );
-        } else {
-          q = collection(db, 'studentData');
-        }
-
-        const querySnapshot = await getDocs(q);
-        const fetchedStudents = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        studentManager.students = fetchedStudents;
-        setStudents(fetchedStudents);
-        setFilteredStudents(fetchedStudents);
-      } catch (error) {
-        console.error('Error fetching students:', error);
-        setSnackbarMessage('Error loading students: ' + error.message);
-        setSnackbarSeverity('error');
-        setOpenSnackbar(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStudents();
-
     const unsubscribe = studentManager.subscribe(() => {
-      setFilteredStudents(studentManager.getFilteredStudents());
+      const allStudents = studentManager.students;
+      setStudents(allStudents);
+      setFilteredStudents(allStudents);
+      setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [currentUser, studentManager]);
+  }, [studentManager]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
