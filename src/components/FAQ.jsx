@@ -211,7 +211,7 @@ Tips:
    • Response time: 24-48 hours
 
 2. Emergency Help:
-   • IT Help Desk: 09533347008
+   • IT Help Desk: 09533347008  / 09664731708
    • Available: Mon-Fri, 8am-5pm
 
 3. Additional Resources:
