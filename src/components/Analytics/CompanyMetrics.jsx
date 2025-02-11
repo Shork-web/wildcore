@@ -34,35 +34,35 @@ function CompanyMetrics() {
         
         unsubscribe = onSnapshot(evaluationsRef, (snapshot) => {
           if (!isMounted) return;
+        
+        const data = {
+          companies: new Set(),
+          years: new Set(),
+          evaluations: {}
+        };
 
-          const data = {
-            companies: new Set(),
-            years: new Set(),
-            evaluations: {}
-          };
-
-          snapshot.docs.forEach(doc => {
-            const evaluation = doc.data();
-            
+        snapshot.docs.forEach(doc => {
+          const evaluation = doc.data();
+          
             if (evaluation.status !== 'submitted') return;
 
-            const { companyName, schoolYear, semester } = evaluation;
+          const { companyName, schoolYear, semester } = evaluation;
 
-            data.companies.add(companyName);
-            data.years.add(schoolYear);
+          data.companies.add(companyName);
+          data.years.add(schoolYear);
 
-            if (!data.evaluations[companyName]) {
-              data.evaluations[companyName] = {};
-            }
-            if (!data.evaluations[companyName][schoolYear]) {
-              data.evaluations[companyName][schoolYear] = {};
-            }
-            if (!data.evaluations[companyName][schoolYear][semester]) {
-              data.evaluations[companyName][schoolYear][semester] = [];
-            }
+          if (!data.evaluations[companyName]) {
+            data.evaluations[companyName] = {};
+          }
+          if (!data.evaluations[companyName][schoolYear]) {
+            data.evaluations[companyName][schoolYear] = {};
+          }
+          if (!data.evaluations[companyName][schoolYear][semester]) {
+            data.evaluations[companyName][schoolYear][semester] = [];
+          }
 
             // Store evaluation with exact database structure
-            data.evaluations[companyName][schoolYear][semester].push({
+          data.evaluations[companyName][schoolYear][semester].push({
               workEnvironmentData: [
                 {
                   aspect: 'Workstation',
@@ -150,9 +150,9 @@ function CompanyMetrics() {
           });
 
           if (isMounted) {
-            setCompanies(Array.from(data.companies).map(name => ({ id: name, name })));
-            setEvaluationsData(data.evaluations);
-            setYears(Array.from(data.years).sort());
+        setCompanies(Array.from(data.companies).map(name => ({ id: name, name })));
+        setEvaluationsData(data.evaluations);
+        setYears(Array.from(data.years).sort());
             
             const yearsArray = Array.from(data.years).sort();
             const companiesArray = Array.from(data.companies);
@@ -184,8 +184,8 @@ function CompanyMetrics() {
       } catch (error) {
         console.error('Error setting up listener:', error);
         if (isMounted) {
-          setError(error.message);
-          setLoading(false);
+        setError(error.message);
+        setLoading(false);
         }
       }
     };
@@ -293,16 +293,16 @@ function CompanyMetrics() {
         </Grid>
 
         {selectedCompany && (
-          <Grid item xs={12}>
+        <Grid item xs={12}>
             <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ color: '#800000', fontWeight: 'bold' }}>
                 {companies.find(c => c.id === selectedCompany)?.name}
               </Typography>
               <Typography variant="body2" color="textSecondary">
                 {selectedYear} - {selectedSemester} Semester
-              </Typography>
-            </Box>
-          </Grid>
+            </Typography>
+          </Box>
+        </Grid>
         )}
       </Grid>
     </Paper>
@@ -438,7 +438,7 @@ function CompanyMetrics() {
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
                           out of 5.0
-                        </Typography>
+                      </Typography>
                       </Box>
                     </CardContent>
                   </Card>
@@ -577,7 +577,7 @@ function CompanyMetrics() {
                             {metric.rating >= 4.5 ? 'Excellent' : 
                              metric.rating >= 4.0 ? 'Good' : 'Needs Improvement'}
                           </span>
-                        </Typography>
+                      </Typography>
                       </Box>
                     </CardContent>
                   </Card>

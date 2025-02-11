@@ -112,10 +112,21 @@ class StudentManager {
 
   async updateStudent(studentId, updatedData) {
     try {
-      // Ensure all required fields are present and valid
+      // Critical fields that cannot be empty
+      const criticalFields = [
+        'name', 'program', 'partnerCompany', 'location',
+        'gender', 'semester'  // Added gender and semester as critical fields
+      ];
+
+      criticalFields.forEach(field => {
+        if (!updatedData[field] || updatedData[field].trim() === '') {
+          throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} cannot be empty`);
+        }
+      });
+
+      // Other required fields
       const requiredFields = [
-        'name', 'gender', 'program', 'semester', 'schoolYear',
-        'partnerCompany', 'location', 'endDate',
+        'schoolYear',  // Only schoolYear remains as required
         'concerns', 'solutions', 'recommendations', 'evaluation',
         'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
       ];
@@ -125,22 +136,15 @@ class StudentManager {
         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
       }
 
-      // Ensure string fields are not empty for required fields
-      const requiredStringFields = [
-        'name', 'gender', 'program', 'semester', 'schoolYear',
-        'partnerCompany', 'location', 'endDate'
-      ];
-
-      requiredStringFields.forEach(field => {
-        if (!updatedData[field] || updatedData[field].trim() === '') {
-          throw new Error(`${field} cannot be empty`);
-        }
-      });
-
-      // Add startDate to updatedData if it exists, otherwise set it to empty string
+      // Prepare the final update data
       const finalUpdatedData = {
         ...updatedData,
-        startDate: updatedData.startDate || '',
+        startDate: updatedData.startDate || '',  // Make startDate optional
+        endDate: updatedData.endDate || '',      // Make endDate optional
+        concerns: updatedData.concerns || '',
+        solutions: updatedData.solutions || '',
+        recommendations: updatedData.recommendations || '',
+        evaluation: updatedData.evaluation || '',
         college: updatedData.college || this._currentUser?.profile?.college || '',
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser?.uid

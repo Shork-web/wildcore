@@ -115,15 +115,26 @@ class Student {
   }
 
   validate() {
-    const fieldsToValidate = [
-      'name', 'gender', 'program', 'semester', 'schoolYear',
-      'partnerCompany', 'location', 'endDate'
+    // Check critical fields that cannot be empty
+    const criticalFields = [
+      'name', 'program', 'partnerCompany', 'location',
+      'gender', 'semester'
     ];
     
-    // Only validate non-empty values
-    for (const field of fieldsToValidate) {
+    for (const field of criticalFields) {
       if (!this._data[field] || this._data[field].trim() === '') {
         throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} cannot be empty`);
+      }
+    }
+
+    // Check other required fields
+    const requiredFields = [
+      'schoolYear'
+    ];
+    
+    for (const field of requiredFields) {
+      if (!this._data[field] || this._data[field].trim() === '') {
+        throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} is required`);
       }
     }
 
@@ -247,7 +258,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       if (!auth.currentUser) {
         throw new Error('No authenticated user found');
@@ -261,9 +272,16 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
       const userData = userDoc.data();
       
       formData.validate();
+
       const studentData = {
         ...formData.getAllData(),
         college: userData.college,
+        startDate: formData.startDate || '',
+        endDate: formData.endDate || '',
+        concerns: formData.concerns || '',
+        solutions: formData.solutions || '',
+        recommendations: formData.recommendations || '',
+        evaluation: formData.evaluation || '',
         createdAt: isEditing ? formData.createdAt : new Date().toISOString(),
         createdBy: isEditing ? formData.createdBy : auth.currentUser.uid,
         updatedAt: new Date().toISOString(),
@@ -307,37 +325,26 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   };
 
   return (
-    <StyledCard elevation={0}>
-      <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
-        <Typography variant="h5" align="center" sx={{ color: 'primary.main', fontWeight: 'bold', mb: 3 }}>
+    <StyledCard>
+      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Typography variant="h5" align="center" gutterBottom sx={{ color: maroon, fontWeight: 'bold' }}>
           Student Internship Program Form
         </Typography>
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-          <Grid container spacing={4}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <SectionTitle>Personal Information</SectionTitle>
-              <TextField
+              <CompactTextField
+                required
                 fullWidth
                 label="Student Name"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 size="small"
-                sx={{
-                  mb: 2,
-                  '& .MuiOutlinedInput-root': {
-                    height: '40px',
-                  },
-                  '& .MuiInputLabel-root': {
-                    transform: 'translate(14px, 10px) scale(0.75)',
-                  },
-                  '& .MuiInputLabel-shrink': {
-                    transform: 'translate(14px, -6px) scale(0.75)',
-                  },
-                }}
               />
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+              <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel>Gender</InputLabel>
                 <Select
                   name="gender"
@@ -347,15 +354,13 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
-                  <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <SectionTitle>Academic Information</SectionTitle>
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+              <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
                 <Autocomplete
                   value={formData.program}
                   onChange={handleProgramChange}
@@ -368,51 +373,16 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     <TextField
                       {...params}
                       label="Program"
+                      required
                       size="small"
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          height: '40px',
-                          '&:hover fieldset': {
-                            borderColor: '#800000',
-                          },
-                          '&.Mui-focused fieldset': {
-                            borderColor: '#800000',
-                          },
-                        },
-                        '& .MuiInputLabel-root': {
-                          transform: 'translate(14px, 10px) scale(0.75)',
-                        },
-                        '& .MuiInputLabel-shrink': {
-                          transform: 'translate(14px, -6px) scale(0.75)',
-                        },
-                      }}
                     />
                   )}
-                  renderOption={(props, option) => (
-                    <li {...props} style={{ padding: '8px 16px' }}>
-                      {option}
-                    </li>
-                  )}
-                  ListboxProps={{
-                    style: {
-                      maxHeight: '200px',
-                      border: '1px solid #ddd',
-                      borderRadius: '4px',
-                      marginTop: '4px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    }
-                  }}
-                  PopperProps={{
-                    style: {
-                      width: 'fit-content',
-                      minWidth: '100%'
-                    }
-                  }}
                 />
               </FormControl>
+
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
                     <InputLabel>Semester</InputLabel>
                     <Select
                       name="semester"
@@ -427,7 +397,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                   </FormControl>
                 </Grid>
                 <Grid item xs={6}>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
                     <InputLabel>School Year</InputLabel>
                     <Select
                       name="schoolYear"
@@ -447,6 +417,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
             <Grid item xs={12} md={6}>
               <SectionTitle>Internship Information</SectionTitle>
               <CompactTextField
+                required
                 fullWidth
                 label="Partner Company"
                 name="partnerCompany"
@@ -455,6 +426,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                 size="small"
               />
               <CompactTextField
+                required
                 fullWidth
                 label="Location"
                 name="location"
@@ -542,10 +514,15 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
             <Button 
               type="submit" 
               variant="contained" 
-              color="primary" 
               fullWidth 
               size="large"
               disabled={isSubmitting}
+              sx={{
+                bgcolor: maroon,
+                '&:hover': {
+                  bgcolor: '#600000',
+                },
+              }}
             >
               {isSubmitting 
                 ? 'Saving...' 
@@ -559,7 +536,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
       {!disableSnackbar && (
         <Snackbar
           open={openSnackbar}
-          autoHideDuration={6000}
+          autoHideDuration={3000}
           onClose={handleCloseSnackbar}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
@@ -568,17 +545,11 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
             severity={snackbarSeverity} 
             sx={{ 
               width: '100%',
-              backgroundColor: snackbarSeverity === 'success' ? '#E8F5E9' : 
-                              snackbarSeverity === 'warning' ? '#FFF3E0' : 
-                              snackbarSeverity === 'error' ? '#FFEBEE' : '#E3F2FD',
+              backgroundColor: snackbarSeverity === 'success' ? '#E8F5E9' : '#FFEBEE',
               '& .MuiAlert-icon': {
-                color: snackbarSeverity === 'success' ? '#2E7D32' : 
-                       snackbarSeverity === 'warning' ? '#F57C00' : 
-                       snackbarSeverity === 'error' ? '#C62828' : '#1976D2'
+                color: snackbarSeverity === 'success' ? '#2E7D32' : '#C62828'
               },
-              color: snackbarSeverity === 'success' ? '#1B5E20' : 
-                     snackbarSeverity === 'warning' ? '#E65100' : 
-                     snackbarSeverity === 'error' ? '#B71C1C' : '#0D47A1',
+              color: snackbarSeverity === 'success' ? '#1B5E20' : '#B71C1C',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
               borderRadius: 2,
             }}
