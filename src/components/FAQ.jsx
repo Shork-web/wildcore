@@ -34,7 +34,7 @@ function FAQ() {
       items: [
         {
           primary: "What is WILD C.O.R.E?",
-          secondary: `WILD C.O.R.E (Work Integrated Learning Data Collection and Reporting Engine) is your central hub for managing student internships. 
+          secondary: `WILD C.O.R.E (Work-Integrated Learning and Development – Collaborative OJT Records and Evaluation ) is your central hub for managing student internships. 
 
 Key Benefits:
 • Streamlined record management
