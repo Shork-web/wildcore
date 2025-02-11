@@ -90,11 +90,11 @@ export default function SignUp() {
   const validatePasswords = () => {
     return userData.password === userData.confirmPassword;
   };
-
+   //Admin key 
   const validateAdminKey = () => {
     if (userData.accountType === 'admin') {
-      // admin key validation
-      return userData.adminKey === "CITADMIN";
+      // admin key validation (change if needed)
+      return userData.adminKey === "NLOADMIN_24!!";
     }
     return true;
   };
