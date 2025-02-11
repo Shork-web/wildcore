@@ -250,6 +250,36 @@ function StudentList() {
     }
   };
 
+  const handleEdit = (student) => {
+    // Create a new Student instance with the existing data
+    const studentData = {
+      name: student.name || '',
+      gender: student.gender || '',
+      program: student.program || '',
+      semester: student.semester || '',
+      schoolYear: student.schoolYear || '',
+      partnerCompany: student.partnerCompany || '',
+      location: student.location || '',
+      startDate: student.startDate || '',
+      endDate: student.endDate || '',
+      concerns: student.concerns || '',
+      solutions: student.solutions || '',
+      recommendations: student.recommendations || '',
+      evaluation: student.evaluation || '',
+      college: student.college || currentUser?.profile?.college || '',
+      createdAt: student.createdAt,
+      createdBy: student.createdBy,
+      updatedAt: new Date().toISOString(),
+      updatedBy: auth.currentUser?.uid
+    };
+
+    setEditingStudent({
+      id: student.id,
+      ...studentData
+    });
+    setIsDialogOpen(true);
+  };
+
   const handleUpdateSuccess = async (updatedData) => {
     try {
       if (!editingStudent?.id) {
@@ -262,14 +292,11 @@ function StudentList() {
 
       const completeUpdateData = {
         ...updatedData,
+        college: currentUser?.profile?.college || editingStudent.college,
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser.uid,
         createdAt: editingStudent.createdAt,
-        createdBy: editingStudent.createdBy,
-        concerns: updatedData.concerns || '',
-        solutions: updatedData.solutions || '',
-        recommendations: updatedData.recommendations || '',
-        evaluation: updatedData.evaluation || ''
+        createdBy: editingStudent.createdBy
       };
 
       await studentManager.updateStudent(editingStudent.id, completeUpdateData);
@@ -285,11 +312,6 @@ function StudentList() {
       setOpenSnackbar(true);
       throw error;
     }
-  };
-
-  const handleEdit = (student) => {
-    setEditingStudent(student);
-    setIsDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
@@ -825,6 +847,8 @@ function StudentList() {
               docId={editingStudent.id}
               addStudent={handleUpdateSuccess}
               disableSnackbar={true}
+              isEditing={true}
+              key={editingStudent.id}
             />
           )}
         </DialogContent>

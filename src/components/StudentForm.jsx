@@ -179,86 +179,66 @@ class Student {
   }
 }
 
-function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
+function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditing }) {
   const { currentUser } = useContext(AuthContext);
-  const [student, setStudent] = useState(new Student(initialData));
+  const [formData, setFormData] = useState(() => {
+    if (isEditing && initialData) {
+      return new Student({
+        name: initialData.name || '',
+        gender: initialData.gender || '',
+        program: initialData.program || '',
+        semester: initialData.semester || '',
+        schoolYear: initialData.schoolYear || '',
+        partnerCompany: initialData.partnerCompany || '',
+        location: initialData.location || '',
+        startDate: initialData.startDate || '',
+        endDate: initialData.endDate || '',
+        concerns: initialData.concerns || '',
+        solutions: initialData.solutions || '',
+        recommendations: initialData.recommendations || '',
+        evaluation: initialData.evaluation || '',
+        college: initialData.college || currentUser?.profile?.college || '',
+        createdAt: initialData.createdAt,
+        createdBy: initialData.createdBy
+      });
+    }
+    return new Student();
+  });
+
+  const [availablePrograms, setAvailablePrograms] = useState([]);
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availablePrograms, setAvailablePrograms] = useState([]);
-
-  const isEditing = initialData && Object.keys(initialData).length > 0;
 
   useEffect(() => {
-    if (initialData && Object.keys(initialData).length > 0) {
-      const formattedData = {
-        ...initialData,
-        startDate: initialData.startDate ? initialData.startDate.split('T')[0] : '',
-        endDate: initialData.endDate ? initialData.endDate.split('T')[0] : '',
-      };
-      setStudent(new Student(formattedData));
-    }
-
-    if (currentUser?.profile?.college && !initialData?.college) {
-      const newStudent = new Student({
-        ...student.toJSON(),
-        college: currentUser.profile.college
-      });
-      setStudent(newStudent);
-    }
-
     if (currentUser?.profile?.college) {
       const programs = getProgramsByCollege(currentUser.profile.college);
       setAvailablePrograms(programs);
     }
-  }, [currentUser, initialData, student]);
+  }, [currentUser]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    try {
-      const newStudent = new Student(student.toJSON());
+    setFormData(prevData => {
+      const newStudent = new Student(prevData.toJSON());
       newStudent.update(name, value);
-      
-      // Only validate non-empty values
-      if (value.trim() && ['name', 'partnerCompany', 'location'].includes(name)) {
-        switch (name) {
-          case 'name':
-            if (!/^[a-zA-ZÀ-ÿ\s.\-'(),]*$/.test(value)) {
-              setSnackbarMessage('Please enter a valid name');
-              setSnackbarSeverity('warning');
-              setOpenSnackbar(true);
-              return;
-            }
-            break;
-          case 'partnerCompany':
-            if (!/^[a-zA-Z0-9À-ÿ\s.\-&'(),/+]*$/.test(value)) {
-              setSnackbarMessage('Please enter a valid company name');
-              setSnackbarSeverity('warning');
-              setOpenSnackbar(true);
-              return;
-            }
-            break;
-          case 'location':
-            if (!/^[a-zA-Z0-9À-ÿ\s.\-,'()#+]*$/.test(value)) {
-              setSnackbarMessage('Please enter a valid location');
-              setSnackbarSeverity('warning');
-              setOpenSnackbar(true);
-              return;
-            }
-            break;
-          default:
-            break;
-        }
-      }
-      
-      setStudent(newStudent);
-    } catch (error) {
-      setSnackbarMessage(error.message);
-      setSnackbarSeverity('error');
-      setOpenSnackbar(true);
+      return newStudent;
+    });
+  };
+
+  const handleProgramChange = (event, newValue) => {
+    let programValue = newValue;
+    
+    if (typeof newValue === 'string') {
+      programValue = newValue;
     }
+    
+    setFormData(prevData => {
+      const newStudent = new Student(prevData.toJSON());
+      newStudent.update('program', programValue);
+      return newStudent;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -266,38 +246,32 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
     setIsSubmitting(true);
     
     try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      if (!auth.currentUser) {
         throw new Error('No authenticated user found');
       }
 
-      // Get user document from Firestore to ensure we have the latest data
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
       if (!userDoc.exists()) {
         throw new Error('User profile not found');
       }
 
       const userData = userDoc.data();
       
-      student.validate();
-      const currentData = student.getAllData();
-
+      formData.validate();
       const studentData = {
-        ...currentData,
-        college: userData.college, // Get college directly from Firestore document
-        createdAt: isEditing ? currentData.createdAt : new Date().toISOString(),
-        createdBy: isEditing ? currentData.createdBy : currentUser.uid,
+        ...formData.getAllData(),
+        college: userData.college,
+        createdAt: isEditing ? formData.createdAt : new Date().toISOString(),
+        createdBy: isEditing ? formData.createdBy : auth.currentUser.uid,
         updatedAt: new Date().toISOString(),
-        updatedBy: currentUser.uid,
+        updatedBy: auth.currentUser.uid
       };
 
       if (isEditing && docId) {
-        if (addStudent) {
-          await addStudent(studentData);
-        }
+        await addStudent(studentData);
       } else {
         const docRef = await addDoc(collection(db, 'studentData'), studentData);
-        setStudent(new Student());
+        setFormData(new Student());
         
         if (addStudent) {
           await addStudent({ ...studentData, id: docRef.id });
@@ -344,7 +318,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 fullWidth
                 label="Student Name"
                 name="name"
-                value={student.name}
+                value={formData.name}
                 onChange={handleChange}
                 size="small"
                 sx={{
@@ -364,7 +338,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 <InputLabel>Gender</InputLabel>
                 <Select
                   name="gender"
-                  value={student.gender}
+                  value={formData.gender}
                   onChange={handleChange}
                   label="Gender"
                 >
@@ -380,17 +354,13 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
               <SectionTitle>Academic Information</SectionTitle>
               <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <Autocomplete
-                  value={student.program}
-                  onChange={(event, newValue) => {
-                    const e = {
-                      target: {
-                        name: 'program',
-                        value: newValue
-                      }
-                    };
-                    handleChange(e);
-                  }}
+                  value={formData.program}
+                  onChange={handleProgramChange}
                   options={availablePrograms}
+                  freeSolo
+                  selectOnFocus
+                  clearOnBlur
+                  handleHomeEndKeys
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -398,21 +368,41 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                       size="small"
                       sx={{
                         '& .MuiOutlinedInput-root': {
+                          height: '40px',
                           '&:hover fieldset': {
                             borderColor: '#800000',
                           },
                           '&.Mui-focused fieldset': {
                             borderColor: '#800000',
                           },
-                        }
+                        },
+                        '& .MuiInputLabel-root': {
+                          transform: 'translate(14px, 10px) scale(0.75)',
+                        },
+                        '& .MuiInputLabel-shrink': {
+                          transform: 'translate(14px, -6px) scale(0.75)',
+                        },
                       }}
                     />
                   )}
-                  freeSolo
-                  autoSelect
-                  sx={{
-                    '& .MuiAutocomplete-input': {
-                      height: '20px', // Adjust height to match other fields
+                  renderOption={(props, option) => (
+                    <li {...props} style={{ padding: '8px 16px' }}>
+                      {option}
+                    </li>
+                  )}
+                  ListboxProps={{
+                    style: {
+                      maxHeight: '200px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      marginTop: '4px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    }
+                  }}
+                  PopperProps={{
+                    style: {
+                      width: 'fit-content',
+                      minWidth: '100%'
                     }
                   }}
                 />
@@ -423,7 +413,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                     <InputLabel>Semester</InputLabel>
                     <Select
                       name="semester"
-                      value={student.semester}
+                      value={formData.semester}
                       onChange={handleChange}
                       label="Semester"
                     >
@@ -438,7 +428,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                     <InputLabel>School Year</InputLabel>
                     <Select
                       name="schoolYear"
-                      value={student.schoolYear}
+                      value={formData.schoolYear}
                       onChange={handleChange}
                       label="School Year"
                     >
@@ -457,7 +447,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 fullWidth
                 label="Partner Company"
                 name="partnerCompany"
-                value={student.partnerCompany}
+                value={formData.partnerCompany}
                 onChange={handleChange}
                 size="small"
               />
@@ -465,7 +455,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 fullWidth
                 label="Location"
                 name="location"
-                value={student.location}
+                value={formData.location}
                 onChange={handleChange}
                 size="small"
               />
@@ -476,7 +466,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                     label="Start Date"
                     name="startDate"
                     type="date"
-                    value={student.startDate}
+                    value={formData.startDate}
                     onChange={handleChange}
                     InputLabelProps={{ shrink: true }}
                     size="small"
@@ -488,7 +478,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                     label="End Date"
                     name="endDate"
                     type="date"
-                    value={student.endDate}
+                    value={formData.endDate}
                     onChange={handleChange}
                     InputLabelProps={{ shrink: true }}
                     size="small"
@@ -505,7 +495,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 name="concerns"
                 multiline
                 rows={3}
-                value={student.concerns}
+                value={formData.concerns}
                 onChange={handleChange}
                 size="small"
                 sx={{ mb: 2 }}
@@ -516,7 +506,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 name="solutions"
                 multiline
                 rows={3}
-                value={student.solutions}
+                value={formData.solutions}
                 onChange={handleChange}
                 size="small"
                 sx={{ mb: 2 }}
@@ -527,7 +517,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 name="recommendations"
                 multiline
                 rows={3}
-                value={student.recommendations}
+                value={formData.recommendations}
                 onChange={handleChange}
                 size="small"
                 sx={{ mb: 2 }}
@@ -538,7 +528,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 name="evaluation"
                 multiline
                 rows={3}
-                value={student.evaluation}
+                value={formData.evaluation}
                 onChange={handleChange}
                 size="small"
               />
