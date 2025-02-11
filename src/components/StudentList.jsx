@@ -115,7 +115,7 @@ class StudentManager {
       // Ensure all required fields are present and valid
       const requiredFields = [
         'name', 'gender', 'program', 'semester', 'schoolYear',
-        'partnerCompany', 'location', 'startDate', 'endDate',
+        'partnerCompany', 'location', 'endDate',
         'concerns', 'solutions', 'recommendations', 'evaluation',
         'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
       ];
@@ -128,7 +128,7 @@ class StudentManager {
       // Ensure string fields are not empty for required fields
       const requiredStringFields = [
         'name', 'gender', 'program', 'semester', 'schoolYear',
-        'partnerCompany', 'location', 'startDate', 'endDate'
+        'partnerCompany', 'location', 'endDate'
       ];
 
       requiredStringFields.forEach(field => {
@@ -137,8 +137,17 @@ class StudentManager {
         }
       });
 
+      // Add startDate to updatedData if it exists, otherwise set it to empty string
+      const finalUpdatedData = {
+        ...updatedData,
+        startDate: updatedData.startDate || '',
+        college: updatedData.college || this._currentUser?.profile?.college || '',
+        updatedAt: new Date().toISOString(),
+        updatedBy: auth.currentUser?.uid
+      };
+
       const studentRef = doc(db, 'studentData', studentId);
-      await updateDoc(studentRef, updatedData);
+      await updateDoc(studentRef, finalUpdatedData);
       
       return true;
     } catch (error) {
@@ -735,11 +744,17 @@ function StudentList() {
                   }
                 }}>
                   <Tooltip 
-                    title={`${new Date(student.startDate).toLocaleDateString()} - ${new Date(student.endDate).toLocaleDateString()}`} 
+                    title={
+                      student.startDate || student.endDate 
+                        ? `${student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} - ${student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}`
+                        : 'N/A'
+                    } 
                     placement="top"
                   >
                     <span className="content">
-                      {`${new Date(student.startDate).toLocaleDateString()} - ${new Date(student.endDate).toLocaleDateString()}`}
+                      {student.startDate || student.endDate 
+                        ? `${student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} - ${student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}`
+                        : 'N/A'}
                     </span>
                   </Tooltip>
                 </TableCell>

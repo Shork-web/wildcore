@@ -117,13 +117,13 @@ class Student {
   validate() {
     const fieldsToValidate = [
       'name', 'gender', 'program', 'semester', 'schoolYear',
-      'partnerCompany', 'location', 'startDate', 'endDate'
+      'partnerCompany', 'location', 'endDate'
     ];
     
     // Only validate non-empty values
     for (const field of fieldsToValidate) {
-      if (this._data[field] && this._data[field].trim() === '') {
-        throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} cannot be empty if provided`);
+      if (!this._data[field] || this._data[field].trim() === '') {
+        throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} cannot be empty`);
       }
     }
 
@@ -136,14 +136,14 @@ class Student {
     }
 
     if (this._data.partnerCompany && this._data.partnerCompany.trim()) {
-      const companyRegex = /^[a-zA-Z0-9À-ÿ\s.\-&'(),/+]+$/;
+      const companyRegex = /^[a-zA-Z0-9À-ÿ\s.\-&'(),/+@#$%*!?]+$/;
       if (!companyRegex.test(this._data.partnerCompany)) {
         throw new Error('Company name contains invalid characters');
       }
     }
 
     if (this._data.location && this._data.location.trim()) {
-      const locationRegex = /^[a-zA-Z0-9À-ÿ\s.\-,'()#+]+$/;
+      const locationRegex = /^[a-zA-Z0-9À-ÿ\s.\-,'()@#$%*!?&/+]+$/;
       if (!locationRegex.test(this._data.location)) {
         throw new Error('Location contains invalid characters');
       }
@@ -158,14 +158,12 @@ class Student {
         case 'name':
         case 'partnerCompany':
         case 'location':
-          // Allow spaces without requiring other characters
           this._data[field] = value;
           break;
         case 'concerns':
         case 'solutions':
         case 'recommendations':
         case 'evaluation':
-          // Allow all characters for text areas
           this._data[field] = value;
           break;
         default:
