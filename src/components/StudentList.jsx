@@ -37,13 +37,13 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
 import { db, auth } from '../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../context/AuthContext';
 import { exportStudentsToExcel } from '../utils/studentExport';
 
 class StudentManager {
-  constructor() {
+  constructor(currentUser) {
     this._students = [];
     this._subscribers = new Set();
     this._filters = {
@@ -53,6 +53,7 @@ class StudentManager {
       company: 'All'
     };
     this._error = null;
+    this._currentUser = currentUser;
     this.initializeDataFetching();
   }
 
@@ -158,7 +159,17 @@ class StudentManager {
 
   // Data fetching method
   initializeDataFetching() {
-    const q = query(collection(db, 'studentData'));
+    let q;
+    
+    if (this._currentUser?.profile?.role === 'instructor') {
+      q = query(
+        collection(db, 'studentData'),
+        where('college', '==', this._currentUser.profile.college)
+      );
+    } else {
+      q = query(collection(db, 'studentData'));
+    }
+
     return onSnapshot(q, 
       (querySnapshot) => {
         const studentsList = querySnapshot.docs.map(doc => ({
@@ -179,7 +190,7 @@ class StudentManager {
 
 function StudentList() {
   const { currentUser } = useContext(AuthContext);
-  const studentManager = useRef(new StudentManager()).current;
+  const studentManager = useRef(new StudentManager(currentUser)).current;
   const [page, setPage] = useState(1);
   const [rowsPerPage] = useState(50);
   const [editingStudent, setEditingStudent] = useState(null);
