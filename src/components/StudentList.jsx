@@ -501,8 +501,12 @@ function StudentList() {
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
           maxHeight: '75vh',
           minHeight: '500px',
-          overflow: 'auto',
           width: '100%',
+          overflowX: 'auto',
+          '& .MuiTable-root': {
+            tableLayout: 'fixed',
+            minWidth: 1000,
+          },
           '&::-webkit-scrollbar': {
             width: '10px',
             height: '10px',
@@ -532,115 +536,61 @@ function StudentList() {
         >
           <TableHead>
             <TableRow>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '15%',
-                  minWidth: '150px',
-                  padding: '16px',
-                }}
-              >
-                Name
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '12%',
-                  minWidth: '120px',
-                  padding: '16px',
-                }}
-              >
-                Program
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '12%',
-                  minWidth: '120px',
-                  padding: '16px',
-                }}
-              >
-                Gender
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '12%',
-                  minWidth: '120px',
-                  padding: '16px',
-                }}
-              >
-                Semester
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '12%',
-                  minWidth: '120px',
-                  padding: '16px',
-                }}
-              >
-                School Year
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '12%',
-                  minWidth: '120px',
-                  padding: '16px',
-                }}
-              >
-                Company
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '12%',
-                  minWidth: '120px',
-                  padding: '16px',
-                }}
-              >
-                Location
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '8%',
-                  minWidth: '140px',
-                  padding: '16px',
-                }}
-              >
-                Duration
-              </TableCell>
-              <TableCell 
-                align="center"
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: '#800000',
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  width: '5%',
-                  minWidth: '100px',
-                  padding: '16px',
-                }}
-              >
-                Actions
-              </TableCell>
+              <TableCell sx={{ 
+                width: '15%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Name</TableCell>
+              <TableCell sx={{ 
+                width: '12%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Program</TableCell>
+              <TableCell sx={{ 
+                width: '6%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Gender</TableCell>
+              <TableCell sx={{ 
+                width: '7%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Semester</TableCell>
+              <TableCell sx={{ 
+                width: '8%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>School Year</TableCell>
+              <TableCell sx={{ 
+                width: '12%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Company</TableCell>
+              <TableCell sx={{ 
+                width: '12%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Location</TableCell>
+              <TableCell sx={{ 
+                width: '10%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Duration</TableCell>
+              <TableCell sx={{ 
+                width: '8%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                textAlign: 'center'
+              }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -655,87 +605,125 @@ function StudentList() {
                 }}
               >
                 <TableCell sx={{ 
-                  width: '15%',
-                  minWidth: '150px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.name}
+                  <Tooltip title={student.name} placement="top">
+                    <span className="content">{student.name}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '12%',
-                  minWidth: '120px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.program}
+                  <Tooltip title={student.program} placement="top">
+                    <span className="content">{student.program}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '12%',
-                  minWidth: '120px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.gender}
+                  <Tooltip title={student.gender} placement="top">
+                    <span className="content">{student.gender}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '12%',
-                  minWidth: '120px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.semester}
+                  <Tooltip title={student.semester} placement="top">
+                    <span className="content">{student.semester}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '12%',
-                  minWidth: '120px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.schoolYear}
+                  <Tooltip title={student.schoolYear} placement="top">
+                    <span className="content">{student.schoolYear}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '12%',
-                  minWidth: '120px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.partnerCompany}
+                  <Tooltip title={student.partnerCompany} placement="top">
+                    <span className="content">{student.partnerCompany}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '12%',
-                  minWidth: '120px',
                   padding: '16px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
                 }}>
-                  {student.location}
+                  <Tooltip title={student.location} placement="top">
+                    <span className="content">{student.location}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
-                  width: '8%',
-                  minWidth: '140px',
                   padding: '16px',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    fontSize: '0.875rem'
+                  }
                 }}>
-                  {`${new Date(student.startDate).toLocaleDateString()} - ${new Date(student.endDate).toLocaleDateString()}`}
+                  <Tooltip 
+                    title={`${new Date(student.startDate).toLocaleDateString()} - ${new Date(student.endDate).toLocaleDateString()}`} 
+                    placement="top"
+                  >
+                    <span className="content">
+                      {`${new Date(student.startDate).toLocaleDateString()} - ${new Date(student.endDate).toLocaleDateString()}`}
+                    </span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell 
                   align="center"
                   sx={{ 
-                    width: '5%',
-                    minWidth: '100px',
                     padding: '16px',
                   }}
                 >

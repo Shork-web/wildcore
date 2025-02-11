@@ -13,6 +13,7 @@ import {
   CardContent,
   Snackbar,
   Alert,
+  Autocomplete,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../firebase-config';
@@ -114,34 +115,34 @@ class Student {
   }
 
   validate() {
-    const requiredFields = [
+    const fieldsToValidate = [
       'name', 'gender', 'program', 'semester', 'schoolYear',
       'partnerCompany', 'location', 'startDate', 'endDate'
     ];
     
-    // Check if fields are empty after trimming
-    for (const field of requiredFields) {
-      if (!this._data[field] || this._data[field].trim() === '') {
-        throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} is required`);
+    // Only validate non-empty values
+    for (const field of fieldsToValidate) {
+      if (this._data[field] && this._data[field].trim() === '') {
+        throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} cannot be empty if provided`);
       }
     }
 
-    // Only validate non-empty values
-    if (this._data.name.trim()) {
+    // Validate format only if value is provided
+    if (this._data.name && this._data.name.trim()) {
       const nameRegex = /^[a-zA-ZÀ-ÿ\s.\-'(),]+$/;
       if (!nameRegex.test(this._data.name)) {
         throw new Error('Name contains invalid characters');
       }
     }
 
-    if (this._data.partnerCompany.trim()) {
+    if (this._data.partnerCompany && this._data.partnerCompany.trim()) {
       const companyRegex = /^[a-zA-Z0-9À-ÿ\s.\-&'(),/+]+$/;
       if (!companyRegex.test(this._data.partnerCompany)) {
         throw new Error('Company name contains invalid characters');
       }
     }
 
-    if (this._data.location.trim()) {
+    if (this._data.location && this._data.location.trim()) {
       const locationRegex = /^[a-zA-Z0-9À-ÿ\s.\-,'()#+]+$/;
       if (!locationRegex.test(this._data.location)) {
         throw new Error('Location contains invalid characters');
@@ -341,7 +342,6 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
               <SectionTitle>Personal Information</SectionTitle>
               <TextField
                 fullWidth
-                required
                 label="Student Name"
                 name="name"
                 value={student.name}
@@ -360,16 +360,13 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                   },
                 }}
               />
-              <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
+              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel>Gender</InputLabel>
                 <Select
                   name="gender"
                   value={student.gender}
                   onChange={handleChange}
                   label="Gender"
-                  sx={{
-                    height: '40px',
-                  }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
@@ -381,24 +378,48 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
 
             <Grid item xs={12} md={6}>
               <SectionTitle>Academic Information</SectionTitle>
-              <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
-                <InputLabel>Program</InputLabel>
-                <Select
-                  name="program"
+              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                <Autocomplete
                   value={student.program}
-                  onChange={handleChange}
-                  label="Program"
-                >
-                  {availablePrograms.map((program) => (
-                    <MenuItem key={program} value={program}>
-                      {program}
-                    </MenuItem>
-                  ))}
-                </Select>
+                  onChange={(event, newValue) => {
+                    const e = {
+                      target: {
+                        name: 'program',
+                        value: newValue
+                      }
+                    };
+                    handleChange(e);
+                  }}
+                  options={availablePrograms}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Program"
+                      size="small"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          '&:hover fieldset': {
+                            borderColor: '#800000',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#800000',
+                          },
+                        }
+                      }}
+                    />
+                  )}
+                  freeSolo
+                  autoSelect
+                  sx={{
+                    '& .MuiAutocomplete-input': {
+                      height: '20px', // Adjust height to match other fields
+                    }
+                  }}
+                />
               </FormControl>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
+                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                     <InputLabel>Semester</InputLabel>
                     <Select
                       name="semester"
@@ -413,7 +434,7 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                   </FormControl>
                 </Grid>
                 <Grid item xs={6}>
-                  <FormControl fullWidth required size="small" sx={{ mb: 2 }}>
+                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                     <InputLabel>School Year</InputLabel>
                     <Select
                       name="schoolYear"
@@ -438,7 +459,6 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 name="partnerCompany"
                 value={student.partnerCompany}
                 onChange={handleChange}
-                required
                 size="small"
               />
               <CompactTextField
@@ -447,7 +467,6 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                 name="location"
                 value={student.location}
                 onChange={handleChange}
-                required
                 size="small"
               />
               <Grid container spacing={2}>
@@ -460,7 +479,6 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                     value={student.startDate}
                     onChange={handleChange}
                     InputLabelProps={{ shrink: true }}
-                    required
                     size="small"
                   />
                 </Grid>
@@ -473,7 +491,6 @@ function StudentForm({ addStudent, initialData, docId, disableSnackbar }) {
                     value={student.endDate}
                     onChange={handleChange}
                     InputLabelProps={{ shrink: true }}
-                    required
                     size="small"
                   />
                 </Grid>
