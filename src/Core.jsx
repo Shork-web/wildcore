@@ -14,6 +14,7 @@ import { AuthContext, AuthProvider, StudentsContext } from './context/AuthContex
 import ProtectedRoute from './components/ProtectedRoute';
 import Footer from './components/Footer';
 import Analytics from './components/Analytics/AnalyticsExport';
+import FAQ from './components/FAQ';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -217,6 +218,14 @@ function MainContent() {
               element={
                 <ProtectedRoute allowedRoles={['instructor']}>
                   <StudentForm addStudent={addStudent} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/faq"
+              element={
+                <ProtectedRoute allowedRoles={['instructor']}>
+                  <FAQ />
                 </ProtectedRoute>
               }
             />

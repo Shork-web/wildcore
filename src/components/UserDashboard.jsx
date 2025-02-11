@@ -174,6 +174,7 @@ function UserDashboard() {
                 title="Need Help?"
                 description="Access user guides, FAQs, and contact support for assistance. Get detailed information about using the system and managing student records effectively."
                 action="Get Help"
+                path="/faq"
               />
             </Grid>
           </Grid>
