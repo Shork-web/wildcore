@@ -19,7 +19,7 @@ import { styled } from '@mui/system';
 import { db, auth } from '../firebase-config';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { AuthContext } from '../context/AuthContext';
-import { getProgramsByCollege } from '../utils/collegePrograms';
+import { getProgramsByCollege, COLLEGES } from '../utils/collegePrograms';
 
 const maroon = '#800000';
 
@@ -212,7 +212,12 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (currentUser?.profile?.college) {
+    if (currentUser?.profile?.role === 'admin') {
+      // For admin, get all programs from all colleges
+      const allPrograms = Object.values(COLLEGES).flat();
+      setAvailablePrograms(allPrograms);
+    } else if (currentUser?.profile?.college) {
+      // For instructors, keep existing college-specific programs
       const programs = getProgramsByCollege(currentUser.profile.college);
       setAvailablePrograms(programs);
     }
