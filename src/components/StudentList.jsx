@@ -704,19 +704,7 @@ function StudentList() {
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Gender</TableCell>
               <TableCell sx={{ 
-                width: '7%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Semester</TableCell>
-              <TableCell sx={{ 
-                width: '8%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>School Year</TableCell>
-              <TableCell sx={{ 
-                width: '12%',
+                width: '15%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -732,9 +720,15 @@ function StudentList() {
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Duration</TableCell>
+              }}>Start Date</TableCell>
               <TableCell sx={{ 
-                width: '8%',
+                width: '10%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>End Date</TableCell>
+              <TableCell sx={{ 
+                width: '10%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -805,34 +799,6 @@ function StudentList() {
                     maxWidth: '100%'
                   }
                 }}>
-                  <Tooltip title={student.semester} placement="top">
-                    <span className="content">{student.semester}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.schoolYear} placement="top">
-                    <span className="content">{student.schoolYear}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
                   <Tooltip title={student.partnerCompany} placement="top">
                     <span className="content">{student.partnerCompany}</span>
                   </Tooltip>
@@ -862,17 +828,30 @@ function StudentList() {
                   }
                 }}>
                   <Tooltip 
-                    title={
-                      student.startDate || student.endDate 
-                        ? `${student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} - ${student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}`
-                        : 'N/A'
-                    } 
+                    title={student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} 
                     placement="top"
                   >
                     <span className="content">
-                      {student.startDate || student.endDate 
-                        ? `${student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} - ${student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}`
-                        : 'N/A'}
+                      {student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ 
+                  padding: '16px',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    fontSize: '0.875rem'
+                  }
+                }}>
+                  <Tooltip 
+                    title={student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'} 
+                    placement="top"
+                  >
+                    <span className="content">
+                      {student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}
                     </span>
                   </Tooltip>
                 </TableCell>
