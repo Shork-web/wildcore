@@ -57,6 +57,7 @@ class Student {
   constructor(data = {}) {
     this._data = {
       name: data.name || '',
+      middleInitial: data.middleInitial || '',
       gender: data.gender || '',
       program: data.program || '',
       semester: data.semester || '',
@@ -92,6 +93,7 @@ class Student {
   get recommendations() { return this._data.recommendations; }
   get evaluation() { return this._data.evaluation; }
   get college() { return this._data.college; }
+  get middleInitial() { return this._data.middleInitial; }
 
   // Setters
   set name(value) { this._data.name = value; }
@@ -108,6 +110,7 @@ class Student {
   set recommendations(value) { this._data.recommendations = value; }
   set evaluation(value) { this._data.evaluation = value; }
   set college(value) { this._data.college = value; }
+  set middleInitial(value) { this._data.middleInitial = value; }
 
   // Methods
   toJSON() {
@@ -194,6 +197,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     if (isEditing && initialData) {
       return new Student({
         name: initialData.name || '',
+        middleInitial: initialData.middleInitial || '',
         gender: initialData.gender || '',
         program: initialData.program || '',
         semester: initialData.semester || '',
@@ -220,6 +224,24 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Add state for split name fields
+  const [nameFields, setNameFields] = useState(() => {
+    if (isEditing && initialData?.name) {
+      // Split the full name if editing
+      const nameParts = initialData.name.split(',').map(part => part.trim());
+      return {
+        familyName: nameParts[0] || '',
+        givenName: (nameParts[1] || '').split(' ')[0] || '',
+        middleInitial: (nameParts[1] || '').split(' ')[1] || ''
+      };
+    }
+    return {
+      familyName: '',
+      givenName: '',
+      middleInitial: ''
+    };
+  });
+
   useEffect(() => {
     if (currentUser?.profile?.role === 'admin') {
       // For admin, get all programs from all colleges
@@ -234,11 +256,30 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prevData => {
-      const newStudent = new Student(prevData.toJSON());
-      newStudent.update(name, value);
-      return newStudent;
-    });
+    
+    if (['familyName', 'givenName', 'middleInitial'].includes(name)) {
+      setNameFields(prev => ({
+        ...prev,
+        [name]: value
+      }));
+      
+      // Only include middleInitial in the full name if it exists
+      const middleInitialPart = name === 'middleInitial' ? value : nameFields.middleInitial;
+      const fullName = `${nameFields.familyName}, ${nameFields.givenName}${middleInitialPart ? ' ' + middleInitialPart : ''}`.trim();
+      
+      setFormData(prevData => {
+        const newStudent = new Student(prevData.toJSON());
+        newStudent.update('name', fullName);
+        newStudent.update('middleInitial', middleInitialPart || '');
+        return newStudent;
+      });
+    } else {
+      setFormData(prevData => {
+        const newStudent = new Student(prevData.toJSON());
+        newStudent.update(name, value);
+        return newStudent;
+      });
+    }
   };
 
   const handleProgramChange = (event, newValue) => {
@@ -335,16 +376,42 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <SectionTitle>Personal Information</SectionTitle>
-              <CompactTextField
-                required
-                fullWidth
-                label="Student Name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                size="small"
-              />
-              <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <CompactTextField
+                    required
+                    fullWidth
+                    label="Family Name"
+                    name="familyName"
+                    value={nameFields.familyName}
+                    onChange={handleChange}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={8}>
+                  <CompactTextField
+                    required
+                    fullWidth
+                    label="Given Name"
+                    name="givenName"
+                    value={nameFields.givenName}
+                    onChange={handleChange}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={4}>
+                  <CompactTextField
+                    fullWidth
+                    label="M.I."
+                    name="middleInitial"
+                    value={nameFields.middleInitial}
+                    onChange={handleChange}
+                    size="small"
+                  />
+                </Grid>
+              </Grid>
+              
+              <FormControl required fullWidth size="small" sx={{ mb: 2, mt: 2 }}>
                 <InputLabel>Gender</InputLabel>
                 <Select
                   name="gender"

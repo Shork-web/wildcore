@@ -29,17 +29,13 @@ import {
   Alert,
   CircularProgress,
   Pagination,
-  Stack,
-  InputAdornment,
-  TextField,
-  Autocomplete
+  Stack
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
-import SearchIcon from '@mui/icons-material/Search';
 import { db, auth } from '../firebase-config';
 import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import StudentForm from './StudentForm';
@@ -118,8 +114,9 @@ class StudentManager {
     try {
       // Critical fields that cannot be empty
       const criticalFields = [
-        'name', 'program', 'partnerCompany', 'location',
-        'gender', 'semester'  // Added gender and semester as critical fields
+        'name', 'middleInitial',
+        'program', 'partnerCompany', 'location',
+        'gender', 'semester'
       ];
 
       criticalFields.forEach(field => {
@@ -221,9 +218,6 @@ function StudentList() {
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [companySearch, setCompanySearch] = useState('');
-  const [companies, setCompanies] = useState([]);
   const userRole = currentUser?.profile?.role || 'student';
 
   useEffect(() => {
@@ -236,14 +230,6 @@ function StudentList() {
 
     return () => unsubscribe();
   }, [studentManager]);
-
-  useEffect(() => {
-    const uniqueCompanies = ['All', ...new Set(students
-      .map(student => student.partnerCompany)
-      .filter(Boolean)
-      .sort())];
-    setCompanies(uniqueCompanies);
-  }, [students]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -282,6 +268,7 @@ function StudentList() {
     // Create a new Student instance with the existing data
     const studentData = {
       name: student.name || '',
+      middleInitial: student.middleInitial || '',
       gender: student.gender || '',
       program: student.program || '',
       semester: student.semester || '',
@@ -363,21 +350,6 @@ function StudentList() {
     setPage(newPage);
   };
 
-  const handleSearch = (event) => {
-    setSearchQuery(event.target.value);
-    const query = event.target.value.toLowerCase();
-    
-    const filtered = students.filter(student => 
-      student.name?.toLowerCase().includes(query) ||
-      student.program?.toLowerCase().includes(query) ||
-      student.partnerCompany?.toLowerCase().includes(query) ||
-      student.location?.toLowerCase().includes(query)
-    );
-    
-    setFilteredStudents(filtered);
-    setPage(1); // Reset to first page when searching
-  };
-
   const paginatedStudents = filteredStudents.slice(
     (page - 1) * rowsPerPage,
     page * rowsPerPage
@@ -416,92 +388,56 @@ function StudentList() {
         >
           Student List
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            size="small"
-            placeholder="Search by name, program, company, or location..."
-            value={searchQuery}
-            onChange={handleSearch}
-            sx={{
-              maxWidth: '500px',
-              '& .MuiOutlinedInput-root': {
-                '&:hover fieldset': {
-                  borderColor: '#800000',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: '#800000',
-                },
-              }
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Button
+            startIcon={<FilterListIcon />}
+            onClick={() => setShowFilters(!showFilters)}
+            variant={showFilters ? "contained" : "outlined"}
+            color="primary"
+            sx={{ 
+              borderRadius: 2,
+              position: 'relative'
             }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: '#800000' }} />
-                </InputAdornment>
-              ),
-              sx: {
-                borderRadius: 2,
-                bgcolor: 'white',
-              }
-            }}
-          />
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              startIcon={<FilterListIcon />}
-              onClick={() => setShowFilters(!showFilters)}
-              variant={showFilters ? "contained" : "outlined"}
-              color="primary"
-              sx={{ 
-                borderRadius: 2,
-                position: 'relative',
-                minWidth: 'fit-content',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              Filters
-              {studentManager.getActiveFiltersCount() > 0 && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: -8,
-                    right: -8,
-                    backgroundColor: '#FFD700',
-                    color: '#800000',
-                    borderRadius: '50%',
-                    width: 20,
-                    height: 20,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.75rem',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {studentManager.getActiveFiltersCount()}
-                </Box>
-              )}
-            </Button>
-
-            {userRole === 'admin' && (
-              <Button 
-                variant="contained" 
-                color="primary" 
-                onClick={() => exportStudentsToExcel(filteredStudents, userRole)}
-                sx={{ 
-                  background: 'linear-gradient(45deg, #800000, #FFD700)',
-                  '&:hover': {
-                    background: 'linear-gradient(45deg, #600000, #DFB700)'
-                  },
-                  minWidth: 'fit-content',
-                  whiteSpace: 'nowrap'
+          >
+            Filters
+            {studentManager.getActiveFiltersCount() > 0 && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  backgroundColor: '#FFD700',
+                  color: '#800000',
+                  borderRadius: '50%',
+                  width: 20,
+                  height: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
                 }}
               >
-                Export to Excel
-              </Button>
+                {studentManager.getActiveFiltersCount()}
+              </Box>
             )}
-          </Box>
+          </Button>
+
+          {userRole === 'admin' && (
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={() => exportStudentsToExcel(filteredStudents, userRole)}
+              sx={{ 
+                background: 'linear-gradient(45deg, #800000, #FFD700)',
+                '&:hover': {
+                  background: 'linear-gradient(45deg, #600000, #DFB700)'
+                }
+              }}
+            >
+              Export to Excel
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -576,64 +512,18 @@ function StudentList() {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <Autocomplete
-                value={studentManager.filters.company}
-                onChange={(event, newValue) => {
-                  handleFilterChange('company', newValue || 'All');
-                }}
-                inputValue={companySearch}
-                onInputChange={(event, newInputValue) => {
-                  setCompanySearch(newInputValue);
-                }}
-                options={companies}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Company"
-                    size="small"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        '&:hover fieldset': {
-                          borderColor: '#800000',
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#800000',
-                        },
-                      },
-                    }}
-                  />
-                )}
-                sx={{
-                  '& .MuiAutocomplete-tag': {
-                    backgroundColor: 'rgba(128, 0, 0, 0.08)',
-                    color: '#800000',
-                  }
-                }}
-                freeSolo
-                selectOnFocus
-                clearOnBlur
-                handleHomeEndKeys
-                disableListWrap
-                filterOptions={(options, { inputValue }) => {
-                  const filterValue = inputValue.toLowerCase();
-                  return options.filter(option => 
-                    option.toLowerCase().includes(filterValue)
-                  ).slice(0, 100); // Limit to first 100 matches for performance
-                }}
-                ListboxProps={{
-                  style: {
-                    maxHeight: '200px'
-                  }
-                }}
-                componentsProps={{
-                  paper: {
-                    sx: {
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(10px)',
-                    }
-                  }
-                }}
-              />
+              <FormControl fullWidth size="small">
+                <InputLabel>Company</InputLabel>
+                <Select
+                  value={studentManager.filters.company}
+                  onChange={(e) => handleFilterChange('company', e.target.value)}
+                  label="Company"
+                >
+                  {studentManager.companies.map(company => (
+                    <MenuItem key={company} value={company}>{company}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </Card>
@@ -702,7 +592,19 @@ function StudentList() {
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Gender</TableCell>
               <TableCell sx={{ 
-                width: '15%',
+                width: '7%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Semester</TableCell>
+              <TableCell sx={{ 
+                width: '8%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>School Year</TableCell>
+              <TableCell sx={{ 
+                width: '12%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -718,18 +620,13 @@ function StudentList() {
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Start Date</TableCell>
+              }}>Duration</TableCell>
               <TableCell sx={{ 
-                width: '10%',
+                width: '8%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>End Date</TableCell>
-              <TableCell sx={{ 
-                width: '10%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                textAlign: 'center'
               }}>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -796,6 +693,34 @@ function StudentList() {
                     maxWidth: '100%'
                   }
                 }}>
+                  <Tooltip title={student.semester} placement="top">
+                    <span className="content">{student.semester}</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ 
+                  padding: '16px',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
+                }}>
+                  <Tooltip title={student.schoolYear} placement="top">
+                    <span className="content">{student.schoolYear}</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ 
+                  padding: '16px',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
+                }}>
                   <Tooltip title={student.partnerCompany} placement="top">
                     <span className="content">{student.partnerCompany}</span>
                   </Tooltip>
@@ -825,30 +750,17 @@ function StudentList() {
                   }
                 }}>
                   <Tooltip 
-                    title={student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} 
+                    title={
+                      student.startDate || student.endDate 
+                        ? `${student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} - ${student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}`
+                        : 'N/A'
+                    } 
                     placement="top"
                   >
                     <span className="content">
-                      {student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    fontSize: '0.875rem'
-                  }
-                }}>
-                  <Tooltip 
-                    title={student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'} 
-                    placement="top"
-                  >
-                    <span className="content">
-                      {student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}
+                      {student.startDate || student.endDate 
+                        ? `${student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} - ${student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}`
+                        : 'N/A'}
                     </span>
                   </Tooltip>
                 </TableCell>
