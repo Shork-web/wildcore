@@ -31,7 +31,8 @@ import {
   Pagination,
   Stack,
   InputAdornment,
-  TextField
+  TextField,
+  Autocomplete
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -221,6 +222,8 @@ function StudentList() {
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
+  const [companies, setCompanies] = useState([]);
   const userRole = currentUser?.profile?.role || 'student';
 
   useEffect(() => {
@@ -233,6 +236,14 @@ function StudentList() {
 
     return () => unsubscribe();
   }, [studentManager]);
+
+  useEffect(() => {
+    const uniqueCompanies = ['All', ...new Set(students
+      .map(student => student.partnerCompany)
+      .filter(Boolean)
+      .sort())];
+    setCompanies(uniqueCompanies);
+  }, [students]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -565,18 +576,64 @@ function StudentList() {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Company</InputLabel>
-                <Select
-                  value={studentManager.filters.company}
-                  onChange={(e) => handleFilterChange('company', e.target.value)}
-                  label="Company"
-                >
-                  {studentManager.companies.map(company => (
-                    <MenuItem key={company} value={company}>{company}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                value={studentManager.filters.company}
+                onChange={(event, newValue) => {
+                  handleFilterChange('company', newValue || 'All');
+                }}
+                inputValue={companySearch}
+                onInputChange={(event, newInputValue) => {
+                  setCompanySearch(newInputValue);
+                }}
+                options={companies}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Company"
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '&:hover fieldset': {
+                          borderColor: '#800000',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#800000',
+                        },
+                      },
+                    }}
+                  />
+                )}
+                sx={{
+                  '& .MuiAutocomplete-tag': {
+                    backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                    color: '#800000',
+                  }
+                }}
+                freeSolo
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
+                disableListWrap
+                filterOptions={(options, { inputValue }) => {
+                  const filterValue = inputValue.toLowerCase();
+                  return options.filter(option => 
+                    option.toLowerCase().includes(filterValue)
+                  ).slice(0, 100); // Limit to first 100 matches for performance
+                }}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '200px'
+                  }
+                }}
+                componentsProps={{
+                  paper: {
+                    sx: {
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(10px)',
+                    }
+                  }
+                }}
+              />
             </Grid>
           </Grid>
         </Card>
