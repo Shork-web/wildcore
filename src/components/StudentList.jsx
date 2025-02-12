@@ -36,6 +36,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import InputAdornment from '@mui/material/InputAdornment';
+import TextField from '@mui/material/TextField';
+import Autocomplete from '@mui/material/Autocomplete';
 import { db, auth } from '../firebase-config';
 import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import StudentForm from './StudentForm';
@@ -219,6 +223,9 @@ function StudentList() {
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
   const userRole = currentUser?.profile?.role || 'student';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
+  const [companies, setCompanies] = useState([]);
 
   useEffect(() => {
     const unsubscribe = studentManager.subscribe(() => {
@@ -230,6 +237,14 @@ function StudentList() {
 
     return () => unsubscribe();
   }, [studentManager]);
+
+  useEffect(() => {
+    const uniqueCompanies = ['All', ...new Set(students
+      .map(student => student.partnerCompany)
+      .filter(Boolean)
+      .sort())];
+    setCompanies(uniqueCompanies);
+  }, [students]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -355,6 +370,21 @@ function StudentList() {
     page * rowsPerPage
   );
 
+  const handleSearch = (event) => {
+    setSearchQuery(event.target.value);
+    const query = event.target.value.toLowerCase();
+    
+    const filtered = students.filter(student => 
+      student.name?.toLowerCase().includes(query) ||
+      student.program?.toLowerCase().includes(query) ||
+      student.partnerCompany?.toLowerCase().includes(query) ||
+      student.location?.toLowerCase().includes(query)
+    );
+    
+    setFilteredStudents(filtered);
+    setPage(1); // Reset to first page when searching
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -388,56 +418,92 @@ function StudentList() {
         >
           Student List
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-          <Button
-            startIcon={<FilterListIcon />}
-            onClick={() => setShowFilters(!showFilters)}
-            variant={showFilters ? "contained" : "outlined"}
-            color="primary"
-            sx={{ 
-              borderRadius: 2,
-              position: 'relative'
+        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            size="small"
+            placeholder="Search by name, program, company, or location..."
+            value={searchQuery}
+            onChange={handleSearch}
+            sx={{
+              maxWidth: '500px',
+              '& .MuiOutlinedInput-root': {
+                '&:hover fieldset': {
+                  borderColor: '#800000',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#800000',
+                },
+              }
             }}
-          >
-            Filters
-            {studentManager.getActiveFiltersCount() > 0 && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  backgroundColor: '#FFD700',
-                  color: '#800000',
-                  borderRadius: '50%',
-                  width: 20,
-                  height: 20,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  fontWeight: 'bold',
-                }}
-              >
-                {studentManager.getActiveFiltersCount()}
-              </Box>
-            )}
-          </Button>
-
-          {userRole === 'admin' && (
-            <Button 
-              variant="contained" 
-              color="primary" 
-              onClick={() => exportStudentsToExcel(filteredStudents, userRole)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: '#800000' }} />
+                </InputAdornment>
+              ),
+              sx: {
+                borderRadius: 2,
+                bgcolor: 'white',
+              }
+            }}
+          />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              startIcon={<FilterListIcon />}
+              onClick={() => setShowFilters(!showFilters)}
+              variant={showFilters ? "contained" : "outlined"}
+              color="primary"
               sx={{ 
-                background: 'linear-gradient(45deg, #800000, #FFD700)',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #600000, #DFB700)'
-                }
+                borderRadius: 2,
+                position: 'relative',
+                minWidth: 'fit-content',
+                whiteSpace: 'nowrap'
               }}
             >
-              Export to Excel
+              Filters
+              {studentManager.getActiveFiltersCount() > 0 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -8,
+                    right: -8,
+                    backgroundColor: '#FFD700',
+                    color: '#800000',
+                    borderRadius: '50%',
+                    width: 20,
+                    height: 20,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {studentManager.getActiveFiltersCount()}
+                </Box>
+              )}
             </Button>
-          )}
+
+            {userRole === 'admin' && (
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={() => exportStudentsToExcel(filteredStudents, userRole)}
+                sx={{ 
+                  background: 'linear-gradient(45deg, #800000, #FFD700)',
+                  '&:hover': {
+                    background: 'linear-gradient(45deg, #600000, #DFB700)'
+                  },
+                  minWidth: 'fit-content',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Export to Excel
+              </Button>
+            )}
+          </Box>
         </Box>
       </Box>
 
@@ -512,18 +578,64 @@ function StudentList() {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Company</InputLabel>
-                <Select
-                  value={studentManager.filters.company}
-                  onChange={(e) => handleFilterChange('company', e.target.value)}
-                  label="Company"
-                >
-                  {studentManager.companies.map(company => (
-                    <MenuItem key={company} value={company}>{company}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                value={studentManager.filters.company}
+                onChange={(event, newValue) => {
+                  handleFilterChange('company', newValue || 'All');
+                }}
+                inputValue={companySearch}
+                onInputChange={(event, newInputValue) => {
+                  setCompanySearch(newInputValue);
+                }}
+                options={companies}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Company"
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '&:hover fieldset': {
+                          borderColor: '#800000',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#800000',
+                        },
+                      },
+                    }}
+                  />
+                )}
+                sx={{
+                  '& .MuiAutocomplete-tag': {
+                    backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                    color: '#800000',
+                  }
+                }}
+                freeSolo
+                selectOnFocus
+                clearOnBlur
+                handleHomeEndKeys
+                disableListWrap
+                filterOptions={(options, { inputValue }) => {
+                  const filterValue = inputValue.toLowerCase();
+                  return options.filter(option => 
+                    option.toLowerCase().includes(filterValue)
+                  ).slice(0, 100); // Limit to first 100 matches for performance
+                }}
+                ListboxProps={{
+                  style: {
+                    maxHeight: '200px'
+                  }
+                }}
+                componentsProps={{
+                  paper: {
+                    sx: {
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(10px)',
+                    }
+                  }
+                }}
+              />
             </Grid>
           </Grid>
         </Card>
