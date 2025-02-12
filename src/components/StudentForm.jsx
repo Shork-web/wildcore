@@ -333,7 +333,14 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         await addStudent(studentData);
       } else {
         const docRef = await addDoc(collection(db, 'studentData'), studentData);
+        
+        // Reset form fields after successful submission
         setFormData(new Student());
+        setNameFields({
+          familyName: '',
+          givenName: '',
+          middleInitial: ''
+        });
         
         if (addStudent) {
           await addStudent({ ...studentData, id: docRef.id });
@@ -376,7 +383,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <SectionTitle>Personal Information</SectionTitle>
-              <Grid container spacing={2}>
+              <Grid container spacing={0}>
                 <Grid item xs={12}>
                   <CompactTextField
                     required
@@ -386,6 +393,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     value={nameFields.familyName}
                     onChange={handleChange}
                     size="small"
+                    sx={{ mb: 1.5 }}
                   />
                 </Grid>
                 <Grid item xs={8}>
@@ -397,6 +405,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     value={nameFields.givenName}
                     onChange={handleChange}
                     size="small"
+                    sx={{ mb: 1.5, pr: 1 }}
                   />
                 </Grid>
                 <Grid item xs={4}>
@@ -407,11 +416,17 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     value={nameFields.middleInitial}
                     onChange={handleChange}
                     size="small"
+                    sx={{ mb: 1.5 }}
                   />
                 </Grid>
               </Grid>
               
-              <FormControl required fullWidth size="small" sx={{ mb: 2, mt: 2 }}>
+              <FormControl 
+                required 
+                fullWidth 
+                size="small" 
+                sx={{ mb: 1.5 }}
+              >
                 <InputLabel>Gender</InputLabel>
                 <Select
                   name="gender"
