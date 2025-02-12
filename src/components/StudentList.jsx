@@ -118,9 +118,8 @@ class StudentManager {
     try {
       // Critical fields that cannot be empty
       const criticalFields = [
-        'name', 'middleInitial',
-        'program', 'partnerCompany', 'location',
-        'gender', 'semester'
+        'name', 'program', 'partnerCompany', 'location',
+        'gender', 'semester'  // Removed middleInitial from critical fields
       ];
 
       criticalFields.forEach(field => {
@@ -150,6 +149,7 @@ class StudentManager {
         solutions: updatedData.solutions || '',
         recommendations: updatedData.recommendations || '',
         evaluation: updatedData.evaluation || '',
+        middleInitial: updatedData.middleInitial || '',  // Make middleInitial optional
         college: updatedData.college || this._currentUser?.profile?.college || '',
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser?.uid

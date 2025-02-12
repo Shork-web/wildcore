@@ -163,6 +163,14 @@ class Student {
       }
     }
 
+    // Only validate middle initial if it's provided
+    if (this._data.middleInitial && this._data.middleInitial.trim()) {
+      const middleInitialRegex = /^[a-zA-Z\s.]+$/;
+      if (!middleInitialRegex.test(this._data.middleInitial)) {
+        throw new Error('Middle Initial contains invalid characters');
+      }
+    }
+
     return true;
   }
 
@@ -224,15 +232,23 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Add state for split name fields
+  // Update the useState for nameFields to properly handle the name splitting
   const [nameFields, setNameFields] = useState(() => {
     if (isEditing && initialData?.name) {
       // Split the full name if editing
       const nameParts = initialData.name.split(',').map(part => part.trim());
+      const lastName = nameParts[0] || '';
+      let givenName = nameParts[1] || '';
+      
+      // If there's a middle initial in the name, remove it from given name
+      if (initialData.middleInitial) {
+        givenName = givenName.replace(` ${initialData.middleInitial}`, '');
+      }
+
       return {
-        familyName: nameParts[0] || '',
-        givenName: (nameParts[1] || '').split(' ')[0] || '',
-        middleInitial: (nameParts[1] || '').split(' ')[1] || ''
+        familyName: lastName,
+        givenName: givenName,
+        middleInitial: initialData.middleInitial || ''
       };
     }
     return {
@@ -254,6 +270,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     }
   }, [currentUser]);
 
+  // Update the handleChange function to properly handle name changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     
@@ -263,14 +280,19 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         [name]: value
       }));
       
-      // Only include middleInitial in the full name if it exists
-      const middleInitialPart = name === 'middleInitial' ? value : nameFields.middleInitial;
-      const fullName = `${nameFields.familyName}, ${nameFields.givenName}${middleInitialPart ? ' ' + middleInitialPart : ''}`.trim();
+      // Construct the full name with proper formatting
+      const updatedFields = {
+        ...nameFields,
+        [name]: value
+      };
+      
+      // Format the full name with family name, given name, and middle initial
+      const fullName = `${updatedFields.familyName}, ${updatedFields.givenName}${updatedFields.middleInitial ? ' ' + updatedFields.middleInitial : ''}`.trim();
       
       setFormData(prevData => {
         const newStudent = new Student(prevData.toJSON());
         newStudent.update('name', fullName);
-        newStudent.update('middleInitial', middleInitialPart || '');
+        newStudent.update('middleInitial', updatedFields.middleInitial);
         return newStudent;
       });
     } else {
