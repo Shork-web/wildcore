@@ -136,7 +136,7 @@ function OJTAdviser() {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#800000' }}>
-          OJT Adviser Evaluations
+          OJT Partner Evaluations
         </Typography>
         <Button
           startIcon={<FilterList />}

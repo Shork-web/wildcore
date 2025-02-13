@@ -49,7 +49,7 @@ function Analytics() {
         >
           <Tab label="Student Metrics" />
           <Tab label="Company Metrics" />
-          <Tab label="OJT Advisers" />
+          <Tab label="OJT Partners" />
         </Tabs>
       </Paper>
 
