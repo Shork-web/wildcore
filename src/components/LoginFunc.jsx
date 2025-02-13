@@ -91,7 +91,7 @@ function BackgroundLogo({ isMobile }) {
         bottom: { xs: '-100px', sm: '-120px', md: '-150px' },
         left: { xs: '-60px', sm: '-70px', md: '-80px' },
         opacity: 0.5,
-        zIndex: 1,
+        zIndex: 0,
         animation: `${rotate} 20s linear infinite`,
         transition: 'all 0.3s ease-in-out',
         pointerEvents: 'none',
@@ -135,7 +135,7 @@ function LoginFunc() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth={false} sx={styles.contentContainer}>
+      <Container maxWidth={false} sx={{ ...styles.contentContainer, zIndex: 1 }}>
         <Box
           sx={{
             width: '100%',
@@ -166,6 +166,7 @@ function LoginFunc() {
         sx={{
           ...styles.backgroundOverlay,
           backgroundImage: `url(${require('../assets/bg.jpg')})`,
+          zIndex: -1,
         }}
       />
     </Box>
