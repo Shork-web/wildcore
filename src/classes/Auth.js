@@ -5,6 +5,8 @@ import { app } from '../firebase-config';
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+const ADMIN_KEY = "NLOADMIN_24!!"; // Move the admin key constant here
+
 export default class Auth {
   constructor() {
     this._auth = auth;
@@ -25,6 +27,14 @@ export default class Auth {
   // Authentication methods
   async signUp(userData) {
     try {
+      // Validate admin key if signing up as admin
+      if (userData.role === 'admin' && !this.validateAdminKey(userData.adminKey)) {
+        return { 
+          success: false, 
+          error: 'Invalid Admin Key' 
+        };
+      }
+
       // Create auth user
       const userCredential = await createUserWithEmailAndPassword(
         this._auth,
@@ -157,8 +167,8 @@ export default class Auth {
 
   // Validation methods
   validateAdminKey(key) {
-    // Replace with your actual admin key validation logic
-    return key === 'your-admin-key';
+    // Update the admin key validation logic
+    return key === ADMIN_KEY;
   }
 
   validatePasswords(password, confirmPassword) {

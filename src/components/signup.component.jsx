@@ -90,14 +90,6 @@ export default function SignUp() {
   const validatePasswords = () => {
     return userData.password === userData.confirmPassword;
   };
-   //Admin key 
-  const validateAdminKey = () => {
-    if (userData.accountType === 'admin') {
-      // admin key validation (change if needed)
-      return userData.adminKey === "NLOADMIN_24!!";
-    }
-    return true;
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -107,11 +99,6 @@ export default function SignUp() {
     try {
       if (!validatePasswords()) {
         setMessage({ type: 'error', text: 'Passwords do not match' });
-        return;
-      }
-
-      if (!validateAdminKey()) {
-        setMessage({ type: 'error', text: 'Invalid Admin Key' });
         return;
       }
 
@@ -132,12 +119,8 @@ export default function SignUp() {
         role: userData.accountType,
         college: userData.college,
         createdAt: new Date().toISOString(),
-        adminKeyVerified: userData.accountType === 'admin'
+        adminKey: userData.adminKey
       };
-
-      if (userData.accountType === 'admin') {
-        userForAuth.adminKey = userData.adminKey;
-      }
 
       const result = await auth.signUp(userForAuth);
 

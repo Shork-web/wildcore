@@ -1,0 +1,417 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // HELPER FUNCTIONS
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Check if user is instructor
+    function isInstructor() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor';
+    }
+
+    // Check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Get user's college
+    function getUserCollege() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.college;
+    }
+
+    // Check if instructor has access to student's college
+    function hasCollegeAccess(studentCollege) {
+      return isAdmin() || (isInstructor() && getUserCollege() == studentCollege);
+    }
+
+    // Validate student data fields
+    function isValidStudentData() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'name', 'gender', 'program', 'semester', 'schoolYear',
+        'partnerCompany', 'location', 'startDate', 'endDate',
+        'concerns', 'solutions', 'recommendations', 'evaluation',
+        'createdBy', 'updatedBy', 'createdAt', 'updatedAt',
+        'college'
+      ]) &&
+      // Validate required string fields
+      data.name is string && data.name.size() > 0 &&
+      data.gender is string && data.gender.size() > 0 &&
+      data.program is string && data.program.size() > 0 &&
+      data.semester is string && data.semester.size() > 0 &&
+      data.schoolYear is string && data.schoolYear.size() > 0 &&
+      data.partnerCompany is string && data.partnerCompany.size() > 0 &&
+      data.location is string && data.location.size() > 0 &&
+      data.college is string && data.college.size() > 0 &&
+      // Optional fields can be empty but must exist
+      data.concerns is string &&
+      data.solutions is string &&
+      data.recommendations is string &&
+      data.evaluation is string &&
+      data.startDate is string &&
+      data.endDate is string &&
+      // Metadata validation
+      data.createdBy is string &&
+      data.updatedBy is string &&
+      data.createdAt is string &&
+      data.updatedAt is string;
+    }
+
+    // Validate student survey
+    function isValidStudentSurvey() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'surveyType',
+        'studentName',
+        'companyName',
+        'program',
+        'schoolYear',
+        'semester',
+        'college',
+        'workAttitude',
+        'workPerformance',
+        'totalScore',
+        'maxPossibleScore',
+        'submittedAt',
+        'submittedBy',
+        'status'
+      ]) &&
+      // Basic fields validation
+      data.surveyType == 'student' &&
+      data.studentName is string && data.studentName.size() > 0 &&
+      data.companyName is string && data.companyName.size() > 0 &&
+      data.program is string && data.program.size() > 0 &&
+      data.schoolYear is string && data.schoolYear.size() > 0 &&
+      data.semester is string && data.semester.size() > 0 &&
+      data.college is string && data.college.size() > 0 &&
+
+      // Work attitude validation
+      data.workAttitude is map &&
+      data.workAttitude.keys().hasAll(['ratings', 'totalScore', 'maxPossibleScore']) &&
+      data.workAttitude.ratings is map &&
+      data.workAttitude.totalScore is number &&
+      data.workAttitude.maxPossibleScore is number &&
+
+      // Work performance validation
+      data.workPerformance is map &&
+      data.workPerformance.keys().hasAll(['ratings', 'totalScore', 'maxPossibleScore']) &&
+      data.workPerformance.ratings is map &&
+      data.workPerformance.totalScore is number &&
+      data.workPerformance.maxPossibleScore is number &&
+
+      // Metadata validation
+      data.totalScore is number &&
+      data.maxPossibleScore is number &&
+      data.submittedAt is timestamp &&
+      data.submittedBy is string &&
+      data.status is string;
+    }
+
+    // Validate company survey
+    function isValidCompanySurvey() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'surveyType',
+        'meetingDate',
+        'companyName',
+        'studentNames',
+        'overallPerformance',
+        'tasksAssigned',
+        'trainingProvided',
+        'technicalSkills',
+        'recommendations',
+        'industryMentor',
+        'recommendToStudents',
+        'program',
+        'totalScore',
+        'maxPossibleScore',
+        'submittedAt',
+        'submittedBy',
+        'status'
+      ]) &&
+      // Basic fields validation
+      data.surveyType == 'company' &&
+      data.meetingDate is string && data.meetingDate.size() > 0 &&
+      data.companyName is string && data.companyName.size() > 0 &&
+      data.studentNames is string && data.studentNames.size() > 0 &&
+      data.program is string && data.program.size() > 0 &&
+      data.overallPerformance is number && 
+      data.overallPerformance >= 1 && 
+      data.overallPerformance <= 10 &&
+      data.tasksAssigned is string && data.tasksAssigned.size() > 0 &&
+      data.trainingProvided is string && data.trainingProvided.size() > 0 &&
+      data.technicalSkills is string && data.technicalSkills.size() > 0 &&
+      data.recommendations is string && data.recommendations.size() > 0 &&
+      data.industryMentor is string && data.industryMentor.size() > 0 &&
+      data.recommendToStudents is string &&
+      (data.recommendToStudents == 'yes' || data.recommendToStudents == 'no') &&
+
+      // Overall score validation
+      data.totalScore is number &&
+      data.totalScore >= 0 &&
+      data.totalScore <= 10 &&
+      data.maxPossibleScore == 10 &&
+
+      // Metadata validation
+      data.submittedAt is timestamp &&
+      data.submittedBy is string &&
+      data.status is string;
+    }
+
+    // Validate company evaluation
+    function isValidCompanyEvaluation() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'companyName',
+        'studentName',
+        'program',
+        'schoolYear',
+        'semester',
+        'workEnvironment',
+        'performanceSupport',
+        'experienceQuality',
+        'overall',
+        'submittedAt',
+        'status'
+      ]) &&
+      // Basic Information validation
+      data.companyName is string && data.companyName.size() > 0 &&
+      data.studentName is string && data.studentName.size() > 0 &&
+      data.program is string && data.program.size() > 0 &&
+      data.schoolYear is string && data.schoolYear.size() > 0 &&
+      data.semester is string && data.semester.size() > 0 &&
+
+      // Work Environment validation
+      data.workEnvironment is map &&
+      data.workEnvironment.keys().hasAll([
+        'workstation', 'resources', 'safety', 'workload',
+        'totalScore', 'maxPossibleScore'
+      ]) &&
+      data.workEnvironment.workstation is number &&
+      data.workEnvironment.workstation >= 0 &&
+      data.workEnvironment.workstation <= 5 &&
+      data.workEnvironment.totalScore is number &&
+      data.workEnvironment.maxPossibleScore == 20 &&
+
+      // Performance Support validation
+      data.performanceSupport is map &&
+      data.performanceSupport.keys().hasAll([
+        'supervision', 'feedback', 'training', 'mentorship',
+        'totalScore', 'maxPossibleScore'
+      ]) &&
+      data.performanceSupport.supervision is number &&
+      data.performanceSupport.supervision >= 0 &&
+      data.performanceSupport.supervision <= 5 &&
+      data.performanceSupport.totalScore is number &&
+      data.performanceSupport.maxPossibleScore == 20 &&
+
+      // Experience Quality validation
+      data.experienceQuality is map &&
+      data.experienceQuality.keys().hasAll([
+        'relevance', 'skills', 'growth', 'satisfaction',
+        'totalScore', 'maxPossibleScore'
+      ]) &&
+      data.experienceQuality.relevance is number &&
+      data.experienceQuality.relevance >= 0 &&
+      data.experienceQuality.relevance <= 5 &&
+      data.experienceQuality.totalScore is number &&
+      data.experienceQuality.maxPossibleScore == 20 &&
+
+      // Overall Metrics validation
+      data.overall is map &&
+      data.overall.keys().hasAll([
+        'totalScore', 'maxPossibleScore', 'averageRating'
+      ]) &&
+      data.overall.totalScore is number &&
+      data.overall.totalScore >= 0 &&
+      data.overall.maxPossibleScore == 60 &&
+      data.overall.averageRating is string &&
+
+      // Metadata validation
+      data.submittedAt is timestamp &&
+      data.status is string &&
+      data.status == 'submitted';
+    }
+
+    // COLLECTION RULES
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if request.auth != null && 
+                    request.auth.uid == userId && 
+                    request.resource.data.keys().hasAll([
+                      'firstName', 'lastName', 'email', 'role', 
+                      'idNumber', 'phoneNumber', 'createdAt'
+                    ]) &&
+                    (
+                      // For admin accounts
+                      (request.resource.data.role == 'admin' &&
+                       request.resource.data.adminKeyVerified == true) ||
+                      // For instructor accounts
+                      (request.resource.data.role == 'instructor' &&
+                       request.resource.data.college is string && 
+                       request.resource.data.college.size() > 0)
+                    );
+      allow update: if isAdmin() && 
+                    request.resource.data.keys().hasAll([
+                      'firstName', 'lastName', 'email', 'role', 
+                      'idNumber', 'phoneNumber', 'createdAt'
+                    ]) &&
+                    (
+                      // For admin accounts
+                      (request.resource.data.role == 'admin' &&
+                       request.resource.data.adminKeyVerified == true) ||
+                      // For instructor accounts
+                      (request.resource.data.role == 'instructor' &&
+                       request.resource.data.college is string && 
+                       request.resource.data.college.size() > 0)
+                    );
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    // Admin Profiles Collection
+    match /users/{userId}/adminProfile/{document=**} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() || 
+                   (request.auth.uid == userId && 
+                    request.resource.data.adminKeyVerified == true);
+    }
+
+    // Profile Collection
+    match /profile/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if isAdmin() || isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    // StudentData Collection
+    match /studentData/{docId} {
+      allow read: if isAuthenticated() && 
+                   (isAdmin() || hasCollegeAccess(resource.data.college));
+      allow create: if isAuthenticated() && 
+                    isValidStudentData() &&
+                    (isAdmin() || 
+                      (isInstructor() && 
+                       request.resource.data.college == getUserCollege())) &&
+                    request.resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.updatedBy == request.auth.uid;
+      allow update: if isAuthenticated() &&
+                    isValidStudentData() &&
+                    (isAdmin() || 
+                      (isInstructor() && 
+                       request.resource.data.college == getUserCollege())) &&
+                    request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if isAuthenticated() && 
+                    (isAdmin() || 
+                      (isInstructor() && 
+                       resource.data.college == getUserCollege()));
+    }
+
+    // Student Surveys Collection
+    match /studentSurveys/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if request.resource.data.keys().hasAll([
+        'surveyType',
+        'studentName',
+        'companyName',
+        'program',
+        'schoolYear',
+        'semester',
+        'workAttitude',
+        'workPerformance',
+        'totalScore',
+        'maxPossibleScore',
+        'submittedAt',
+        'submittedBy',
+        'status'
+      ]) && 
+      request.resource.data.surveyType == 'student';  // Basic validation only
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // OJT Advisers Collection
+    match /OJTadvisers/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if 
+        request.resource.data.keys().hasAll([
+          'surveyType',
+          'meetingDate',
+          'companyName',
+          'studentNames',
+          'overallPerformance',
+          'tasksAssigned',
+          'trainingProvided',
+          'technicalSkills',
+          'recommendations',
+          'industryMentor',
+          'recommendToStudents',
+          'program',
+          'totalScore',
+          'maxPossibleScore',
+          'submittedAt',
+          'submittedBy',
+          'status'
+        ]) && 
+        request.resource.data.surveyType == 'company';
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Company Evaluations Collection Rules
+    match /companyEvaluations/{surveyId} {
+      allow read: if true;
+      allow create: if isValidCompanyEvaluation();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Admin Profiles Collection
+    match /users/{userId}/adminProfile/{document=**} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Instructor Profiles Collection
+    match /users/{userId}/instructorProfile/{document=**} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+    }
+
+    // Student Records Collection
+    match /students/{studentId}/records/{recordId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (isInstructor() && 
+         resource.data.college == getUserCollege())
+      );
+      allow write: if isAuthenticated() && (
+        isAdmin() || 
+        (isInstructor() && 
+         request.resource.data.college == getUserCollege() &&
+         request.resource.data.instructorId == request.auth.uid)
+      );
+    }
+
+    // Add a specific rule for batch deletions
+    match /{document=**} {
+      allow delete: if isAdmin() &&
+                      (request.path.segments[0] == 'users' || 
+                       request.path.segments[0] == 'profile') &&
+                      request.auth.uid != resource.id;
+    }
+  }
+} 
