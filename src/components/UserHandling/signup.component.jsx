@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import Auth from '../classes/Auth';
+import Auth from '../../classes/Auth';
 
 const COLLEGES = {
   'COLLEGE OF ENGINEERING AND ARCHITECTURE': [

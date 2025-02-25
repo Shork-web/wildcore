@@ -18,8 +18,7 @@ import {
   Collapse,
   IconButton,
   Card,
-  Button,
-  CircularProgress
+  Button
 } from '@mui/material';
 import { 
   Warning, 
@@ -31,9 +30,9 @@ import {
   FilterList,
   Clear
 } from '@mui/icons-material';
-import { db } from '../firebase-config';
+import { db } from '../../firebase-config';
 import { collection, query, onSnapshot } from 'firebase/firestore';
-import { exportConcernsToExcel } from '../utils/concernsExport';
+import { exportConcerns } from '../../utils/concernsExport';
 
 class ConcernsManager {
   constructor() {
@@ -97,7 +96,6 @@ class ConcernsManager {
 
 function ConcernsSolutions() {
   const [concernsManager] = useState(() => new ConcernsManager());
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState(null);
@@ -112,13 +110,11 @@ function ConcernsSolutions() {
           ...doc.data()
         }));
         concernsManager.students = studentsList;
-        setLoading(false);
-        forceUpdate({}); // Force re-render when data changes
+        forceUpdate({});
       },
       (error) => {
         console.error("Error fetching students:", error);
         setError(error.message);
-        setLoading(false);
       }
     );
 
@@ -148,14 +144,6 @@ function ConcernsSolutions() {
     };
     return icons[type] || null;
   };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   if (error) {
     return (
@@ -220,7 +208,7 @@ function ConcernsSolutions() {
           <Button 
             variant="contained" 
             color="primary" 
-            onClick={() => exportConcernsToExcel(filteredStudents)}
+            onClick={() => exportConcerns(filteredStudents)}
             sx={{ 
               background: 'linear-gradient(45deg, #800000, #FFD700)',
               '&:hover': {

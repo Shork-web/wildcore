@@ -1,25 +1,17 @@
 import React from 'react';
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { 
-  AppBar, 
-  Toolbar, 
-  Container, 
-  Box, 
-  useTheme,
-  useMediaQuery,
-  keyframes
-} from '@mui/material';
+import { AppBar, Toolbar, Container, Box, useTheme, useMediaQuery,keyframes } from '@mui/material';
 import Login from './login.component';
 import SignUp from './signup.component';
 import ForgotPassword from './forgotpw.component';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import '../css/login.css';
-import '../css/Signup.css';
-import '../css/transitions.css';
-
-import logo from '../assets/wordlogo.png';
-import citLogo from '../assets/citlogo.png';
+import '../../css/login.css';
+import '../../css/Signup.css';
+import '../../css/transitions.css';
+import wordlogo from '../../assets/wordlogo.png';
+import citlogo from '../../assets/citlogo.png';
+import bgImage from '../../assets/bg.jpg';
 
 // Styles
 const styles = {
@@ -100,7 +92,7 @@ function BackgroundLogo({ isMobile }) {
       }}
     >
       <img
-        src={citLogo}
+        src={citlogo}
         alt="CIT University Logo"
         style={{
           width: '100%',
@@ -124,7 +116,7 @@ function LoginFunc() {
         <Toolbar sx={{ justifyContent: 'flex-start' }}>
           <Link to="/sign-in" style={{ textDecoration: 'none' }}>
             <img
-              src={logo}
+              src={wordlogo}
               alt="logo"
               style={{ 
                 width: isMobile ? '120px' : '150px', 
@@ -165,7 +157,7 @@ function LoginFunc() {
       <Box
         sx={{
           ...styles.backgroundOverlay,
-          backgroundImage: `url(${require('../assets/bg.jpg')})`,
+          backgroundImage: `url(${bgImage})`,
           zIndex: -1,
         }}
       />

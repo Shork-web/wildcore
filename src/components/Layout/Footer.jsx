@@ -8,7 +8,7 @@ import {
   Phone,
   Email
 } from '@mui/icons-material';
-import citLogo2 from '../assets/cit-logo2.png';
+import citLogo2 from '../../assets/cit-logo2.png';
 
 const Footer = () => {
   return (

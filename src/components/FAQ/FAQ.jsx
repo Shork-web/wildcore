@@ -208,20 +208,11 @@ Tips:
 
 1. Primary Support:
    • Email: iverson.merto@cit.edu / nathanieledryd.negapatan@cit.edu
-   • Response time: 24-48 hours
+   • Response time: 5-10 hours
 
 2. Emergency Help:
    • IT Help Desk: 09533347008  / 09664731708
    • Available: Mon-Fri, 8am-5pm
-
-3. Additional Resources:
-   • Department Admin
-   • System Documentation
-   • Training Materials`
-        },
-        {
-          primary: "Common Issues",
-          secondary: `Troubleshooting Steps:
 
 1. System Access:
    • Check internet connection

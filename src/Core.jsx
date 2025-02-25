@@ -1,20 +1,20 @@
 import React, { useState, useCallback, useContext } from 'react';
 import { Container, Dialog, Grid, Button, Box, DialogActions, DialogContent, DialogContentText, DialogTitle, CssBaseline } from '@mui/material';
 import { Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import StudentForm from './components/StudentForm';
-import StudentList from './components/StudentList';
-import UserDashboard from './components/UserDashboard';
-import AdminDashboard from './components/AdminDashboard';
-import LoginFunc from './components/LoginFunc';
+import StudentForm from './components/Dashboards/StudentForm';
+import StudentList from './components/Dashboards/StudentList';
+import UserDashboard from './components/Dashboards/UserDashboard';
+import AdminDashboard from './components/Dashboards/AdminDashboard';
+import LoginFunc from './components/UserHandling/LoginFunc';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { AppBar, Toolbar } from '@mui/material';
 import logo from './assets/wordlogo.png'; 
-import ConcernsSolutions from './components/ConcernsSolutions';
+import ConcernsSolutions from './components/Dashboards/ConcernsSolutions';
 import { AuthContext, AuthProvider, StudentsContext } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Footer from './components/Footer';
+import ProtectedRoute from './components/UserHandling/ProtectedRoute';
+import Footer from './components/Layout/Footer';
 import Analytics from './components/Analytics/AnalyticsExport';
-import FAQ from './components/FAQ';
+import FAQ from './components/FAQ/FAQ';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';

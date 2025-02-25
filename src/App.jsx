@@ -1,13 +1,13 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useContext } from 'react-router-dom';
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import AdminDashboard from './components/AdminDashboard';
-import UserDashboard from './components/UserDashboard';
+import AdminDashboard from './components/Dashboard/AdminDashboard';
+import UserDashboard from './components/Dashboards/UserDashboard';
 import Navigation from './components/Navigation';
 import Login from './components/login.component';
-import SignUp from './components/signup.component';
+import SignUp from './components/UserHandling/signup.component';
 import ForgotPassword from './components/forgotpw.component';
-import StudentList from './components/StudentList';
+import StudentList from './components/Dashboards/StudentList';
 import StudentForm from './components/StudentForm';
 import ConcernsSolutions from './components/ConcernsSolutions';
 import { Box, CircularProgress, createTheme, ThemeProvider, CssBaseline, GlobalStyles } from '@mui/material';

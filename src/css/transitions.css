@@ -9,26 +9,4 @@
   transition: opacity 300ms ease-in, transform 300ms ease-in;
 }
 
-.fade-exit {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.fade-exit-active {
-  opacity: 0;
-  transform: translateY(-20px);
-  transition: opacity 300ms ease-in, transform 300ms ease-in;
-}
-
-.auth-wrapper {
-  perspective: 1000px;
-}
-
-.auth-inner {
-  transition: transform 0.6s;
-  transform-style: preserve-3d;
-}
-
-.auth-inner > div {
-  backface-visibility: hidden;
-}
+/* ... rest of transitions.css content ... */ 

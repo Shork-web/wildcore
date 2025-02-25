@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { Email, Lock, Visibility, VisibilityOff, School, AdminPanelSettings } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-import Auth from '../classes/Auth';
+import Auth from '../../classes/Auth';
 
 // Styles object to keep JSX clean
 const styles = {

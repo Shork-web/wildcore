@@ -1,7 +1,7 @@
 import React from "react";
 import { Routes, Route } from 'react-router-dom';
 import Core from "./Core";
-import ForgotPassword from './components/forgotpw.component';
+import ForgotPassword from './components/UserHandling/forgotpw.component';
 
 function App() {
   return (

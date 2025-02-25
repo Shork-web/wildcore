@@ -1,4 +1,4 @@
-export const COLLEGES = {
+export const collegePrograms = {
   'COLLEGE OF ENGINEERING AND ARCHITECTURE': [
     'BS Architecture',
     'BS Chemical Engineering',
@@ -45,5 +45,5 @@ export const COLLEGES = {
 
 // Helper function to get programs for a specific college
 export const getProgramsByCollege = (college) => {
-  return COLLEGES[college] || [];
+  return collegePrograms[college] || [];
 }; 

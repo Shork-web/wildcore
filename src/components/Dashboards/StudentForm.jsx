@@ -16,10 +16,10 @@ import {
   Autocomplete,
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { db, auth } from '../firebase-config';
+import { db, auth } from '../../firebase-config';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
-import { AuthContext } from '../context/AuthContext';
-import { getProgramsByCollege, COLLEGES } from '../utils/collegePrograms';
+import { AuthContext } from '../../context/AuthContext';
+import { collegePrograms } from '../../utils/collegePrograms';
 
 const maroon = '#800000';
 
@@ -261,11 +261,11 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   useEffect(() => {
     if (currentUser?.profile?.role === 'admin') {
       // For admin, get all programs from all colleges
-      const allPrograms = Object.values(COLLEGES).flat();
+      const allPrograms = Object.values(collegePrograms).flat();
       setAvailablePrograms(allPrograms);
     } else if (currentUser?.profile?.college) {
       // For instructors, keep existing college-specific programs
-      const programs = getProgramsByCollege(currentUser.profile.college);
+      const programs = collegePrograms[currentUser.profile.college];
       setAvailablePrograms(programs);
     }
   }, [currentUser]);

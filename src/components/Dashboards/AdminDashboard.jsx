@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Container, Grid, Typography, Box, List, ListItem, ListItemText, 
-  useTheme, useMediaQuery, Card, CardContent, Divider,
-  IconButton, Fade
-} from '@mui/material';
+import { Container, Grid, Typography, Box, List, ListItem, ListItemText, useTheme, useMediaQuery, Card, CardContent, Divider, IconButton, Fade } from '@mui/material';
 import { styled } from '@mui/system';
-import { 
-  PeopleAlt, School, WomanRounded, ManRounded,
-  TrendingUp, Assessment, CalendarToday
-} from '@mui/icons-material';
-import { db } from '../firebase-config';
+import { PeopleAlt, School, WomanRounded, ManRounded, TrendingUp, Assessment, CalendarToday } from '@mui/icons-material';
+import { db } from '../../firebase-config';
 import { collection, query, onSnapshot } from 'firebase/firestore';
+import LoadingDashboard from './LoadingDashboard';
 
 const StyledCard = styled(Card)(({ theme }) => ({
   height: '100%',
@@ -112,10 +106,9 @@ class DashboardManager {
 }
 
 function AdminDashboard() {
+  const [isLoading, setIsLoading] = useState(true);
   const [dashboardManager] = useState(() => new DashboardManager());
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [, forceUpdate] = useState();
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -129,13 +122,12 @@ function AdminDashboard() {
           ...doc.data()
         }));
         dashboardManager.students = studentsList;
-        setLoading(false);
-        forceUpdate({}); // Force re-render when data changes
+        setIsLoading(false);
       },
       (error) => {
         console.error("Error fetching students:", error);
         setError(error.message);
-        setLoading(false);
+        setIsLoading(false);
       }
     );
 
@@ -257,12 +249,8 @@ function AdminDashboard() {
     </StyledCard>
   );
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Typography>Loading dashboard data...</Typography>
-      </Box>
-    );
+  if (isLoading) {
+    return <LoadingDashboard />;
   }
 
   if (error) {

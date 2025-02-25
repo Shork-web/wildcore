@@ -1,36 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import {
-  Container,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Tooltip,
-  Box,
-  Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Card,
-  Collapse,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton as MuiIconButton,
-  Snackbar,
-  Alert,
-  CircularProgress,
-  Pagination,
-  Stack
-} from '@mui/material';
+import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Stack } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -40,11 +9,11 @@ import SearchIcon from '@mui/icons-material/Search';
 import InputAdornment from '@mui/material/InputAdornment';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
-import { db, auth } from '../firebase-config';
+import { db, auth } from '../../firebase-config';
 import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import StudentForm from './StudentForm';
-import { AuthContext } from '../context/AuthContext';
-import { exportStudentsToExcel } from '../utils/studentExport';
+import { AuthContext } from '../../context/AuthContext';
+import { exportStudentsToExcel } from '../../utils/studentExport';
 
 class StudentManager {
   constructor(currentUser) {
@@ -219,7 +188,6 @@ function StudentList() {
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
   const userRole = currentUser?.profile?.role || 'student';
@@ -232,7 +200,6 @@ function StudentList() {
       const allStudents = studentManager.students;
       setStudents(allStudents);
       setFilteredStudents(allStudents);
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -384,18 +351,6 @@ function StudentList() {
     setFilteredStudents(filtered);
     setPage(1); // Reset to first page when searching
   };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (studentManager.error) {
-    return <div>Error: {studentManager.error}</div>;
-  }
 
   return (
     <Container 

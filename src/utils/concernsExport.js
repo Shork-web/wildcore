@@ -28,4 +28,28 @@ export const exportConcernsToExcel = (students, fileName = 'concerns_solutions.x
 
   // Write the file and trigger download
   XLSX.writeFile(workbook, fileName);
+};
+
+export const exportConcerns = (data) => {
+  // Add your export logic here
+  // Example:
+  const headers = [
+    'Student Name',
+    'Program',
+    'Partner Company',
+    'Concerns',
+    'Solutions',
+    'Recommendations'
+  ];
+
+  const rows = data.map(item => [
+    item.name,
+    item.program,
+    item.partnerCompany,
+    item.concerns,
+    item.solutions,
+    item.recommendations
+  ]);
+
+  return [headers, ...rows];
 }; 

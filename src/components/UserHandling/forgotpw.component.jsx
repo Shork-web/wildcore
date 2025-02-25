@@ -21,10 +21,11 @@ import {
 import { Email } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
-import { app } from '../firebase-config';
-import '../css/login.css';
-import citLogo from '../assets/citlogo.png';
-import logo from '../assets/wordlogo.png';
+import { app } from '../../firebase-config';
+import '../../css/login.css';
+import citlogo from '../../assets/citlogo.png';
+import wordlogo from '../../assets/wordlogo.png';
+import bgImage from '../../assets/bg.jpg';
 
 // Define the rotation animation
 const rotate = keyframes`
@@ -76,7 +77,7 @@ export default function ForgotPassword() {
         <Toolbar sx={{ justifyContent: 'flex-start' }}>
           <Link to="/sign-in" style={{ textDecoration: 'none' }}>
             <img
-              src={logo}
+              src={wordlogo}
               alt="logo"
               style={{ 
                 width: isMobile ? '120px' : '150px', 
@@ -250,7 +251,7 @@ export default function ForgotPassword() {
         }}
       >
         <img
-          src={citLogo}
+          src={citlogo}
           alt="CIT University Logo"
           style={{
             width: '400px',
@@ -267,7 +268,7 @@ export default function ForgotPassword() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundImage: `url(${require('../assets/bg.jpg')})`,
+          backgroundImage: `url(${bgImage})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           filter: 'blur(2px)',

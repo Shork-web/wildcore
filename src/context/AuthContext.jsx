@@ -3,7 +3,33 @@ import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase-config';
 import Auth from '../classes/Auth';
-import { CircularProgress, Box } from '@mui/material';
+import { Box, CircularProgress, Typography } from '@mui/material';
+import { keyframes } from '@mui/system';
+
+// Define animations
+const pulse = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+`;
+
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
 
 export const AuthContext = createContext();
 export const StudentsContext = createContext();
@@ -55,30 +81,118 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, [firebaseAuth, handleSignOut]);
 
-  const value = {
-    auth,
-    currentUser,
-    userRole,
-    loading,
-    handleSignOut
-  };
-
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh' 
-      }}>
-        <CircularProgress />
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          width: '100%',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          gap: 3,
+          animation: `${fadeIn} 0.5s ease-in-out`,
+          backgroundColor: 'white',
+          zIndex: 1000,
+        }}
+      >
+        <Box
+          sx={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {/* Outer progress circle */}
+          <CircularProgress
+            size={100}
+            thickness={2}
+            sx={{
+              color: '#FFD700',
+              position: 'absolute',
+              animation: `${pulse} 2s infinite ease-in-out`,
+            }}
+          />
+          {/* Inner progress circle */}
+          <CircularProgress
+            size={80}
+            thickness={3}
+            sx={{
+              color: '#800000',
+              animation: `${pulse} 2s infinite ease-in-out`,
+              animationDelay: '0.3s',
+            }}
+          />
+        </Box>
+
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 'bold',
+              mb: 1,
+              background: 'linear-gradient(45deg, #800000, #FFD700)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              animation: `${pulse} 2s infinite ease-in-out`,
+            }}
+          >
+            Initializing WILD C.O.R.E
+          </Typography>
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{
+              animation: `${fadeIn} 0.5s ease-in-out`,
+              animationDelay: '0.2s',
+            }}
+          >
+            Please wait while we set things up...
+          </Typography>
+        </Box>
+
+        {/* Loading dots */}
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            mt: 2,
+          }}
+        >
+          {[0, 1, 2].map((index) => (
+            <Box
+              key={index}
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: '#800000',
+                animation: `${pulse} 1s infinite ease-in-out`,
+                animationDelay: `${index * 0.2}s`,
+              }}
+            />
+          ))}
+        </Box>
       </Box>
     );
   }
 
+  const value = {
+    auth,
+    currentUser,
+    userRole,
+    handleSignOut
+  };
+
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }; 

@@ -162,7 +162,7 @@ function UserDashboard() {
             <Grid item xs={12} sm={6}>
               <FeatureCard
                 icon={<History />}
-                title="Student Records"
+                title="Student List"
                 description="View and manage student records. Review, edit, and verify student information."
                 action="View & Edit"
                 path="/students"
