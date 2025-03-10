@@ -13,7 +13,7 @@ import { db, auth } from '../../firebase-config';
 import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
-import { exportStudentsToExcel } from '../../utils/studentExport';
+import exportManager from '../../utils/ExportManager';
 
 class StudentManager {
   constructor(currentUser) {
@@ -445,7 +445,14 @@ function StudentList() {
               <Button 
                 variant="contained" 
                 color="primary" 
-                onClick={() => exportStudentsToExcel(filteredStudents, userRole)}
+                onClick={() => exportManager.exportStudentsToExcel(
+                  filteredStudents, 
+                  userRole, 
+                  'student_interns.xlsx', 
+                  'Cebu Institute of Technology - University', // HEI name
+                  'N. Bacalso Avenue, Cebu City', // HEI address
+                  '2023-2024' // Academic year
+                )}
                 sx={{ 
                   background: 'linear-gradient(45deg, #800000, #FFD700)',
                   '&:hover': {

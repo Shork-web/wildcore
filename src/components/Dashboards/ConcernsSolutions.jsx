@@ -32,7 +32,7 @@ import {
 } from '@mui/icons-material';
 import { db } from '../../firebase-config';
 import { collection, query, onSnapshot } from 'firebase/firestore';
-import { exportConcerns } from '../../utils/concernsExport';
+import exportManager from '../../utils/ExportManager';
 
 class ConcernsManager {
   constructor() {
@@ -208,7 +208,30 @@ function ConcernsSolutions() {
           <Button 
             variant="contained" 
             color="primary" 
-            onClick={() => exportConcerns(filteredStudents)}
+            onClick={() => {
+              try {
+                // Get the current academic year or use a default
+                const currentYear = new Date().getFullYear();
+                const academicYear = `${currentYear-1}-${currentYear}`;
+                
+                // Get HEI information from the first student or use defaults
+                const heiName = filteredStudents.length > 0 && filteredStudents[0].college 
+                  ? filteredStudents[0].college 
+                  : 'Cebu Institute of Technology - University';
+                const heiAddress = 'N. Bacalso Avenue, Cebu City';
+                
+                exportManager.exportConcernsToExcel(
+                  filteredStudents,
+                  'concerns_solutions.xlsx',
+                  heiName,
+                  heiAddress,
+                  academicYear
+                );
+              } catch (error) {
+                console.error('Export error:', error);
+                setError('Failed to export data: ' + error.message);
+              }
+            }}
             sx={{ 
               background: 'linear-gradient(45deg, #800000, #FFD700)',
               '&:hover': {

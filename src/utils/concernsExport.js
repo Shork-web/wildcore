@@ -23,6 +23,28 @@ export const exportConcernsToExcel = (students, fileName = 'concerns_solutions.x
     { width: 40 }  // Recommendations
   ];
 
+  // Apply center alignment to all cells
+  const range = XLSX.utils.decode_range(worksheet['!ref']);
+  for (let r = range.s.r; r <= range.e.r; ++r) {
+    for (let c = range.s.c; c <= range.e.c; ++c) {
+      const cellRef = XLSX.utils.encode_cell({ r, c });
+      if (!worksheet[cellRef]) continue;
+      if (!worksheet[cellRef].s) worksheet[cellRef].s = {};
+      worksheet[cellRef].s.alignment = { horizontal: 'center', vertical: 'center' };
+    }
+  }
+
+  // Apply header styling
+  for (let c = range.s.c; c <= range.e.c; ++c) {
+    const headerRef = XLSX.utils.encode_cell({ r: 0, c });
+    if (!worksheet[headerRef]) continue;
+    worksheet[headerRef].s = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '800000' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+  }
+
   // Add the worksheet to the workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Concerns & Solutions');
 
@@ -52,4 +74,4 @@ export const exportConcerns = (data) => {
   ]);
 
   return [headers, ...rows];
-}; 
+};

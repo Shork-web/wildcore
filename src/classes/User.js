@@ -51,7 +51,7 @@ export default class User {
   }
 
   validateAdminKey() {
-    return this._accountType !== 'admin' || this._adminKey === 'CITADMIN';
+    return this._accountType !== 'admin' || this._adminKey === 'NLOADMIN_24!!';
   }
 
   isValid() {
