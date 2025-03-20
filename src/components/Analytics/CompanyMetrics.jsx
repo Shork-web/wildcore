@@ -355,6 +355,16 @@ function CompanyMetrics() {
         <CompanySelector />
       </Grid>
 
+      {getFilteredData('workEnvironmentData').length === 0 && (
+        <Grid item xs={12}>
+          <Box sx={{ p: 3, bgcolor: '#f5f5f5', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="h6" sx={{ color: '#800000' }}>
+              No data available. Please select a different semester.
+            </Typography>
+          </Box>
+        </Grid>
+      )}
+      
       <Grid item xs={12}>
         <Card elevation={3}>
           <CardContent>
