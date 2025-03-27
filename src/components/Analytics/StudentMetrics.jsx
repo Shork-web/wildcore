@@ -11,13 +11,39 @@ import {
 
 const COLORS = ['#800000', '#FFD700', '#FF6B6B', '#4ECDC4'];
 
+const RATING_LABELS = {
+  // Work Attitude mappings
+  'Demonstrates positive attitude towards work': 'Attitude',
+  'Shows enthusiasm and initiative': 'Drive',
+  'Works effectively with others': 'Team',
+  'Demonstrates professionalism': 'Prof',
+  'Exhibits dependability and responsibility': 'Depend',
+  'Demonstrates good judgment': 'Judge',
+  'Shows desire to learn': 'Learn',
+  
+  // Work Performance mappings
+  'Quality of work output': 'Quality',
+  'Quantity of work output': 'Quantity',
+  'Planning and organizing work': 'Plan',
+  'Meeting deadlines': 'Time',
+  'Technical knowledge and skills': 'Tech',
+  'Communication skills': 'Comm',
+  'Problem-solving abilities': 'Solve',
+  'Decision-making abilities': 'Decide'
+};
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
+    // Find original label by looking up the shortened version
+    const originalLabel = Object.entries(RATING_LABELS).find(([_, short]) => 
+      short === data.aspect
+    )?.[0] || data.aspect;
+
     return (
       <Card sx={{ p: 2, maxWidth: 250, boxShadow: 3 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#800000' }}>
-          {data.aspect || data.name}
+          {originalLabel}
         </Typography>
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
           Category: {data.category || 'Program'}
@@ -41,12 +67,12 @@ const CustomTooltip = ({ active, payload, label }) => {
 function StudentMetrics() {
   const [surveyData, setSurveyData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedProgram, setSelectedProgram] = useState('all');
-  const [selectedYear, setSelectedYear] = useState('all');
-  const [selectedSemester, setSelectedSemester] = useState('all');
-  const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedProgram, setSelectedProgram] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
+  const [selectedCompany, setSelectedCompany] = useState('');
 
-  // Fetch data from Firestore
+  // Fetch data and set initial filter values
   useEffect(() => {
     const fetchSurveyData = async () => {
       try {
@@ -57,6 +83,20 @@ function StudentMetrics() {
           ...doc.data()
         }));
         setSurveyData(surveys);
+
+        // Set initial filter values to the first option in each category
+        if (surveys.length > 0) {
+          const programs = [...new Set(surveys.map(survey => survey.program))];
+          const years = [...new Set(surveys.map(survey => survey.schoolYear))];
+          const semesters = [...new Set(surveys.map(survey => survey.semester))];
+          const companies = [...new Set(surveys.map(survey => survey.companyName))];
+
+          setSelectedProgram(programs[0] || '');
+          setSelectedYear(years[0] || '');
+          setSelectedSemester(semesters[0] || '');
+          setSelectedCompany(companies[0] || '');
+        }
+
         setLoading(false);
       } catch (error) {
         console.error('Error fetching surveys:', error);
@@ -78,10 +118,10 @@ function StudentMetrics() {
   // Filter data based on selections
   const getFilteredData = () => {
     return surveyData.filter(survey => {
-      return (selectedProgram === 'all' || survey.program === selectedProgram) &&
-             (selectedYear === 'all' || survey.schoolYear === selectedYear) &&
-             (selectedSemester === 'all' || survey.semester === selectedSemester) &&
-             (selectedCompany === 'all' || survey.companyName === selectedCompany);
+      return (!selectedProgram || survey.program === selectedProgram) &&
+             (!selectedYear || survey.schoolYear === selectedYear) &&
+             (!selectedSemester || survey.semester === selectedSemester) &&
+             (!selectedCompany || survey.companyName === selectedCompany);
     });
   };
 
@@ -89,28 +129,30 @@ function StudentMetrics() {
   const processChartData = () => {
     const filteredData = getFilteredData();
     
-    // Work Attitude Data (from workAttitude.ratings)
+    // Work Attitude Data
     const workAttitudeData = filteredData.reduce((acc, survey) => {
       const ratings = survey.workAttitude?.ratings || {};
       Object.entries(ratings).forEach(([aspect, rating]) => {
-        if (!acc[aspect]) {
-          acc[aspect] = { total: 0, count: 0 };
+        const shortLabel = RATING_LABELS[aspect] || aspect;
+        if (!acc[shortLabel]) {
+          acc[shortLabel] = { total: 0, count: 0 };
         }
-        acc[aspect].total += rating;
-        acc[aspect].count += 1;
+        acc[shortLabel].total += rating;
+        acc[shortLabel].count += 1;
       });
       return acc;
     }, {});
 
-    // Work Performance Data (from workPerformance.ratings)
+    // Work Performance Data
     const workPerformanceData = filteredData.reduce((acc, survey) => {
       const ratings = survey.workPerformance?.ratings || {};
       Object.entries(ratings).forEach(([aspect, rating]) => {
-        if (!acc[aspect]) {
-          acc[aspect] = { total: 0, count: 0 };
+        const shortLabel = RATING_LABELS[aspect] || aspect;
+        if (!acc[shortLabel]) {
+          acc[shortLabel] = { total: 0, count: 0 };
         }
-        acc[aspect].total += rating;
-        acc[aspect].count += 1;
+        acc[shortLabel].total += rating;
+        acc[shortLabel].count += 1;
       });
       return acc;
     }, {});
@@ -162,7 +204,6 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Programs</MenuItem>
             {filterOptions.programs.map((program) => (
               <MenuItem key={program} value={program}>
                 {program}
@@ -184,7 +225,6 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Years</MenuItem>
             {filterOptions.years.map((year) => (
               <MenuItem key={year} value={year}>
                 {year}
@@ -206,7 +246,6 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Semesters</MenuItem>
             {filterOptions.semesters.map((semester) => (
               <MenuItem key={semester} value={semester}>
                 {semester}
@@ -228,7 +267,6 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Companies</MenuItem>
             {filterOptions.companies.map((company) => (
               <MenuItem key={company} value={company}>
                 {company}
@@ -242,11 +280,10 @@ function StudentMetrics() {
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" color="textSecondary">
           Active Filters:
-          {selectedProgram !== 'all' && ` Program: ${selectedProgram},`}
-          {selectedYear !== 'all' && ` Year: ${selectedYear},`}
-          {selectedSemester !== 'all' && ` Semester: ${selectedSemester},`}
-          {selectedCompany !== 'all' && ` Company: ${selectedCompany}`}
-          {(selectedProgram === 'all' && selectedYear === 'all' && selectedSemester === 'all' && selectedCompany === 'all') && ' None'}
+          {selectedProgram && ` Program: ${selectedProgram},`}
+          {selectedYear && ` Year: ${selectedYear},`}
+          {selectedSemester && ` Semester: ${selectedSemester},`}
+          {selectedCompany && ` Company: ${selectedCompany}`}
         </Typography>
       </Box>
     </Paper>
