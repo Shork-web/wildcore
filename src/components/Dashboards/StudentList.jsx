@@ -520,30 +520,28 @@ function StudentList() {
               )}
             </Button>
 
-            {userRole === 'admin' && (
-              <Button 
-                variant="contained" 
-                color="primary" 
-                onClick={() => exportManager.exportStudentsToExcel(
-                  filteredStudents, 
-                  userRole, 
-                  'student_interns.xlsx', 
-                  'Cebu Institute of Technology - University', // HEI name
-                  'N. Bacalso Avenue, Cebu City', // HEI address
-                  '2023-2024' // Academic year
-                )}
-                sx={{ 
-                  background: 'linear-gradient(45deg, #800000, #FFD700)',
-                  '&:hover': {
-                    background: 'linear-gradient(45deg, #600000, #DFB700)'
-                  },
-                  minWidth: 'fit-content',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                Export to Excel
-              </Button>
-            )}
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={() => exportManager.exportStudentsToExcel(
+                filteredStudents, 
+                userRole, 
+                'student_interns.xlsx', 
+                'Cebu Institute of Technology - University', // HEI name
+                'N. Bacalso Avenue, Cebu City', // HEI address
+                '2023-2024' // Academic year
+              )}
+              sx={{ 
+                background: 'linear-gradient(45deg, #800000, #FFD700)',
+                '&:hover': {
+                  background: 'linear-gradient(45deg, #600000, #DFB700)'
+                },
+                minWidth: 'fit-content',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Export to Excel
+            </Button>
           </Box>
         </Box>
       </Box>
