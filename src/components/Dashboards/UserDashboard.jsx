@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Grid, Typography, Paper, Box, Card, CardContent, IconButton, Divider, Chip } from '@mui/material';
 import { styled } from '@mui/system';
-import { Assignment, History, HelpOutline, ArrowForward, Notifications, TrendingUp } from '@mui/icons-material';
+import { Assignment, History, HelpOutline, ArrowForward, Notifications, TrendingUp, Assessment } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 const DashboardCard = styled(Card)(({ theme }) => ({
@@ -168,11 +168,20 @@ function UserDashboard() {
                 path="/students"
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
+              <FeatureCard
+                icon={<Assessment />}
+                title="Student Analytics"
+                description="Access visual analytics and insights about student performance across companies and semesters."
+                action="View Insights"
+                path="/student-analytics"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <FeatureCard
                 icon={<HelpOutline />}
                 title="Need Help?"
-                description="Access user guides, FAQs, and contact support for assistance. Get detailed information about using the system and managing student records effectively."
+                description="Access user guides, FAQs, and contact support for assistance."
                 action="Get Help"
                 path="/faq"
               />
@@ -205,6 +214,9 @@ function UserDashboard() {
             </Typography>
             <Typography variant="body2" paragraph>
               • Use "Student Records" to view, edit and manage all submitted records.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              • Check "Student Analytics" for performance insights and statistics.
             </Typography>
             <Divider sx={{ my: 2 }} />
             <Typography variant="subtitle2" color="primary" gutterBottom>

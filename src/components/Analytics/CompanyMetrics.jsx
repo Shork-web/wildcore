@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Grid, Box, Typography, Card, CardContent, Divider, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, LineChart, Line, RadarChart, 
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell
-} from 'recharts';
+import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase-config';
 
@@ -308,29 +303,25 @@ function CompanyMetrics() {
     </Paper>
   );
 
-  // Enhanced tooltip component with better formatting
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <Card sx={{ p: 2, maxWidth: 250, boxShadow: 3 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#800000' }}>
-            {data.aspect}
-          </Typography>
-          <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
-            Category: {data.category}
-          </Typography>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="body2">
-            {data.description}
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1, fontWeight: 'bold' }}>
-            Rating: {data.rating}/5
-          </Typography>
-        </Card>
-      );
-    }
-    return null;
+  // Get rating color based on score
+  const getRatingColor = (rating) => {
+    if (rating >= 4.5) return '#2e7d32'; // Green for Excellent
+    if (rating >= 4.0) return '#1976d2'; // Blue for Good
+    return '#ed6c02'; // Orange for Needs Improvement
+  };
+
+  // Get rating text based on score
+  const getRatingText = (rating) => {
+    if (rating >= 4.5) return 'Excellent';
+    if (rating >= 4.0) return 'Good';
+    return 'Needs Improvement';
+  };
+
+  // Get background color for rating badge
+  const getRatingBgColor = (rating) => {
+    if (rating >= 4.5) return '#e8f5e9'; // Light green
+    if (rating >= 4.0) return '#e3f2fd'; // Light blue
+    return '#fff3e0'; // Light orange
   };
 
   if (loading) {
@@ -399,8 +390,7 @@ function CompanyMetrics() {
                             variant="caption" 
                             sx={{ 
                               color: 'text.secondary',
-                              bgcolor: metric.rating >= 4.5 ? '#e8f5e9' : 
-                                     metric.rating >= 4.0 ? '#e3f2fd' : '#fff3e0',
+                              bgcolor: getRatingBgColor(metric.rating),
                               px: 1,
                               py: 0.5,
                               borderRadius: 1,
@@ -414,8 +404,7 @@ function CompanyMetrics() {
                         <Typography 
                           variant="h4" 
                           sx={{ 
-                            color: metric.rating >= 4.5 ? '#2e7d32' : 
-                                   metric.rating >= 4.0 ? '#1976d2' : '#ed6c02',
+                            color: getRatingColor(metric.rating),
                             fontWeight: 'bold',
                             ml: 2
                           }}
@@ -432,92 +421,25 @@ function CompanyMetrics() {
                         mt: 'auto',
                         p: 1,
                         borderRadius: 1,
-                        bgcolor: metric.rating >= 4.5 ? '#e8f5e9' : 
-                                metric.rating >= 4.0 ? '#e3f2fd' : '#fff3e0',
+                        bgcolor: getRatingBgColor(metric.rating),
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
                       }}>
                         <Typography variant="caption" sx={{ 
-                          color: metric.rating >= 4.5 ? '#2e7d32' : 
-                                 metric.rating >= 4.0 ? '#1976d2' : '#ed6c02',
+                          color: getRatingColor(metric.rating),
                           fontWeight: 'bold'
                         }}>
-                          {metric.rating >= 4.5 ? 'Excellent' : 
-                           metric.rating >= 4.0 ? 'Good' : 'Needs Improvement'}
+                          {getRatingText(metric.rating)}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
                           out of 5.0
-                      </Typography>
+                        </Typography>
                       </Box>
                     </CardContent>
                   </Card>
                 </Grid>
               ))}
-
-              {/* Radar Chart */}
-              <Grid item xs={12} md={6}>
-                <Box sx={{ height: 400, mt: 2 }}>
-                  <ResponsiveContainer>
-                    <RadarChart data={getFilteredData('workEnvironmentData')}>
-                      <PolarGrid gridType="polygon" />
-                      <PolarAngleAxis 
-                        dataKey="aspect" 
-                        tick={{ fill: '#666', fontSize: 12 }}
-                      />
-                      <PolarRadiusAxis 
-                        domain={[0, 5]} 
-                        axisLine={{ stroke: '#666' }}
-                        tick={{ fill: '#666' }}
-                      />
-                      <Radar
-                        name="Environment"
-                        dataKey="rating"
-                        stroke="#800000"
-                        fill="#800000"
-                        fillOpacity={0.6}
-                        strokeWidth={2}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Grid>
-
-              {/* Bar Chart */}
-              <Grid item xs={12} md={6}>
-                <Box sx={{ height: 400, mt: 2 }}>
-                  <ResponsiveContainer>
-                    <BarChart 
-                      data={getFilteredData('workEnvironmentData')}
-                      layout="vertical"
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" domain={[0, 5]} />
-                      <YAxis 
-                        dataKey="aspect" 
-                        type="category" 
-                        width={150}
-                        tick={{ fill: '#666' }}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="rating" 
-                        background={{ fill: '#f5f5f5' }}
-                      >
-                        {getFilteredData('workEnvironmentData').map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`}
-                            fill={entry.rating >= 4.5 ? '#2e7d32' : 
-                                  entry.rating >= 4.0 ? '#1976d2' : '#ed6c02'}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Grid>
             </Grid>
           </CardContent>
         </Card>
@@ -535,7 +457,7 @@ function CompanyMetrics() {
             <Grid container spacing={3}>
               {/* Performance Metrics Cards */}
               {getFilteredData('performanceData').map((metric) => (
-                <Grid item xs={12} md={6} lg={4} key={metric.aspect}>
+                <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
                   <Card 
                     elevation={2}
                     sx={{
@@ -555,8 +477,7 @@ function CompanyMetrics() {
                         <Typography 
                           variant="h4" 
                           sx={{ 
-                            color: metric.rating >= 4.5 ? '#2e7d32' : 
-                                   metric.rating >= 4.0 ? '#1976d2' : '#ed6c02',
+                            color: getRatingColor(metric.rating),
                             fontWeight: 'bold'
                           }}
                         >
@@ -572,91 +493,24 @@ function CompanyMetrics() {
                         mt: 2, 
                         p: 1, 
                         borderRadius: 1,
-                        bgcolor: metric.rating >= 4.5 ? '#e8f5e9' : 
-                                metric.rating >= 4.0 ? '#e3f2fd' : '#fff3e0'
+                        bgcolor: getRatingBgColor(metric.rating)
                       }}>
                         <Typography variant="caption" sx={{ 
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          color: metric.rating >= 4.5 ? '#2e7d32' : 
-                                 metric.rating >= 4.0 ? '#1976d2' : '#ed6c02'
+                          color: getRatingColor(metric.rating)
                         }}>
                           <span>Category: {metric.category}</span>
                           <span>
-                            {metric.rating >= 4.5 ? 'Excellent' : 
-                             metric.rating >= 4.0 ? 'Good' : 'Needs Improvement'}
+                            {getRatingText(metric.rating)}
                           </span>
-                      </Typography>
+                        </Typography>
                       </Box>
                     </CardContent>
                   </Card>
                 </Grid>
               ))}
-
-              {/* Radar Chart */}
-              <Grid item xs={12}>
-                <Box sx={{ height: 400, mt: 2 }}>
-                  <ResponsiveContainer>
-                    <RadarChart data={getFilteredData('performanceData')}>
-                      <PolarGrid gridType="polygon" />
-                      <PolarAngleAxis 
-                        dataKey="aspect" 
-                        tick={{ fill: '#666', fontSize: 12 }}
-                      />
-                      <PolarRadiusAxis 
-                        domain={[0, 5]} 
-                        axisLine={{ stroke: '#666' }}
-                        tick={{ fill: '#666' }}
-                      />
-                      <Radar
-                        name="Performance"
-                        dataKey="rating"
-                        stroke="#800000"
-                        fill="#800000"
-                        fillOpacity={0.6}
-                        strokeWidth={2}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Grid>
-
-              {/* Summary Bar Chart */}
-              <Grid item xs={12}>
-                <Box sx={{ height: 300 }}>
-                  <ResponsiveContainer>
-                    <BarChart 
-                      data={getFilteredData('performanceData')}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="aspect" 
-                        angle={45} 
-                        textAnchor="start" 
-                        height={100}
-                        interval={0}
-                      />
-                      <YAxis domain={[0, 5]} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="rating" 
-                        background={{ fill: '#f5f5f5' }}
-                      >
-                        {getFilteredData('performanceData').map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`}
-                            fill={entry.rating >= 4.5 ? '#2e7d32' : 
-                                  entry.rating >= 4.0 ? '#1976d2' : '#ed6c02'}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Grid>
             </Grid>
           </CardContent>
         </Card>
@@ -699,8 +553,7 @@ function CompanyMetrics() {
                         justifyContent: 'space-between'
                       }}>
                         <Typography variant="h4" sx={{ 
-                          color: metric.rating >= 4.5 ? '#2e7d32' : 
-                                 metric.rating >= 4.0 ? '#1976d2' : '#ed6c02',
+                          color: getRatingColor(metric.rating),
                           fontWeight: 'bold'
                         }}>
                           {metric.rating.toFixed(1)}
@@ -712,90 +565,15 @@ function CompanyMetrics() {
                       <Typography variant="caption" sx={{ 
                         display: 'block',
                         mt: 1,
-                        color: metric.rating >= 4.5 ? '#2e7d32' : 
-                               metric.rating >= 4.0 ? '#1976d2' : '#ed6c02'
+                        color: getRatingColor(metric.rating)
                       }}>
-                        {metric.rating >= 4.5 ? 'Excellent' : 
-                         metric.rating >= 4.0 ? 'Good' : 'Needs Improvement'}
+                        {getRatingText(metric.rating)}
                       </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
               ))}
-
-              {/* Summary Chart */}
-              <Grid item xs={12}>
-                <Box sx={{ height: 300, mt: 2 }}>
-                  <ResponsiveContainer>
-                    <BarChart 
-                      data={getFilteredData('experienceData')}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="aspect" 
-                        angle={45} 
-                        textAnchor="start" 
-                        height={100}
-                        interval={0}
-                      />
-                      <YAxis domain={[0, 5]} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="rating" 
-                        fill="#FFD700"
-                        radius={[4, 4, 0, 0]}
-                        background={{ fill: '#f5f5f5' }}
-                      >
-                        {getFilteredData('experienceData').map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`}
-                            fill={entry.rating >= 4.5 ? '#2e7d32' : 
-                                  entry.rating >= 4.0 ? '#1976d2' : '#ed6c02'}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Grid>
             </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12}>
-        <Card elevation={3}>
-          <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Satisfaction & Engagement Trends
-            </Typography>
-            <Box sx={{ height: 350, mt: 3 }}>
-              <ResponsiveContainer>
-                <LineChart data={getFilteredData('trendData')}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis domain={[0, 5]} tickCount={6} />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="satisfaction" 
-                    stroke="#800000" 
-                    name="Overall Satisfaction"
-                    strokeWidth={2}
-                    dot={{ fill: '#800000' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="engagement" 
-                    stroke="#FFD700" 
-                    name="Employee Engagement"
-                    strokeWidth={2}
-                    dot={{ fill: '#FFD700' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </Box>
           </CardContent>
         </Card>
       </Grid>

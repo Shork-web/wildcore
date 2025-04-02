@@ -15,6 +15,7 @@ import ProtectedRoute from './components/UserHandling/ProtectedRoute';
 import Footer from './components/Layout/Footer';
 import Analytics from './components/Analytics/AnalyticsExport';
 import FAQ from './components/FAQ/FAQ';
+import StudentAnalytics from './components/Analytics/StudentAnalytics';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -168,6 +169,9 @@ function MainContent() {
               <Button color="inherit" component={Link} to="/students">
                 Student List
               </Button>
+              <Button color="inherit" component={Link} to="/student-analytics">
+                Analytics
+              </Button>
             </>
           )}
           <Button color="inherit" onClick={openLogoutDialog}>
@@ -226,6 +230,14 @@ function MainContent() {
               element={
                 <ProtectedRoute allowedRoles={['instructor']}>
                   <FAQ />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-analytics"
+              element={
+                <ProtectedRoute allowedRoles={['instructor']}>
+                  <StudentAnalytics />
                 </ProtectedRoute>
               }
             />

@@ -77,6 +77,7 @@ export default function SignUp() {
     adminKeyVerified: false,
     role: 'instructor',
     college: '',
+    section: '',
     createdAt: new Date().toISOString()
   });
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -118,6 +119,7 @@ export default function SignUp() {
         phoneNumber: userData.phoneNumber,
         role: userData.accountType,
         college: userData.college,
+        section: userData.section,
         createdAt: new Date().toISOString(),
         adminKey: userData.adminKey
       };
@@ -149,10 +151,22 @@ export default function SignUp() {
   };
 
   const handleChange = (e) => {
-    setUserData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    const { name, value } = e.target;
+    
+    // Validation for phone number and ID number fields
+    if (name === 'phoneNumber' || name === 'idNumber') {
+      // xx-xxxx-xxx
+      const validatedValue = value.replace(/[^0-9-]/g, '');
+      setUserData(prev => ({
+        ...prev,
+        [name]: validatedValue
+      }));
+    } else {
+      setUserData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleAccountTypeChange = (type) => {
@@ -160,7 +174,8 @@ export default function SignUp() {
       ...prev,
       accountType: type,
       adminKey: type !== 'admin' ? '' : prev.adminKey,
-      college: type === 'instructor' ? '' : prev.college
+      college: type === 'instructor' ? '' : prev.college,
+      section: type === 'instructor' ? '' : prev.section
     }));
   };
 
@@ -331,6 +346,8 @@ export default function SignUp() {
                   label="ID Number"
                   value={userData.idNumber}
                   onChange={handleChange}
+                  inputProps={{ inputMode: 'numeric', pattern: '[0-9-]*' }}
+                  placeholder="Numbers and dashes only"
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       height: '56px',
@@ -359,6 +376,8 @@ export default function SignUp() {
                   label="Phone Number"
                   value={userData.phoneNumber}
                   onChange={handleChange}
+                  inputProps={{ inputMode: 'numeric', pattern: '[0-9-]*' }}
+                  placeholder="Numbers and dashes only"
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       height: '56px',
@@ -380,45 +399,74 @@ export default function SignUp() {
                 />
               </Grid>
               {userData.accountType === 'instructor' && (
-                <Grid item xs={12}>
-                  <TextField
-                    select
-                    required
-                    fullWidth
-                    name="college"
-                    label="College"
-                    value={userData.college}
-                    onChange={handleChange}
-                    SelectProps={{
-                      native: true,
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        height: '56px',
-                        '&:hover fieldset': {
-                          borderColor: '#800000',
+                <>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      select
+                      required
+                      fullWidth
+                      name="college"
+                      label="College"
+                      value={userData.college}
+                      onChange={handleChange}
+                      SelectProps={{
+                        native: true,
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          height: '56px',
+                          '&:hover fieldset': {
+                            borderColor: '#800000',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#800000',
+                          },
                         },
-                        '&.Mui-focused fieldset': {
-                          borderColor: '#800000',
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <School sx={{ color: '#800000' }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    >
+                      <option value="">Select a College</option>
+                      {Object.keys(COLLEGES).map((college) => (
+                        <option key={college} value={college}>
+                          {college}
+                        </option>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      name="section"
+                      label="Section"
+                      value={userData.section}
+                      onChange={handleChange}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          height: '56px',
+                          '&:hover fieldset': {
+                            borderColor: '#800000',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#800000',
+                          },
                         },
-                      },
-                    }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <School sx={{ color: '#800000' }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                  >
-                    <option value="">Select a College</option>
-                    {Object.keys(COLLEGES).map((college) => (
-                      <option key={college} value={college}>
-                        {college}
-                      </option>
-                    ))}
-                  </TextField>
-                </Grid>
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <School sx={{ color: '#800000' }} />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                </>
               )}
             </Grid>
 

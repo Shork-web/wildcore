@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Stack } from '@mui/material';
+import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Stack, Chip, Divider } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -9,6 +9,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import InputAdornment from '@mui/material/InputAdornment';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
+import PersonIcon from '@mui/icons-material/Person';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { db, auth } from '../../firebase-config';
 import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
 import StudentForm from './StudentForm';
@@ -360,20 +362,92 @@ function StudentList() {
         px: { xs: 2, sm: 3, md: 4 },
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography 
-          variant="h4" 
-          sx={{
-            fontWeight: 'bold',
-            background: 'linear-gradient(45deg, #800000, #FFD700)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Student List
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: 'space-between', 
+          alignItems: { xs: 'flex-start', md: 'center' },
+          mb: { xs: 2, md: 1 }
+        }}>
+          <Typography 
+            variant="h4" 
+            sx={{
+              fontWeight: 'bold',
+              background: 'linear-gradient(45deg, #800000, #FFD700)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            Student List
+          </Typography>
+          
+          {userRole === 'instructor' && (
+            <Card 
+              elevation={0}
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                bgcolor: 'rgba(255, 245, 230, 0.7)',
+                border: '1px solid rgba(128, 0, 0, 0.1)',
+                borderRadius: 2,
+                px: 2,
+                py: 1,
+                mt: { xs: 1, md: 0 },
+                width: { xs: '100%', md: 'auto' },
+              }}
+            >
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 0.5,
+                color: '#800000',
+                mr: 2
+              }}>
+                <PersonIcon fontSize="small" />
+                <Typography variant="body2" fontWeight="medium">
+                  {currentUser?.profile?.firstName} {currentUser?.profile?.lastName}
+                </Typography>
+              </Box>
+              
+              <Divider orientation="vertical" flexItem sx={{ mr: 2 }} />
+              
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 0.5,
+                color: '#800000',
+                mr: 2
+              }}>
+                <PeopleAltIcon fontSize="small" />
+                <Typography variant="body2" fontWeight="medium">
+                  {filteredStudents.length} Students
+                </Typography>
+              </Box>
+              
+              <Chip 
+                label={currentUser?.profile?.college || 'Department'} 
+                size="small"
+                sx={{ 
+                  bgcolor: 'rgba(128, 0, 0, 0.1)',
+                  color: '#800000',
+                  fontWeight: 'medium',
+                  '& .MuiChip-label': { px: 1 }
+                }}
+              />
+            </Card>
+          )}
+        </Box>
+        
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: 'space-between', 
+          alignItems: { xs: 'flex-start', md: 'center' },
+          mt: 3,
+          gap: 2
+        }}>
           <TextField
             fullWidth
             variant="outlined"
@@ -382,7 +456,7 @@ function StudentList() {
             value={searchQuery}
             onChange={handleSearch}
             sx={{
-              maxWidth: '500px',
+              maxWidth: { xs: '100%', md: '500px' },
               '& .MuiOutlinedInput-root': {
                 '&:hover fieldset': {
                   borderColor: '#800000',
@@ -404,7 +478,12 @@ function StudentList() {
               }
             }}
           />
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2,
+            width: { xs: '100%', md: 'auto' }, 
+            justifyContent: { xs: 'space-between', md: 'flex-end' } 
+          }}>
             <Button
               startIcon={<FilterListIcon />}
               onClick={() => setShowFilters(!showFilters)}

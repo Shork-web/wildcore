@@ -3,13 +3,12 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase-config';
 import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, Stack, CircularProgress } from '@mui/material';
 
-function StudentMetrics() {
+function StudentAnalytics() {
   const [surveyData, setSurveyData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
-  const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedProgram, setSelectedProgram] = useState('all');
 
   // Fetch data from Firestore
   useEffect(() => {
@@ -34,19 +33,17 @@ function StudentMetrics() {
 
   // Extract unique filter options from actual data
   const filterOptions = {
-    programs: [...new Set(surveyData.map(survey => survey.program))],
     years: [...new Set(surveyData.map(survey => survey.schoolYear))],
     semesters: [...new Set(surveyData.map(survey => survey.semester))],
-    companies: [...new Set(surveyData.map(survey => survey.companyName))]
+    programs: [...new Set(surveyData.map(survey => survey.program))]
   };
 
   // Filter data based on selections
   const getFilteredData = () => {
     return surveyData.filter(survey => {
-      return (selectedProgram === 'all' || survey.program === selectedProgram) &&
-             (selectedYear === 'all' || survey.schoolYear === selectedYear) &&
+      return (selectedYear === 'all' || survey.schoolYear === selectedYear) &&
              (selectedSemester === 'all' || survey.semester === selectedSemester) &&
-             (selectedCompany === 'all' || survey.companyName === selectedCompany);
+             (selectedProgram === 'all' || survey.program === selectedProgram);
     });
   };
 
@@ -212,28 +209,6 @@ function StudentMetrics() {
     <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <FormControl fullWidth>
-          <InputLabel>Program</InputLabel>
-          <Select
-            value={selectedProgram}
-            label="Program"
-            onChange={(e) => setSelectedProgram(e.target.value)}
-            sx={{
-              '& .MuiSelect-select': { color: '#800000' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#800000',
-              },
-            }}
-          >
-            <MenuItem value="all">All Programs</MenuItem>
-            {filterOptions.programs.map((program) => (
-              <MenuItem key={program} value={program}>
-                {program}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth>
           <InputLabel>School Year</InputLabel>
           <Select
             value={selectedYear}
@@ -278,11 +253,11 @@ function StudentMetrics() {
         </FormControl>
 
         <FormControl fullWidth>
-          <InputLabel>Company</InputLabel>
+          <InputLabel>Program</InputLabel>
           <Select
-            value={selectedCompany}
-            label="Company"
-            onChange={(e) => setSelectedCompany(e.target.value)}
+            value={selectedProgram}
+            label="Program"
+            onChange={(e) => setSelectedProgram(e.target.value)}
             sx={{
               '& .MuiSelect-select': { color: '#800000' },
               '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
@@ -290,10 +265,10 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Companies</MenuItem>
-            {filterOptions.companies.map((company) => (
-              <MenuItem key={company} value={company}>
-                {company}
+            <MenuItem value="all">All Programs</MenuItem>
+            {filterOptions.programs.map((program) => (
+              <MenuItem key={program} value={program}>
+                {program}
               </MenuItem>
             ))}
           </Select>
@@ -304,11 +279,10 @@ function StudentMetrics() {
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" color="textSecondary">
           Active Filters:
-          {selectedProgram !== 'all' && ` Program: ${selectedProgram},`}
           {selectedYear !== 'all' && ` Year: ${selectedYear},`}
           {selectedSemester !== 'all' && ` Semester: ${selectedSemester},`}
-          {selectedCompany !== 'all' && ` Company: ${selectedCompany}`}
-          {(selectedProgram === 'all' && selectedYear === 'all' && selectedSemester === 'all' && selectedCompany === 'all') && ' None'}
+          {selectedProgram !== 'all' && ` Program: ${selectedProgram}`}
+          {(selectedYear === 'all' && selectedSemester === 'all' && selectedProgram === 'all') && ' None'}
         </Typography>
       </Box>
     </Paper>
@@ -339,241 +313,240 @@ function StudentMetrics() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="400px">
-        <CircularProgress />
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '70vh' }}>
+        <CircularProgress sx={{ color: '#800000' }} />
       </Box>
     );
   }
 
   return (
-    <Grid container spacing={3}>
-      <Grid item xs={12}>
-        <FilterSection />
-      </Grid>
-
-      <Grid item xs={12}>
-        <Card elevation={3}>
-          <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Work Attitude Assessment
-            </Typography>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              Evaluation of student behavior, cooperation, and professional conduct
-            </Typography>
-            <Grid container spacing={3}>
-              {/* Work Attitude Cards */}
-              {metricsData.workAttitude.map((metric) => (
-                <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
-                  <Card 
-                    elevation={2}
-                    sx={{
-                      height: '100%',
-                      backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
-                      transition: 'transform 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-5px)',
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold' }}>
-                            {metric.aspect}
-                          </Typography>
-                          <Typography 
-                            variant="caption" 
-                            sx={{ 
-                              color: 'text.secondary',
-                              bgcolor: getRatingBgColor(metric.rating),
-                              px: 1,
-                              py: 0.5,
-                              borderRadius: 1,
-                              display: 'inline-block',
-                              mt: 1
-                            }}
-                          >
-                            {metric.category}
-                          </Typography>
-                        </Box>
-                        <Typography 
-                          variant="h4" 
-                          sx={{ 
-                            color: getRatingColor(metric.rating),
-                            fontWeight: 'bold',
-                            ml: 2
-                          }}
-                        >
-                          {metric.rating.toFixed(1)}
-                        </Typography>
-                      </Box>
-
-                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                        {metric.description}
-                      </Typography>
-
-                      <Box sx={{ 
-                        mt: 'auto',
-                        p: 1,
-                        borderRadius: 1,
-                        bgcolor: getRatingBgColor(metric.rating),
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}>
-                        <Typography variant="caption" sx={{ 
-                          color: getRatingColor(metric.rating),
-                          fontWeight: 'bold'
-                        }}>
-                          {getRatingText(metric.rating)}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          out of 5.0
-                        </Typography>
-            </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12}>
-        <Card elevation={3}>
-          <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Work Performance Metrics
-            </Typography>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              Detailed evaluation of student skills, efficiency, and job-specific performance
-            </Typography>
-            <Grid container spacing={3}>
-              {/* Work Performance Cards */}
-              {metricsData.workPerformance.map((metric) => (
-                <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
-                  <Card 
-                    elevation={2}
-                    sx={{
-                      height: '100%',
-                      backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
-                      transition: 'transform 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-5px)',
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold', flex: 1 }}>
+    <Box>
+      <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 3 }}>
+        Student Performance Analytics
+      </Typography>
+      
+      <FilterSection />
+      
+      {/* Work Attitude Assessment */}
+      <Card elevation={3} sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
+            Work Attitude Assessment
+          </Typography>
+          <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mb: 2 }}>
+            Evaluation of student behavior, cooperation, and professional conduct
+          </Typography>
+          
+          <Grid container spacing={3}>
+            {metricsData.workAttitude.map((metric) => (
+              <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
+                <Card 
+                  elevation={2}
+                  sx={{
+                    height: '100%',
+                    backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
+                    transition: 'transform 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-5px)',
+                    }
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold' }}>
                           {metric.aspect}
                         </Typography>
                         <Typography 
-                          variant="h4" 
+                          variant="caption" 
                           sx={{ 
-                            color: getRatingColor(metric.rating),
-                            fontWeight: 'bold'
+                            color: 'text.secondary',
+                            bgcolor: getRatingBgColor(metric.rating),
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            display: 'inline-block',
+                            mt: 1
                           }}
                         >
-                          {metric.rating.toFixed(1)}
+                          {metric.category}
                         </Typography>
                       </Box>
-                      
-                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                        {metric.description}
-                      </Typography>
-                      
-                      <Box sx={{ 
-                        mt: 2, 
-                        p: 1, 
-                        borderRadius: 1,
-                        bgcolor: getRatingBgColor(metric.rating)
-                      }}>
-                        <Typography variant="caption" sx={{ 
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          color: getRatingColor(metric.rating)
-                        }}>
-                          <span>Category: {metric.category}</span>
-                          <span>
-                            {getRatingText(metric.rating)}
-                          </span>
-                        </Typography>
-            </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12}>
-        <Card elevation={3}>
-          <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Program Success Indicators
-            </Typography>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              Comprehensive evaluation of program effectiveness and student career outcomes
-            </Typography>
-            <Grid container spacing={3}>
-              {/* Program Success Cards */}
-              {metricsData.programSuccess.map((metric) => (
-                <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
-                  <Card 
-                    elevation={2}
-                    sx={{
-                      height: '100%',
-                      backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
-                      transition: 'transform 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-5px)',
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ color: '#800000', fontWeight: 'bold' }}>
-                        {metric.aspect}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                        {metric.description}
-                      </Typography>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <Typography variant="h4" sx={{ 
+                      <Typography 
+                        variant="h4" 
+                        sx={{ 
                           color: getRatingColor(metric.rating),
-                          fontWeight: 'bold'
-                        }}>
-                          {metric.rating.toFixed(1)}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          out of 5.0
-                        </Typography>
-            </Box>
+                          fontWeight: 'bold',
+                          ml: 2
+                        }}
+                      >
+                        {metric.rating.toFixed(1)}
+                      </Typography>
+                    </Box>
+
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      {metric.description}
+                    </Typography>
+
+                    <Box sx={{ 
+                      mt: 'auto',
+                      p: 1,
+                      borderRadius: 1,
+                      bgcolor: getRatingBgColor(metric.rating),
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
                       <Typography variant="caption" sx={{ 
-                        display: 'block',
-                        mt: 1,
-                        color: getRatingColor(metric.rating)
+                        color: getRatingColor(metric.rating),
+                        fontWeight: 'bold'
                       }}>
                         {getRatingText(metric.rating)}
                       </Typography>
-          </CardContent>
-        </Card>
-      </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
+                      <Typography variant="caption" color="textSecondary">
+                        out of 5.0
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {/* Work Performance Metrics */}
+      <Card elevation={3} sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
+            Work Performance Metrics
+          </Typography>
+          <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mb: 2 }}>
+            Detailed evaluation of student skills, efficiency, and job-specific performance
+          </Typography>
+
+          <Grid container spacing={3}>
+            {metricsData.workPerformance.map((metric) => (
+              <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
+                <Card 
+                  elevation={2}
+                  sx={{
+                    height: '100%',
+                    backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
+                    transition: 'transform 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-5px)',
+                    }
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold', flex: 1 }}>
+                        {metric.aspect}
+                      </Typography>
+                      <Typography 
+                        variant="h4" 
+                        sx={{ 
+                          color: getRatingColor(metric.rating),
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {metric.rating.toFixed(1)}
+                      </Typography>
+                    </Box>
+                    
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      {metric.description}
+                    </Typography>
+                    
+                    <Box sx={{ 
+                      mt: 2, 
+                      p: 1, 
+                      borderRadius: 1,
+                      bgcolor: getRatingBgColor(metric.rating)
+                    }}>
+                      <Typography variant="caption" sx={{ 
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        color: getRatingColor(metric.rating)
+                      }}>
+                        <span>Category: {metric.category}</span>
+                        <span>
+                          {getRatingText(metric.rating)}
+                        </span>
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {/* Program Success Indicators */}
+      <Card elevation={3}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
+            Program Success Indicators
+          </Typography>
+          <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mb: 2 }}>
+            Comprehensive evaluation of program effectiveness and student career outcomes
+          </Typography>
+
+          <Grid container spacing={3}>
+            {metricsData.programSuccess.map((metric) => (
+              <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
+                <Card 
+                  elevation={2}
+                  sx={{
+                    height: '100%',
+                    backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
+                    transition: 'transform 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-5px)',
+                    }
+                  }}
+                >
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom sx={{ color: '#800000', fontWeight: 'bold' }}>
+                      {metric.aspect}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      {metric.description}
+                    </Typography>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}>
+                      <Typography variant="h4" sx={{ 
+                        color: getRatingColor(metric.rating),
+                        fontWeight: 'bold'
+                      }}>
+                        {metric.rating.toFixed(1)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        out of 5.0
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" sx={{ 
+                      display: 'block',
+                      mt: 1,
+                      color: getRatingColor(metric.rating)
+                    }}>
+                      {getRatingText(metric.rating)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
 
-export default StudentMetrics; 
+export default StudentAnalytics; 
