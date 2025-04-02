@@ -221,7 +221,7 @@ function StudentAnalytics() {
               },
             }}
           >
-            <MenuItem value="all">All Years</MenuItem>
+            <MenuItem value="all">Select Years</MenuItem>
             {filterOptions.years.map((year) => (
               <MenuItem key={year} value={year}>
                 {year}
@@ -243,7 +243,7 @@ function StudentAnalytics() {
               },
             }}
           >
-            <MenuItem value="all">All Semesters</MenuItem>
+            <MenuItem value="all">Select Semesters</MenuItem>
             {filterOptions.semesters.map((semester) => (
               <MenuItem key={semester} value={semester}>
                 {semester}
@@ -265,7 +265,7 @@ function StudentAnalytics() {
               },
             }}
           >
-            <MenuItem value="all">All Programs</MenuItem>
+            <MenuItem value="all">Select Programs</MenuItem>
             {filterOptions.programs.map((program) => (
               <MenuItem key={program} value={program}>
                 {program}

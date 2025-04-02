@@ -6,10 +6,11 @@ import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Sele
 function StudentMetrics() {
   const [surveyData, setSurveyData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedProgram, setSelectedProgram] = useState('all');
+  const [selectedProgram, setSelectedProgram] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
   const [selectedCompany, setSelectedCompany] = useState('all');
+  const [programs, setPrograms] = useState([]);
 
   // Fetch data from Firestore
   useEffect(() => {
@@ -22,6 +23,15 @@ function StudentMetrics() {
           ...doc.data()
         }));
         setSurveyData(surveys);
+        
+        // Extract unique programs and set the first one as default
+        const uniquePrograms = [...new Set(surveys.map(survey => survey.program))].sort();
+        setPrograms(uniquePrograms);
+        
+        if (uniquePrograms.length > 0) {
+          setSelectedProgram(uniquePrograms[0]);
+        }
+        
         setLoading(false);
       } catch (error) {
         console.error('Error fetching surveys:', error);
@@ -34,7 +44,6 @@ function StudentMetrics() {
 
   // Extract unique filter options from actual data
   const filterOptions = {
-    programs: [...new Set(surveyData.map(survey => survey.program))],
     years: [...new Set(surveyData.map(survey => survey.schoolYear))],
     semesters: [...new Set(surveyData.map(survey => survey.semester))],
     companies: [...new Set(surveyData.map(survey => survey.companyName))]
@@ -43,7 +52,7 @@ function StudentMetrics() {
   // Filter data based on selections
   const getFilteredData = () => {
     return surveyData.filter(survey => {
-      return (selectedProgram === 'all' || survey.program === selectedProgram) &&
+      return (selectedProgram === '' || survey.program === selectedProgram) &&
              (selectedYear === 'all' || survey.schoolYear === selectedYear) &&
              (selectedSemester === 'all' || survey.semester === selectedSemester) &&
              (selectedCompany === 'all' || survey.companyName === selectedCompany);
@@ -224,8 +233,7 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Programs</MenuItem>
-            {filterOptions.programs.map((program) => (
+            {programs.map((program) => (
               <MenuItem key={program} value={program}>
                 {program}
               </MenuItem>
@@ -246,7 +254,7 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Years</MenuItem>
+            <MenuItem value="all">Select Years</MenuItem>
             {filterOptions.years.map((year) => (
               <MenuItem key={year} value={year}>
                 {year}
@@ -268,7 +276,7 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Semesters</MenuItem>
+            <MenuItem value="all">Select Semesters</MenuItem>
             {filterOptions.semesters.map((semester) => (
               <MenuItem key={semester} value={semester}>
                 {semester}
@@ -290,7 +298,7 @@ function StudentMetrics() {
               },
             }}
           >
-            <MenuItem value="all">All Companies</MenuItem>
+            <MenuItem value="all">Select Companies</MenuItem>
             {filterOptions.companies.map((company) => (
               <MenuItem key={company} value={company}>
                 {company}
@@ -304,11 +312,11 @@ function StudentMetrics() {
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" color="textSecondary">
           Active Filters:
-          {selectedProgram !== 'all' && ` Program: ${selectedProgram},`}
+          {selectedProgram && ` Program: ${selectedProgram},`}
           {selectedYear !== 'all' && ` Year: ${selectedYear},`}
           {selectedSemester !== 'all' && ` Semester: ${selectedSemester},`}
           {selectedCompany !== 'all' && ` Company: ${selectedCompany}`}
-          {(selectedProgram === 'all' && selectedYear === 'all' && selectedSemester === 'all' && selectedCompany === 'all') && ' None'}
+          {(!selectedProgram && selectedYear === 'all' && selectedSemester === 'all' && selectedCompany === 'all') && ' None'}
         </Typography>
       </Box>
     </Paper>
