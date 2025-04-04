@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Grid, Typography, Paper, Box, Card, CardContent, IconButton, Divider, Chip } from '@mui/material';
 import { styled } from '@mui/system';
-import { Assignment, History, HelpOutline, ArrowForward, Notifications, TrendingUp, Assessment } from '@mui/icons-material';
+import { Assignment, History, HelpOutline, ArrowForward, Notifications, TrendingUp, Assessment, EmojiEvents } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 const DashboardCard = styled(Card)(({ theme }) => ({
@@ -175,6 +175,15 @@ function UserDashboard() {
                 description="Access visual analytics and insights about student performance across companies and semesters."
                 action="View Insights"
                 path="/student-analytics"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FeatureCard
+                icon={<EmojiEvents />}
+                title="Student Rankings"
+                description="View top-performing students ranked by their evaluation scores across programs."
+                action="View Rankings"
+                path="/student-rankings"
               />
             </Grid>
             <Grid item xs={12} sm={6}>

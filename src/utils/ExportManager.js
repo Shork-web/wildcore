@@ -209,15 +209,15 @@ class ExportManager {
   }
 
   /**
-   * Export student data to Excel (admin only)
+   * Export student data to Excel (admin and instructor)
    * @param {Array} students - Array of student objects
    * @param {string} userRole - Role of the current user
    * @param {string} fileName - Name of the output file
    */
   exportStudentsToExcel(students, userRole, fileName = 'student_interns.xlsx', heiName = '', heiAddress = '', academicYear = '') {
-    // Check if user is admin
-    if (userRole !== 'admin') {
-      throw new Error('Export functionality is only available for admin users');
+    // Check if user is admin or instructor
+    if (userRole !== 'admin' && userRole !== 'instructor') {
+      throw new Error('Export functionality is only available for admin and instructor users');
     }
 
     // Create a new workbook
