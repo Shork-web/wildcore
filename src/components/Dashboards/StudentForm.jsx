@@ -14,42 +14,224 @@ import {
   Snackbar,
   Alert,
   Autocomplete,
+  Paper,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../../firebase-config';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
 import { collegePrograms } from '../../utils/collegePrograms';
+import { 
+  Person, 
+  School, 
+  Business, 
+  LocationOn, 
+  DateRange, 
+  Feedback, 
+  Add,
+  Edit,
+  ContactMail 
+} from '@mui/icons-material';
 
 const maroon = '#800000';
 
 const StyledCard = styled(Card)(({ theme }) => ({
-  backgroundColor: '#f8f9fa',
-  borderRadius: theme.shape.borderRadius * 2,
-  boxShadow: '0 4px 20px 0 rgba(0,0,0,0.12)',
-  minHeight: 'calc(100vh - 120px)', // Adjust for better fit
+  backgroundColor: '#ffffff',
+  borderRadius: '16px',
+  boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+  backdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255, 255, 255, 0.18)',
+  overflow: 'hidden',
+  minHeight: 'calc(100vh - 120px)',
   display: 'flex',
   flexDirection: 'column',
+  width: '100%',
+  maxWidth: '100%',
+}));
+
+const FormHeader = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(2.5, 3),
+  background: `linear-gradient(135deg, ${maroon} 0%, #B22222 100%)`,
+  color: 'white',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.18)',
+  marginBottom: theme.spacing(2),
+  borderRadius: '16px 16px 0 0',
+}));
+
+const SectionWrapper = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(2.5, 2.5, 2.5, 3.5),
+  marginBottom: theme.spacing(2),
+  borderRadius: '12px',
+  boxShadow: '0 4px 20px 0 rgba(0, 0, 0, 0.05)',
+  border: '1px solid rgba(0, 0, 0, 0.05)',
+  position: 'relative',
+  overflow: 'hidden',
+  height: '100%',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    boxShadow: '0 6px 24px 0 rgba(0, 0, 0, 0.1)',
+  },
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '6px',
+    height: '100%',
+    background: `linear-gradient(to bottom, ${maroon}, #FF8C00)`,
+    borderRadius: '4px 0 0 4px',
+  }
 }));
 
 const SectionTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '1.1rem',
+  fontSize: '1rem',
   fontWeight: 600,
   color: maroon,
-  marginBottom: theme.spacing(2),
-  marginTop: theme.spacing(2),
+  marginBottom: theme.spacing(1.5),
+  display: 'flex',
+  alignItems: 'center',
+  '& svg': {
+    marginRight: theme.spacing(1),
+    fontSize: '1.2rem',
+  }
 }));
 
-const CompactTextField = styled(TextField)(({ theme }) => ({
+const StyledTextField = styled(TextField)(({ theme }) => ({
   marginBottom: theme.spacing(2),
-  '& .MuiInputBase-root': {
-    height: '40px',
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
+    },
+    '&.Mui-focused': {
+      boxShadow: '0 4px 10px rgba(0, 0, 0, 0.07)',
+    }
+  },
+  '& .MuiInputBase-input': {
+    padding: '12px 14px',
   },
   '& .MuiInputLabel-root': {
-    transform: 'translate(14px, 10px) scale(0.75)',
+    transform: 'translate(14px, 14px) scale(1)',
+    '&.MuiInputLabel-shrink': {
+      transform: 'translate(14px, -6px) scale(0.75)',
+    },
   },
-  '& .MuiInputLabel-shrink': {
-    transform: 'translate(14px, -6px) scale(0.75)',
+  '& .MuiInputLabel-root.Mui-focused': {
+    color: maroon,
+  },
+  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(128, 0, 0, 0.5)',
+    borderWidth: '1px',
+  },
+}));
+
+const StyledFormControl = styled(FormControl)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
+    },
+    '&.Mui-focused': {
+      boxShadow: '0 4px 10px rgba(0, 0, 0, 0.07)',
+    }
+  },
+  '& .MuiInputBase-input': {
+    padding: '12px 14px',
+  },
+  '& .MuiInputLabel-root': {
+    transform: 'translate(14px, 14px) scale(1)',
+    '&.MuiInputLabel-shrink': {
+      transform: 'translate(14px, -6px) scale(0.75)',
+    },
+  },
+  '& .MuiInputLabel-root.Mui-focused': {
+    color: maroon,
+  },
+  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(128, 0, 0, 0.5)',
+    borderWidth: '1px',
+  },
+}));
+
+const MultilineTextField = styled(TextField)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
+    },
+    '&.Mui-focused': {
+      boxShadow: '0 4px 10px rgba(0, 0, 0, 0.07)',
+    }
+  },
+  '& .MuiInputLabel-root': {
+    transform: 'translate(14px, 14px) scale(1)',
+    '&.MuiInputLabel-shrink': {
+      transform: 'translate(14px, -6px) scale(0.75)',
+    },
+  },
+  '& .MuiInputLabel-root.Mui-focused': {
+    color: maroon,
+  },
+  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(128, 0, 0, 0.5)',
+    borderWidth: '1px',
+  },
+  '& .MuiInputBase-inputMultiline': {
+    padding: theme.spacing(2),
+    lineHeight: 1.5,
+  }
+}));
+
+const StyledAutocomplete = styled(Autocomplete)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '8px',
+    transition: 'all 0.3s ease',
+    padding: '3px 9px',
+    '&:hover': {
+      boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
+    },
+    '&.Mui-focused': {
+      boxShadow: '0 4px 10px rgba(0, 0, 0, 0.07)',
+    }
+  },
+  '& .MuiInputLabel-root': {
+    transform: 'translate(14px, 14px) scale(1)',
+    '&.MuiInputLabel-shrink': {
+      transform: 'translate(14px, -6px) scale(0.75)',
+    },
+  },
+  '& .MuiInputLabel-root.Mui-focused': {
+    color: maroon,
+  },
+  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(128, 0, 0, 0.5)',
+    borderWidth: '1px',
+  },
+  '& .MuiAutocomplete-input': {
+    padding: '4px 4px',
+  }
+}));
+
+const SubmitButton = styled(Button)(({ theme }) => ({
+  padding: theme.spacing(1.5),
+  borderRadius: '30px',
+  boxShadow: '0 4px 20px 0 rgba(128, 0, 0, 0.25)',
+  transition: 'all 0.3s ease',
+  fontWeight: 600,
+  fontSize: '1rem',
+  background: `linear-gradient(45deg, ${maroon} 0%, #B22222 100%)`,
+  '&:hover': {
+    boxShadow: '0 6px 25px 0 rgba(128, 0, 0, 0.35)',
+    background: `linear-gradient(45deg, #600000 0%, #800000 100%)`,
+    transform: 'translateY(-2px)',
   },
 }));
 
@@ -63,6 +245,7 @@ class Student {
       semester: data.semester || '',
       schoolYear: data.schoolYear || '2024-2025',
       partnerCompany: data.partnerCompany || '',
+      contactPerson: data.contactPerson || '',
       location: data.location || '',
       startDate: data.startDate || '',
       endDate: data.endDate || '',
@@ -85,6 +268,7 @@ class Student {
   get semester() { return this._data.semester; }
   get schoolYear() { return this._data.schoolYear; }
   get partnerCompany() { return this._data.partnerCompany; }
+  get contactPerson() { return this._data.contactPerson; }
   get location() { return this._data.location; }
   get startDate() { return this._data.startDate; }
   get endDate() { return this._data.endDate; }
@@ -102,6 +286,7 @@ class Student {
   set semester(value) { this._data.semester = value; }
   set schoolYear(value) { this._data.schoolYear = value; }
   set partnerCompany(value) { this._data.partnerCompany = value; }
+  set contactPerson(value) { this._data.contactPerson = value; }
   set location(value) { this._data.location = value; }
   set startDate(value) { this._data.startDate = value; }
   set endDate(value) { this._data.endDate = value; }
@@ -156,6 +341,13 @@ class Student {
       }
     }
 
+    if (this._data.contactPerson && this._data.contactPerson.trim()) {
+      const contactPersonRegex = /^[a-zA-ZÀ-ÿ\s.\-'(),]+$/;
+      if (!contactPersonRegex.test(this._data.contactPerson)) {
+        throw new Error('Contact person name contains invalid characters');
+      }
+    }
+
     if (this._data.location && this._data.location.trim()) {
       const locationRegex = /^[a-zA-Z0-9À-ÿ\s.\-,'()@#$%*!?&/+]+$/;
       if (!locationRegex.test(this._data.location)) {
@@ -201,6 +393,8 @@ class Student {
 
 function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditing }) {
   const { currentUser } = useContext(AuthContext);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState(() => {
     if (isEditing && initialData) {
       return new Student({
@@ -211,6 +405,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         semester: initialData.semester || '',
         schoolYear: initialData.schoolYear || '',
         partnerCompany: initialData.partnerCompany || '',
+        contactPerson: initialData.contactPerson || '',
         location: initialData.location || '',
         startDate: initialData.startDate || '',
         endDate: initialData.endDate || '',
@@ -396,243 +591,345 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
 
   return (
     <StyledCard>
-      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Typography variant="h5" align="center" gutterBottom sx={{ color: maroon, fontWeight: 'bold' }}>
+      <FormHeader>
+        <Typography variant="h5" align="center" fontWeight="bold">
           Student Internship Program Form
         </Typography>
-
+      </FormHeader>
+      
+      <CardContent sx={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        px: { xs: 1.5, sm: 2, md: 3 }, 
+        pt: 0, 
+        pb: 3 
+      }}>
         <Box component="form" onSubmit={handleSubmit} sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <Grid container spacing={3}>
+          {/* Basic Information Row - Personal and Academic side by side */}
+          <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={12} md={6}>
-              <SectionTitle>Personal Information</SectionTitle>
-              <Grid container spacing={0}>
-                <Grid item xs={12}>
-                  <CompactTextField
-                    required
-                    fullWidth
-                    label="Family Name"
-                    name="familyName"
-                    value={nameFields.familyName}
-                    onChange={handleChange}
-                    size="small"
-                    sx={{ mb: 1.5 }}
-                  />
-                </Grid>
-                <Grid item xs={8}>
-                  <CompactTextField
-                    required
-                    fullWidth
-                    label="Given Name"
-                    name="givenName"
-                    value={nameFields.givenName}
-                    onChange={handleChange}
-                    size="small"
-                    sx={{ mb: 1.5, pr: 1 }}
-                  />
-                </Grid>
-                <Grid item xs={4}>
-                  <CompactTextField
-                    fullWidth
-                    label="M.I."
-                    name="middleInitial"
-                    value={nameFields.middleInitial}
-                    onChange={handleChange}
-                    size="small"
-                    sx={{ mb: 1.5 }}
-                  />
-                </Grid>
-              </Grid>
-              
-              <FormControl 
-                required 
-                fullWidth 
-                size="small" 
-                sx={{ mb: 1.5 }}
-              >
-                <InputLabel>Gender</InputLabel>
-                <Select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleChange}
-                  label="Gender"
-                >
-                  <MenuItem value="Male">Male</MenuItem>
-                  <MenuItem value="Female">Female</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <SectionTitle>Academic Information</SectionTitle>
-              <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
-                <Autocomplete
-                  value={formData.program}
-                  onChange={handleProgramChange}
-                  options={availablePrograms}
-                  freeSolo
-                  selectOnFocus
-                  clearOnBlur
-                  handleHomeEndKeys
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Program"
+              <SectionWrapper>
+                <SectionTitle>
+                  <Person /> Personal Information
+                </SectionTitle>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={7}>
+                    <StyledTextField
                       required
-                      size="small"
+                      fullWidth
+                      label="Family Name"
+                      name="familyName"
+                      value={nameFields.familyName}
+                      onChange={handleChange}
+                      variant="outlined"
+                      InputProps={{
+                        sx: { borderRadius: '8px' }
+                      }}
                     />
-                  )}
-                />
-              </FormControl>
-
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Semester</InputLabel>
-                    <Select
-                      name="semester"
-                      value={formData.semester}
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={5}>
+                    <StyledFormControl required fullWidth>
+                      <InputLabel>Gender</InputLabel>
+                      <Select
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        label="Gender"
+                        MenuProps={{
+                          PaperProps: {
+                            style: {
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                            },
+                          },
+                        }}
+                      >
+                        <MenuItem value="Male">Male</MenuItem>
+                        <MenuItem value="Female">Female</MenuItem>
+                      </Select>
+                    </StyledFormControl>
+                  </Grid>
+                  
+                  <Grid item xs={8} sm={9}>
+                    <StyledTextField
+                      required
+                      fullWidth
+                      label="Given Name"
+                      name="givenName"
+                      value={nameFields.givenName}
                       onChange={handleChange}
-                      label="Semester"
-                    >
-                      <MenuItem value="First">First</MenuItem>
-                      <MenuItem value="Second">Second</MenuItem>
-                      <MenuItem value="Summer">Summer</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControl required fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>School Year</InputLabel>
-                    <Select
-                      name="schoolYear"
-                      value={formData.schoolYear}
+                      variant="outlined"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={4} sm={3}>
+                    <StyledTextField
+                      fullWidth
+                      label="M.I."
+                      name="middleInitial"
+                      value={nameFields.middleInitial}
                       onChange={handleChange}
-                      label="School Year"
-                    >
-                      {['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029'].map((year) => (
-                        <MenuItem key={year} value={year}>{year}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                      variant="outlined"
+                    />
+                  </Grid>
                 </Grid>
-              </Grid>
+              </SectionWrapper>
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <SectionTitle>Internship Information</SectionTitle>
-              <CompactTextField
-                required
-                fullWidth
-                label="Partner Company"
-                name="partnerCompany"
-                value={formData.partnerCompany}
-                onChange={handleChange}
-                size="small"
-              />
-              <CompactTextField
-                required
-                fullWidth
-                label="Location"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                size="small"
-              />
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <CompactTextField
-                    fullWidth
-                    label="Start Date"
-                    name="startDate"
-                    type="date"
-                    value={formData.startDate}
-                    onChange={handleChange}
-                    InputLabelProps={{ shrink: true }}
-                    size="small"
-                  />
+              <SectionWrapper>
+                <SectionTitle>
+                  <School /> Academic Information
+                </SectionTitle>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <StyledAutocomplete
+                      value={formData.program}
+                      onChange={handleProgramChange}
+                      options={availablePrograms}
+                      freeSolo
+                      selectOnFocus
+                      clearOnBlur
+                      handleHomeEndKeys
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Program"
+                          required
+                          variant="outlined"
+                        />
+                      )}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={6}>
+                    <StyledFormControl required fullWidth>
+                      <InputLabel>Semester</InputLabel>
+                      <Select
+                        name="semester"
+                        value={formData.semester}
+                        onChange={handleChange}
+                        label="Semester"
+                        MenuProps={{
+                          PaperProps: {
+                            style: {
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                            },
+                          },
+                        }}
+                      >
+                        <MenuItem value="First">First</MenuItem>
+                        <MenuItem value="Second">Second</MenuItem>
+                        <MenuItem value="Summer">Summer</MenuItem>
+                      </Select>
+                    </StyledFormControl>
+                  </Grid>
+                  
+                  <Grid item xs={6}>
+                    <StyledFormControl required fullWidth>
+                      <InputLabel>School Year</InputLabel>
+                      <Select
+                        name="schoolYear"
+                        value={formData.schoolYear}
+                        onChange={handleChange}
+                        label="School Year"
+                        MenuProps={{
+                          PaperProps: {
+                            style: {
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                            },
+                          },
+                        }}
+                      >
+                        {['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029'].map((year) => (
+                          <MenuItem key={year} value={year}>{year}</MenuItem>
+                        ))}
+                      </Select>
+                    </StyledFormControl>
+                  </Grid>
                 </Grid>
-                <Grid item xs={6}>
-                  <CompactTextField
-                    fullWidth
-                    label="End Date"
-                    name="endDate"
-                    type="date"
-                    value={formData.endDate}
-                    onChange={handleChange}
-                    InputLabelProps={{ shrink: true }}
-                    size="small"
-                  />
-                </Grid>
-              </Grid>
+              </SectionWrapper>
             </Grid>
-
-            <Grid item xs={12} md={6}>
-              <SectionTitle>Feedback and Evaluation</SectionTitle>
-              <TextField
-                fullWidth
-                label="Concerns"
-                name="concerns"
-                multiline
-                rows={3}
-                value={formData.concerns}
-                onChange={handleChange}
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Solutions"
-                name="solutions"
-                multiline
-                rows={3}
-                value={formData.solutions}
-                onChange={handleChange}
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Recommendations"
-                name="recommendations"
-                multiline
-                rows={3}
-                value={formData.recommendations}
-                onChange={handleChange}
-                size="small"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Evaluation"
-                name="evaluation"
-                multiline
-                rows={3}
-                value={formData.evaluation}
-                onChange={handleChange}
-                size="small"
-              />
+          </Grid>
+          
+          {/* Internship Information Row - Spans full width */}
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12}>
+              <SectionWrapper>
+                <SectionTitle>
+                  <Business /> Internship Information
+                </SectionTitle>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={4}>
+                    <StyledTextField
+                      required
+                      fullWidth
+                      label="Partner Company"
+                      name="partnerCompany"
+                      value={formData.partnerCompany}
+                      onChange={handleChange}
+                      variant="outlined"
+                      InputProps={{
+                        startAdornment: <Business sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6} md={4}>
+                    <StyledTextField
+                      fullWidth
+                      label="Contact Person"
+                      name="contactPerson"
+                      value={formData.contactPerson}
+                      onChange={handleChange}
+                      variant="outlined"
+                      InputProps={{
+                        startAdornment: <ContactMail sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={12} md={4}>
+                    <StyledTextField
+                      required
+                      fullWidth
+                      label="Location"
+                      name="location"
+                      value={formData.location}
+                      onChange={handleChange}
+                      variant="outlined"
+                      InputProps={{
+                        startAdornment: <LocationOn sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6}>
+                    <StyledTextField
+                      fullWidth
+                      label="Start Date"
+                      name="startDate"
+                      type="date"
+                      value={formData.startDate}
+                      onChange={handleChange}
+                      InputLabelProps={{ shrink: true }}
+                      InputProps={{
+                        startAdornment: <DateRange sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
+                      variant="outlined"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6}>
+                    <StyledTextField
+                      fullWidth
+                      label="End Date"
+                      name="endDate"
+                      type="date"
+                      value={formData.endDate}
+                      onChange={handleChange}
+                      InputLabelProps={{ shrink: true }}
+                      InputProps={{
+                        startAdornment: <DateRange sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
+                      variant="outlined"
+                    />
+                  </Grid>
+                </Grid>
+              </SectionWrapper>
             </Grid>
           </Grid>
 
-          <Box sx={{ mt: 'auto', pt: 3 }}>
-            <Button 
+          {/* Feedback and Evaluation Row - Split into 2 columns on larger screens */}
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <SectionWrapper>
+                <SectionTitle>
+                  <Feedback /> Feedback and Evaluation
+                </SectionTitle>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <MultilineTextField
+                      fullWidth
+                      label="Concerns"
+                      name="concerns"
+                      multiline
+                      rows={isMobile ? 3 : 4}
+                      value={formData.concerns}
+                      onChange={handleChange}
+                      variant="outlined"
+                      placeholder="Describe any concerns or issues"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <MultilineTextField
+                      fullWidth
+                      label="Solutions"
+                      name="solutions"
+                      multiline
+                      rows={isMobile ? 3 : 4}
+                      value={formData.solutions}
+                      onChange={handleChange}
+                      variant="outlined"
+                      placeholder="Describe solutions to the concerns"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <MultilineTextField
+                      fullWidth
+                      label="Recommendations"
+                      name="recommendations"
+                      multiline
+                      rows={isMobile ? 3 : 4}
+                      value={formData.recommendations}
+                      onChange={handleChange}
+                      variant="outlined"
+                      placeholder="Provide recommendations for future internships"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <MultilineTextField
+                      fullWidth
+                      label="Evaluation"
+                      name="evaluation"
+                      multiline
+                      rows={isMobile ? 3 : 4}
+                      value={formData.evaluation}
+                      onChange={handleChange}
+                      variant="outlined"
+                      placeholder="Provide overall evaluation of the internship"
+                    />
+                  </Grid>
+                </Grid>
+              </SectionWrapper>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 'auto', pt: 2, maxWidth: '100%', width: { xs: '100%', sm: '80%', md: '50%' }, mx: 'auto' }}>
+            <SubmitButton 
               type="submit" 
               variant="contained" 
               fullWidth 
               size="large"
               disabled={isSubmitting}
-              sx={{
-                bgcolor: maroon,
-                '&:hover': {
-                  bgcolor: '#600000',
-                },
-              }}
+              startIcon={isEditing ? <Edit /> : <Add />}
             >
               {isSubmitting 
                 ? 'Saving...' 
                 : (isEditing ? 'Update Student' : 'Add Student')
               }
-            </Button>
+            </SubmitButton>
           </Box>
         </Box>
       </CardContent>

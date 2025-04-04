@@ -21,13 +21,16 @@ import {
   Pagination,
   useTheme,
   useMediaQuery,
-  Container
+  Container,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { School, EmojiEvents, Star } from '@mui/icons-material';
 import { db } from '../../firebase-config';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
+import DepartmentRankings from './DepartmentRankings';
 
 const maroon = '#800000';
 
@@ -115,6 +118,27 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
   }
 }));
 
+// Tab panel component
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`rankings-tabpanel-${index}`}
+      aria-labelledby={`rankings-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ pt: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
 function StudentRankings() {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
@@ -126,9 +150,10 @@ function StudentRankings() {
   const [selectedProgram, setSelectedProgram] = useState('All');
   const [selectedSemester, setSelectedSemester] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
+  const [tabValue, setTabValue] = useState(0);
   
-  // Pagination states
-  const [page, setPage] = useState(1);
+  // Replace single page state with a map of program-specific keys to pages
+  const [pagesMap, setPagesMap] = useState({});
   const studentsPerPage = isSmallScreen ? 5 : 10;
   
   // Derived state
@@ -173,7 +198,7 @@ function StudentRankings() {
 
   // Reset page when filters change
   useEffect(() => {
-    setPage(1);
+    setPagesMap({});
   }, [selectedProgram, selectedSemester, selectedYear]);
 
   // Filter students based on selected filters
@@ -202,8 +227,20 @@ function StudentRankings() {
     studentsByProgram[selectedProgram] = rankedStudents;
   }
 
-  const handlePageChange = (event, newPage) => {
-    setPage(newPage);
+  // Update handlePageChange to use unique program identifiers
+  const handlePageChange = (programKey, newPage) => {
+    setPagesMap(prev => ({
+      ...prev,
+      [programKey]: newPage
+    }));
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+    // Reset program selection to "All" when switching to department tab
+    if (newValue === 1) {
+      setSelectedProgram('All');
+    }
   };
 
   if (loading) {
@@ -233,6 +270,7 @@ function StudentRankings() {
                 value={selectedProgram}
                 onChange={(e) => setSelectedProgram(e.target.value)}
                 label="Program"
+                disabled={tabValue === 1} // Disable when on department tab
               >
                 {availablePrograms.map((program) => (
                   <MenuItem key={program} value={program}>
@@ -278,121 +316,152 @@ function StudentRankings() {
           </Grid>
         </Grid>
 
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-          <EmojiEvents sx={{ mr: 1, color: maroon }} /> 
-          <Typography 
-            variant="h5" 
-            sx={{ 
-              fontWeight: 'bold',
-              color: maroon,
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs 
+            value={tabValue} 
+            onChange={handleTabChange}
+            sx={{
+              '& .MuiTab-root': { color: 'text.secondary' },
+              '& .Mui-selected': { color: `${maroon} !important` },
+              '& .MuiTabs-indicator': { backgroundColor: maroon }
             }}
           >
-            Student Rankings by Program
-          </Typography>
+            <Tab label="Student Rankings" />
+            <Tab label="Department Performance" />
+          </Tabs>
         </Box>
-        
-        <Divider sx={{ mb: 3, borderColor: 'rgba(128, 0, 0, 0.1)' }} />
-        
-        {Object.keys(studentsByProgram).length === 0 ? (
-          <Box sx={{ textAlign: 'center', p: 4, bgcolor: 'white', borderRadius: 1 }}>
-            <Typography variant="h6" color="text.secondary">
-              No students match the selected filters
+
+        <TabPanel value={tabValue} index={0}>
+          <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+            <EmojiEvents sx={{ mr: 1, color: maroon }} /> 
+            <Typography 
+              variant="h5" 
+              sx={{ 
+                fontWeight: 'bold',
+                color: maroon,
+              }}
+            >
+              Student Rankings by Program
             </Typography>
           </Box>
-        ) : (
-          Object.entries(studentsByProgram).map(([program, programStudents]) => {
-            // Paginate the students for this program
-            const totalPages = Math.ceil(programStudents.length / studentsPerPage);
-            const displayedStudents = programStudents.slice(
-              (page - 1) * studentsPerPage, 
-              page * studentsPerPage
-            );
-            
-            return (
-              <StyledCard key={program} sx={{ mb: 3 }}>
-                <CardContent sx={{ p: isSmallScreen ? 1 : 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <School sx={{ mr: 1, color: maroon }} />
-                    <Typography variant="h6" fontWeight="medium" sx={{ color: maroon }}>
-                      {program}
-                    </Typography>
-                    <Chip 
-                      label={`${programStudents.length} student${programStudents.length !== 1 ? 's' : ''}`} 
-                      size="small" 
-                      sx={{ 
-                        ml: 2,
-                        bgcolor: 'rgba(128, 0, 0, 0.08)',
-                        color: maroon,
-                        fontWeight: 'medium',
-                        fontSize: '0.7rem'
-                      }}
-                    />
-                  </Box>
-                  
-                  <TableContainer sx={{ borderRadius: 0, boxShadow: 'none' }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow sx={{ backgroundColor: 'rgba(128, 0, 0, 0.03)' }}>
-                          <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1 }}>Rank</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold', width: '30%', py: 1 }}>Name</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold', width: '50%', py: 1 }}>Company</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1, textAlign: 'center' }}>Score</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {displayedStudents.map((student, index) => {
-                          const actualRank = (page - 1) * studentsPerPage + index + 1;
-                          return (
-                            <StyledTableRow key={student.id} rank={actualRank}>
-                              <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                <RankingBadge rank={actualRank}>
-                                  {actualRank}
-                                </RankingBadge>
-                              </TableCell>
-                              <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
-                              <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
-                              <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Box sx={{ 
-                                    display: 'inline-flex', 
-                                    alignItems: 'center',
-                                    color: 'text.secondary'
-                                  }}>
-                                    0.0
-                                    <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
-                                  </Box>
-                                </Box>
-                              </TableCell>
-                            </StyledTableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  
-                  {totalPages > 1 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                      <Pagination 
-                        count={totalPages} 
-                        page={page} 
-                        onChange={handlePageChange}
-                        size={isSmallScreen ? 'small' : 'medium'}
-                        sx={{
-                          '& .MuiPaginationItem-root': {
-                            color: maroon,
-                          },
-                          '& .Mui-selected': {
-                            backgroundColor: 'rgba(128, 0, 0, 0.1) !important',
-                          },
+          
+          <Divider sx={{ mb: 3, borderColor: 'rgba(128, 0, 0, 0.1)' }} />
+          
+          {Object.keys(studentsByProgram).length === 0 ? (
+            <Box sx={{ textAlign: 'center', p: 4, bgcolor: 'white', borderRadius: 1 }}>
+              <Typography variant="h6" color="text.secondary">
+                No students match the selected filters
+              </Typography>
+            </Box>
+          ) : (
+            Object.entries(studentsByProgram).map(([program, programStudents], programIndex) => {
+              // Create a unique key for this specific program section by combining program name and index
+              const programKey = `${program}-${programIndex}`;
+              
+              // Get current page for this specific program, default to 1
+              const currentPage = pagesMap[programKey] || 1;
+              
+              // Paginate the students for this program
+              const totalPages = Math.ceil(programStudents.length / studentsPerPage);
+              const displayedStudents = programStudents.slice(
+                (currentPage - 1) * studentsPerPage, 
+                currentPage * studentsPerPage
+              );
+              
+              return (
+                <StyledCard key={programKey} sx={{ mb: 3 }}>
+                  <CardContent sx={{ p: isSmallScreen ? 1 : 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <School sx={{ mr: 1, color: maroon }} />
+                      <Typography variant="h6" fontWeight="medium" sx={{ color: maroon }}>
+                        {program}
+                      </Typography>
+                      <Chip 
+                        label={`${programStudents.length} student${programStudents.length !== 1 ? 's' : ''}`} 
+                        size="small" 
+                        sx={{ 
+                          ml: 2,
+                          bgcolor: 'rgba(128, 0, 0, 0.08)',
+                          color: maroon,
+                          fontWeight: 'medium',
+                          fontSize: '0.7rem'
                         }}
                       />
                     </Box>
-                  )}
-                </CardContent>
-              </StyledCard>
-            );
-          })
-        )}
+                    
+                    <TableContainer sx={{ borderRadius: 0, boxShadow: 'none' }}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: 'rgba(128, 0, 0, 0.03)' }}>
+                            <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1 }}>Rank</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '30%', py: 1 }}>Name</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '50%', py: 1 }}>Company</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1, textAlign: 'center' }}>Score</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {displayedStudents.map((student, index) => {
+                            const actualRank = (currentPage - 1) * studentsPerPage + index + 1;
+                            return (
+                              <StyledTableRow key={student.id} rank={actualRank}>
+                                <TableCell sx={{ py: 1, textAlign: 'center' }}>
+                                  <RankingBadge rank={actualRank}>
+                                    {actualRank}
+                                  </RankingBadge>
+                                </TableCell>
+                                <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
+                                <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
+                                <TableCell sx={{ py: 1, textAlign: 'center' }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ 
+                                      display: 'inline-flex', 
+                                      alignItems: 'center',
+                                      color: 'text.secondary'
+                                    }}>
+                                      0.0
+                                      <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
+                                    </Box>
+                                  </Box>
+                                </TableCell>
+                              </StyledTableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    
+                    {totalPages > 1 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                        <Pagination 
+                          count={totalPages} 
+                          page={currentPage} 
+                          onChange={(event, newPage) => handlePageChange(programKey, newPage)}
+                          size={isSmallScreen ? 'small' : 'medium'}
+                          sx={{
+                            '& .MuiPaginationItem-root': {
+                              color: maroon,
+                            },
+                            '& .Mui-selected': {
+                              backgroundColor: 'rgba(128, 0, 0, 0.1) !important',
+                            },
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </CardContent>
+                </StyledCard>
+              );
+            })
+          )}
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={1}>
+          <DepartmentRankings 
+            collegeFilter={currentUser?.profile?.college || 'All'}
+            semesterFilter={selectedSemester}
+            yearFilter={selectedYear}
+          />
+        </TabPanel>
       </Box>
     </Container>
   );
