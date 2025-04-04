@@ -17,6 +17,7 @@ import Analytics from './components/Analytics/AnalyticsExport';
 import FAQ from './components/FAQ/FAQ';
 import StudentAnalytics from './components/Analytics/StudentAnalytics';
 import StudentRankings from './components/Rankings/StudentRankings';
+import AdminRankings from './components/Rankings/AdminRankings';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -160,6 +161,9 @@ function MainContent() {
               <Button color="inherit" component={Link} to="/analytics">
                 Analytics
               </Button>
+              <Button color="inherit" component={Link} to="/admin-rankings">
+                Rankings
+              </Button>
             </>
           )}
           {userRole === 'instructor' && (
@@ -218,6 +222,14 @@ function MainContent() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Analytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin-rankings"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminRankings />
                 </ProtectedRoute>
               }
             />
