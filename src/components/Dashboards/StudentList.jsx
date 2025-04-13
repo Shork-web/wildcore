@@ -12,7 +12,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { db, auth } from '../../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
@@ -25,7 +25,8 @@ class StudentManager {
       program: 'All',
       semester: 'All',
       schoolYear: 'All',
-      company: 'All'
+      company: 'All',
+      section: 'All'
     };
     this._error = null;
     this._currentUser = currentUser;
@@ -41,6 +42,7 @@ class StudentManager {
   get semesters() { return ['All', 'First', 'Second', 'Summer']; }
   get schoolYears() { return ['All', ...new Set(this._students.map(student => student.schoolYear))]; }
   get companies() { return ['All', ...new Set(this._students.map(student => student.partnerCompany))]; }
+  get sections() { return ['All', ...new Set(this._students.map(student => student.section).filter(Boolean))]; }
 
   // Setters
   set students(students) { this._students = [...students]; }
@@ -70,18 +72,148 @@ class StudentManager {
       if (this._filters.semester !== 'All' && student.semester !== this._filters.semester) return false;
       if (this._filters.schoolYear !== 'All' && student.schoolYear !== this._filters.schoolYear) return false;
       if (this._filters.company !== 'All' && student.partnerCompany !== this._filters.company) return false;
+      if (this._filters.section !== 'All' && student.section !== this._filters.section) return false;
       return true;
     });
   }
 
-  async deleteStudent(studentId) {
+  async ensureSectionExists() {
     try {
-      await deleteDoc(doc(db, 'studentData', studentId));
-      // No need to manually update state as onSnapshot will handle it
-      return true;
+      if (!this._currentUser?.profile?.section) return;
+
+      const sectionRef = doc(db, 'sections', this._currentUser.profile.section);
+      const sectionDoc = await getDoc(sectionRef);
+
+      if (!sectionDoc.exists()) {
+        await setDoc(sectionRef, {
+          sectionName: this._currentUser.profile.section,
+          college: this._currentUser.profile.college,
+          instructorId: auth.currentUser?.uid,
+          instructorName: `${this._currentUser.profile.firstName} ${this._currentUser.profile.lastName}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: auth.currentUser?.uid,
+          updatedBy: auth.currentUser?.uid
+        });
+      }
     } catch (error) {
-      console.error('Error deleting student:', error);
-      throw error;
+      console.error('Error ensuring section exists:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+
+  async addToSectionCollection(studentData, studentId) {
+    try {
+      if (!this._currentUser?.profile?.section) return;
+
+      // Ensure section document exists
+      await this.ensureSectionExists();
+
+      const sectionRef = doc(db, 'sections', this._currentUser.profile.section);
+      const studentRef = doc(sectionRef, 'students', studentId);
+
+      await setDoc(studentRef, {
+        studentName: studentData.name,
+        studentId: studentId,
+        addedAt: new Date().toISOString(),
+        addedBy: auth.currentUser?.uid
+      });
+    } catch (error) {
+      console.error('Error adding to section collection:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+
+  async removeFromSectionCollection(studentId) {
+    try {
+      if (!this._currentUser?.profile?.section) return;
+
+      const sectionRef = doc(db, 'sections', this._currentUser.profile.section);
+      const studentRef = doc(sectionRef, 'students', studentId);
+      await deleteDoc(studentRef);
+    } catch (error) {
+      console.error('Error removing from section collection:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+
+  async addToCompanyCollection(studentData, studentId) {
+    try {
+      if (!studentData?.partnerCompany) return;
+      
+      // Sanitize company name for use as document ID
+      const companyId = studentData.partnerCompany.trim()
+        .replace(/[^\w\s]/g, '')  // Remove special chars
+        .replace(/\s+/g, '_')     // Replace spaces with underscores
+        .toLowerCase();
+      
+      if (!companyId) return;
+      
+      // Ensure company document exists
+      await this.ensureCompanyExists(companyId, studentData.partnerCompany);
+      
+      // Add student to company's students subcollection
+      const companyRef = doc(db, 'companies', companyId);
+      const studentRef = doc(companyRef, 'students', studentId);
+      
+      await setDoc(studentRef, {
+        studentName: studentData.name,
+        studentId: studentId,
+        program: studentData.program || '',
+        section: studentData.section || '',
+        college: studentData.college || '',
+        startDate: studentData.startDate || '',
+        endDate: studentData.endDate || '',
+        addedAt: new Date().toISOString(),
+        addedBy: auth.currentUser?.uid
+      });
+    } catch (error) {
+      console.error('Error adding to company collection:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+  
+  async ensureCompanyExists(companyId, companyName) {
+    try {
+      const companyRef = doc(db, 'companies', companyId);
+      const companyDoc = await getDoc(companyRef);
+      
+      if (!companyDoc.exists()) {
+        // Create company document
+        await setDoc(companyRef, {
+          companyName: companyName,
+          normalizedName: companyId,
+          studentCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: auth.currentUser?.uid,
+          updatedBy: auth.currentUser?.uid
+        });
+      }
+    } catch (error) {
+      console.error('Error ensuring company exists:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+  
+  async removeFromCompanyCollection(studentId, companyName) {
+    try {
+      if (!companyName) return;
+      
+      // Sanitize company name for use as document ID
+      const companyId = companyName.trim()
+        .replace(/[^\w\s]/g, '')
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+      
+      if (!companyId) return;
+      
+      const companyRef = doc(db, 'companies', companyId);
+      const studentRef = doc(companyRef, 'students', studentId);
+      await deleteDoc(studentRef);
+    } catch (error) {
+      console.error('Error removing from company collection:', error);
+      // Don't throw error to prevent blocking main operation
     }
   }
 
@@ -126,12 +258,56 @@ class StudentManager {
         updatedBy: auth.currentUser?.uid
       };
 
+      // Check if the company changed
       const studentRef = doc(db, 'studentData', studentId);
+      const oldStudentDoc = await getDoc(studentRef);
+      const oldCompanyName = oldStudentDoc.exists() ? oldStudentDoc.data().partnerCompany : null;
+      
+      // Update main student document
       await updateDoc(studentRef, finalUpdatedData);
+      
+      // Handle parallel collections
+      
+      // 1. Update section collection if needed
+      if (this._currentUser?.profile?.section) {
+        await this.addToSectionCollection(finalUpdatedData, studentId);
+      }
+      
+      // 2. Update company collection
+      if (oldCompanyName && oldCompanyName !== finalUpdatedData.partnerCompany) {
+        // If company changed, remove from old company and add to new
+        await this.removeFromCompanyCollection(studentId, oldCompanyName);
+      }
+      
+      // Add to (new) company collection
+      await this.addToCompanyCollection(finalUpdatedData, studentId);
       
       return true;
     } catch (error) {
       console.error('Error updating student:', error);
+      throw error;
+    }
+  }
+
+  async deleteStudent(studentId) {
+    try {
+      // Get student data before deletion for company reference
+      const studentDoc = await getDoc(doc(db, 'studentData', studentId));
+      const studentData = studentDoc.data();
+      
+      // Remove from section collection first
+      await this.removeFromSectionCollection(studentId);
+      
+      // Remove from company collection
+      if (studentData?.partnerCompany) {
+        await this.removeFromCompanyCollection(studentId, studentData.partnerCompany);
+      }
+      
+      // Then delete from main collection
+      await deleteDoc(doc(db, 'studentData', studentId));
+      return true;
+    } catch (error) {
+      console.error('Error deleting student:', error);
       throw error;
     }
   }
@@ -151,11 +327,25 @@ class StudentManager {
     let q;
     
     if (this._currentUser?.profile?.role === 'instructor') {
-      q = query(
-        collection(db, 'studentData'),
-        where('college', '==', this._currentUser.profile.college)
-      );
+      // If instructor has a section, filter by both college and section
+      if (this._currentUser.profile.section && this._currentUser.profile.section.trim() !== '') {
+        console.log(`Filtering students by section: ${this._currentUser.profile.section}`);
+        q = query(
+          collection(db, 'studentData'),
+          where('college', '==', this._currentUser.profile.college),
+          where('section', '==', this._currentUser.profile.section)
+        );
+      } else {
+        // If instructor has no section, just filter by college
+        console.log('Instructor has no section, filtering by college only');
+        q = query(
+          collection(db, 'studentData'),
+          where('college', '==', this._currentUser.profile.college)
+        );
+      }
     } else {
+      // For admin, fetch all students
+      console.log('Admin user, fetching all students');
       q = query(collection(db, 'studentData'));
     }
 
@@ -165,6 +355,7 @@ class StudentManager {
           id: doc.id,
           ...doc.data()
         }));
+        console.log(`Fetched ${studentsList.length} students`);
         this._students = studentsList;
         this._notifySubscribers();
       },
@@ -174,6 +365,20 @@ class StudentManager {
         this._notifySubscribers();
       }
     );
+  }
+
+  // Method to refresh data when section changes
+  refreshDataOnSectionChange(newCurrentUser) {
+    console.log('Refreshing data based on section change');
+    
+    // Update the current user reference
+    this._currentUser = newCurrentUser;
+    
+    // Re-initialize data fetching with new section
+    const unsubscribe = this.initializeDataFetching();
+    
+    // Return unsubscribe function
+    return unsubscribe;
   }
 }
 
@@ -214,6 +419,14 @@ function StudentList() {
       .sort())];
     setCompanies(uniqueCompanies);
   }, [students]);
+
+  useEffect(() => {
+    // This effect will run whenever the currentUser or specifically the section changes
+    if (studentManager && currentUser?.profile?.section !== undefined) {
+      console.log('Section detected in user profile:', currentUser.profile.section);
+      studentManager.refreshDataOnSectionChange(currentUser);
+    }
+  }, [currentUser?.profile?.section, studentManager]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -574,7 +787,7 @@ function StudentList() {
             )}
           </Box>
           <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={3} lg={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>Program</InputLabel>
                 <Select
@@ -588,7 +801,7 @@ function StudentList() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={3} lg={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>Semester</InputLabel>
                 <Select
@@ -602,7 +815,7 @@ function StudentList() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={3} lg={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>School Year</InputLabel>
                 <Select
@@ -616,7 +829,7 @@ function StudentList() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={3} lg={3}>
               <Autocomplete
                 value={studentManager.filters.company}
                 onChange={(event, newValue) => {

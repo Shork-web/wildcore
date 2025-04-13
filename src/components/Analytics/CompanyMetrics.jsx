@@ -61,25 +61,25 @@ function CompanyMetrics() {
               workEnvironmentData: [
                 {
                   aspect: 'Workstation',
-                  rating: evaluation.workEnvironment?.workstation || 0,
+                  rating: Math.min(evaluation.workEnvironment?.workstation || 0, 5.0),
                   category: 'Environment',
                   description: 'Evaluation of ergonomic design, space allocation, and overall functionality of assigned work areas'
                 },
                 {
                   aspect: 'Resources',
-                  rating: evaluation.workEnvironment?.resources || 0,
+                  rating: Math.min(evaluation.workEnvironment?.resources || 0, 5.0),
                   category: 'Support',
                   description: 'Assessment of availability, quality, and accessibility of essential tools and equipment for task execution'
                 },
                 {
                   aspect: 'Safety',
-                  rating: evaluation.workEnvironment?.safety || 0,
+                  rating: Math.min(evaluation.workEnvironment?.safety || 0, 5.0),
                   category: 'Environment',
                   description: 'Analysis of implemented safety protocols, emergency preparedness, and workplace hazard mitigation'
                 },
                 {
                   aspect: 'Workload',
-                  rating: evaluation.workEnvironment?.workload || 0,
+                  rating: Math.min(evaluation.workEnvironment?.workload || 0, 5.0),
                   category: 'Management',
                   description: 'Measurement of task distribution balance, time management requirements, and work intensity levels'
                 }
@@ -87,25 +87,25 @@ function CompanyMetrics() {
               performanceData: [
                 {
                   aspect: 'Supervision',
-                  rating: evaluation.performanceSupport?.supervision || 0,
+                  rating: Math.min(evaluation.performanceSupport?.supervision || 0, 5.0),
                   category: 'Support',
                   description: 'Evaluation of leadership effectiveness, guidance quality, and managerial support provided'
                 },
                 {
                   aspect: 'Feedback',
-                  rating: evaluation.performanceSupport?.feedback || 0,
+                  rating: Math.min(evaluation.performanceSupport?.feedback || 0, 5.0),
                   category: 'Development',
                   description: 'Assessment of constructive criticism frequency, clarity, and actionable insights provided'
                 },
                 {
                   aspect: 'Training',
-                  rating: evaluation.performanceSupport?.training || 0,
+                  rating: Math.min(evaluation.performanceSupport?.training || 0, 5.0),
                   category: 'Development',
                   description: 'Analysis of professional development opportunities, skill enhancement programs, and training effectiveness'
                 },
                 {
                   aspect: 'Mentorship',
-                  rating: evaluation.performanceSupport?.mentorship || 0,
+                  rating: Math.min(evaluation.performanceSupport?.mentorship || 0, 5.0),
                   category: 'Support',
                   description: 'Evaluation of career guidance quality, knowledge transfer effectiveness, and professional relationship building'
                 }
@@ -113,33 +113,33 @@ function CompanyMetrics() {
               experienceData: [
                 {
                   aspect: 'Relevance',
-                  rating: evaluation.experienceQuality?.relevance || 0,
+                  rating: Math.min(evaluation.experienceQuality?.relevance || 0, 5.0),
                   category: 'Value',
                   description: 'Assessment of alignment between internship tasks and academic/career development objectives'
                 },
                 {
                   aspect: 'Skills',
-                  rating: evaluation.experienceQuality?.skills || 0,
+                  rating: Math.min(evaluation.experienceQuality?.skills || 0, 5.0),
                   category: 'Growth',
                   description: 'Measurement of technical and soft skill acquisition through practical application and professional exposure'
                 },
                 {
                   aspect: 'Growth',
-                  rating: evaluation.experienceQuality?.growth || 0,
+                  rating: Math.min(evaluation.experienceQuality?.growth || 0, 5.0),
                   category: 'Development',
                   description: 'Evaluation of personal and professional development opportunities and career advancement potential'
                 },
                 {
                   aspect: 'Satisfaction',
-                  rating: evaluation.experienceQuality?.satisfaction || 0,
+                  rating: Math.min(evaluation.experienceQuality?.satisfaction || 0, 5.0),
                   category: 'Experience',
                   description: 'Comprehensive assessment of overall internship experience quality and professional fulfillment'
                 }
               ],
               trendData: [{
                 month: new Date(evaluation.submittedAt?.toDate()).toLocaleString('default', { month: 'long' }),
-                satisfaction: evaluation.overall?.averageRating || 0,
-                engagement: (evaluation.overall?.totalScore || 0) / (evaluation.overall?.maxPossibleScore || 60) * 5
+                satisfaction: Math.min(evaluation.overall?.averageRating || 0, 5.0),
+                engagement: Math.min((evaluation.overall?.totalScore || 0) / (evaluation.overall?.maxPossibleScore || 60) * 5, 5.0)
               }]
             });
           });
@@ -209,7 +209,7 @@ function CompanyMetrics() {
 
       return evaluation[dataType].map((item, i) => ({
         ...item,
-        rating: (acc[i].rating + item.rating) / 2
+        rating: Math.min((acc[i].rating + item.rating) / 2, 5.0) // Ensure the average doesn't exceed 5.0
       }));
     }, []);
 

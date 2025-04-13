@@ -1,5 +1,5 @@
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, getDocs, query, collection, where } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, getDocs, query, collection, where, updateDoc } from 'firebase/firestore';
 import { app } from '../firebase-config';
 
 const auth = getAuth(app);
@@ -60,6 +60,7 @@ export default class Auth {
         profileData.adminKeyVerified = true;
       } else if (userData.role === 'instructor') {
         profileData.college = userData.college;
+        profileData.section = userData.section || ""; // Include section field with default empty string
       }
 
       // Save to users collection
@@ -214,6 +215,79 @@ export default class Auth {
     } catch (error) {
       console.error('Error fetching user profile:', error);
       throw error;
+    }
+  }
+
+  async updateUserSection(userId, newSection) {
+    try {
+      const userDoc = await getDoc(doc(this._db, 'users', userId));
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+      
+      const userData = userDoc.data();
+      const oldSection = userData.section;
+      
+      // Only proceed if there's an actual section change
+      if (oldSection === newSection) {
+        return { success: true, message: 'No change in section' };
+      }
+      
+      // Update the user's section in their profile
+      await updateDoc(doc(this._db, 'users', userId), {
+        section: newSection || '',
+        updatedAt: new Date().toISOString()
+      });
+      
+      // If there was a previous section, remove instructor association
+      if (oldSection && oldSection.trim() !== '') {
+        const oldSectionRef = doc(this._db, 'sections', oldSection);
+        const oldSectionDoc = await getDoc(oldSectionRef);
+        
+        if (oldSectionDoc.exists() && oldSectionDoc.data().instructorId === userId) {
+          // We found a section where this instructor was assigned
+          // Update the section to mark it as unassigned
+          await updateDoc(oldSectionRef, {
+            instructorId: '',
+            instructorName: 'Unassigned',
+            updatedAt: new Date().toISOString(),
+            updatedBy: userId
+          });
+        }
+      }
+      
+      // If there's a new section, create or update it with this instructor
+      if (newSection && newSection.trim() !== '') {
+        const newSectionRef = doc(this._db, 'sections', newSection);
+        const newSectionDoc = await getDoc(newSectionRef);
+        
+        if (!newSectionDoc.exists()) {
+          // Create new section
+          await setDoc(newSectionRef, {
+            sectionName: newSection,
+            college: userData.college,
+            instructorId: userId,
+            instructorName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: userId,
+            updatedBy: userId
+          });
+        } else {
+          // Update existing section with new instructor
+          await updateDoc(newSectionRef, {
+            instructorId: userId,
+            instructorName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
+            updatedAt: new Date().toISOString(),
+            updatedBy: userId
+          });
+        }
+      }
+      
+      return { success: true, message: 'Section updated successfully' };
+    } catch (error) {
+      console.error('Error updating section:', error);
+      return { success: false, error: error.message };
     }
   }
 } 

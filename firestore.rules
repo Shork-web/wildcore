@@ -30,9 +30,105 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.college;
     }
 
+    // Get user's section
+    function getUserSection() {
+      let section = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.section;
+      // Return null if section is empty or undefined
+      return (section == "" || section == null) ? null : section;
+    }
+
     // Check if instructor has access to student's college
     function hasCollegeAccess(studentCollege) {
       return isAdmin() || (isInstructor() && getUserCollege() == studentCollege);
+    }
+
+    // Check if instructor has access to student's section
+    function hasSectionAccess(studentCollege, studentSection) {
+      return isAdmin() || 
+            (isInstructor() && 
+             getUserCollege() == studentCollege && 
+             (getUserSection() == "" || 
+              getUserSection() == null || 
+              getUserSection() == studentSection));
+    }
+
+    // Check if the department is a valid college
+    function isValidCollege(department) {
+      return department == "COLLEGE OF ENGINEERING AND ARCHITECTURE" ||
+             department == "COLLEGE OF MANAGEMENT, BUSINESS & ACCOUNTANCY" ||
+             department == "COLLEGE OF ARTS, SCIENCES, & EDUCATION" ||
+             department == "COLLEGE OF NURSING & ALLIED HEALTH SCIENCES" ||
+             department == "COLLEGE OF COMPUTER STUDIES" ||
+             department == "COLLEGE OF CRIMINAL JUSTICE" ||
+             department == "CICS";  // For backward compatibility
+    }
+    
+    // Check if a program is valid for the specified college
+    function isValidProgramForCollege(college, program) {
+      // For College of Engineering and Architecture
+      let engineeringPrograms = [
+        'BS Architecture',
+        'BS Chemical Engineering',
+        'BS Civil Engineering',
+        'BS Computer Engineering',
+        'BS Electrical Engineering',
+        'BS Electronics Engineering',
+        'BS Industrial Engineering',
+        'BS Mechanical Engineering',
+        'BS Mining Engineering'
+      ];
+      
+      // For College of Management, Business & Accountancy
+      let businessPrograms = [
+        'BS Accountancy',
+        'BS Accounting Information Systems',
+        'BS Management Accounting',
+        'BS Business Administration',
+        'BS Hospitality Management',
+        'BS Tourism Management',
+        'BS Office Administration',
+        'Bachelor in Public Administration'
+      ];
+      
+      // For College of Arts, Sciences, & Education
+      let artsPrograms = [
+        'AB Communication',
+        'AB English with Applied Linguistics',
+        'Bachelor of Elementary Education',
+        'Bachelor of Secondary Education',
+        'Bachelor of Multimedia Arts',
+        'BS Biology',
+        'BS Math with Applied Industrial Mathematics',
+        'BS Psychology'
+      ];
+      
+      // For College of Nursing & Allied Health Sciences
+      let nursingPrograms = [
+        'BS Nursing',
+        'BS Pharmacy'
+      ];
+      
+      // For College of Computer Studies
+      let computerPrograms = [
+        'BS Computer Science',
+        'BS Information Technology'
+      ];
+      
+      // For College of Criminal Justice
+      let criminalJusticePrograms = [
+        'BS Criminology'
+      ];
+      
+      // Match program to college
+      return (
+        (college == "COLLEGE OF ENGINEERING AND ARCHITECTURE" && engineeringPrograms.hasAny([program])) ||
+        (college == "COLLEGE OF MANAGEMENT, BUSINESS & ACCOUNTANCY" && businessPrograms.hasAny([program])) ||
+        (college == "COLLEGE OF ARTS, SCIENCES, & EDUCATION" && artsPrograms.hasAny([program])) ||
+        (college == "COLLEGE OF NURSING & ALLIED HEALTH SCIENCES" && nursingPrograms.hasAny([program])) ||
+        (college == "COLLEGE OF COMPUTER STUDIES" && computerPrograms.hasAny([program])) ||
+        (college == "COLLEGE OF CRIMINAL JUSTICE" && criminalJusticePrograms.hasAny([program])) ||
+        (college == "CICS" && computerPrograms.hasAny([program])) // For backward compatibility
+      );
     }
 
     // Validate student data fields
@@ -40,10 +136,10 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.keys().hasAll([
         'name', 'gender', 'program', 'semester', 'schoolYear',
-        'partnerCompany', 'location', 'startDate', 'endDate',
+        'partnerCompany', 'contactPerson', 'location', 'startDate', 'endDate',
         'concerns', 'solutions', 'recommendations', 'evaluation',
         'createdBy', 'updatedBy', 'createdAt', 'updatedAt',
-        'college'
+        'college', 'section', 'middleInitial'
       ]) &&
       // Validate required string fields
       data.name is string && data.name.size() > 0 &&
@@ -54,7 +150,10 @@ service cloud.firestore {
       data.partnerCompany is string && data.partnerCompany.size() > 0 &&
       data.location is string && data.location.size() > 0 &&
       data.college is string && data.college.size() > 0 &&
+      data.section is string &&
       // Optional fields can be empty but must exist
+      data.middleInitial is string &&
+      data.contactPerson is string &&
       data.concerns is string &&
       data.solutions is string &&
       data.recommendations is string &&
@@ -69,9 +168,10 @@ service cloud.firestore {
     }
 
     // Validate student survey
+    // Used in external program - DO NOT REMOVE
     function isValidStudentSurvey() {
-      let data = request.resource.data;
-      return data.keys().hasAll([
+      let reqData = request.resource.data;
+      return reqData.keys().hasAll([
         'surveyType',
         'studentName',
         'companyName',
@@ -79,6 +179,8 @@ service cloud.firestore {
         'schoolYear',
         'semester',
         'college',
+        'section',
+        'studentId',
         'workAttitude',
         'workPerformance',
         'totalScore',
@@ -88,40 +190,43 @@ service cloud.firestore {
         'status'
       ]) &&
       // Basic fields validation
-      data.surveyType == 'student' &&
-      data.studentName is string && data.studentName.size() > 0 &&
-      data.companyName is string && data.companyName.size() > 0 &&
-      data.program is string && data.program.size() > 0 &&
-      data.schoolYear is string && data.schoolYear.size() > 0 &&
-      data.semester is string && data.semester.size() > 0 &&
-      data.college is string && data.college.size() > 0 &&
+      reqData.surveyType == 'student' &&
+      reqData.studentName is string && reqData.studentName.size() > 0 &&
+      reqData.companyName is string && reqData.companyName.size() > 0 &&
+      reqData.program is string && reqData.program.size() > 0 &&
+      reqData.schoolYear is string && reqData.schoolYear.size() > 0 &&
+      reqData.semester is string && reqData.semester.size() > 0 &&
+      reqData.college is string && // College field is required but can be empty
+      reqData.section is string && reqData.section.size() > 0 &&
+      reqData.studentId is string && reqData.studentId.size() > 0 &&
 
       // Work attitude validation
-      data.workAttitude is map &&
-      data.workAttitude.keys().hasAll(['ratings', 'totalScore', 'maxPossibleScore']) &&
-      data.workAttitude.ratings is map &&
-      data.workAttitude.totalScore is number &&
-      data.workAttitude.maxPossibleScore is number &&
+      reqData.workAttitude is map &&
+      reqData.workAttitude.keys().hasAll(['ratings', 'totalScore', 'maxPossibleScore']) &&
+      reqData.workAttitude.ratings is map &&
+      reqData.workAttitude.totalScore is number &&
+      reqData.workAttitude.maxPossibleScore is number &&
 
       // Work performance validation
-      data.workPerformance is map &&
-      data.workPerformance.keys().hasAll(['ratings', 'totalScore', 'maxPossibleScore']) &&
-      data.workPerformance.ratings is map &&
-      data.workPerformance.totalScore is number &&
-      data.workPerformance.maxPossibleScore is number &&
+      reqData.workPerformance is map &&
+      reqData.workPerformance.keys().hasAll(['ratings', 'totalScore', 'maxPossibleScore']) &&
+      reqData.workPerformance.ratings is map &&
+      reqData.workPerformance.totalScore is number &&
+      reqData.workPerformance.maxPossibleScore is number &&
 
       // Metadata validation
-      data.totalScore is number &&
-      data.maxPossibleScore is number &&
-      data.submittedAt is timestamp &&
-      data.submittedBy is string &&
-      data.status is string;
+      reqData.totalScore is number &&
+      reqData.maxPossibleScore is number &&
+      reqData.submittedAt is timestamp &&
+      reqData.submittedBy is string &&
+      reqData.status is string;
     }
 
     // Validate company survey
+    // Used in external program - DO NOT REMOVE
     function isValidCompanySurvey() {
-      let data = request.resource.data;
-      return data.keys().hasAll([
+      let reqData = request.resource.data;
+      return reqData.keys().hasAll([
         'surveyType',
         'meetingDate',
         'companyName',
@@ -141,32 +246,32 @@ service cloud.firestore {
         'status'
       ]) &&
       // Basic fields validation
-      data.surveyType == 'company' &&
-      data.meetingDate is string && data.meetingDate.size() > 0 &&
-      data.companyName is string && data.companyName.size() > 0 &&
-      data.studentNames is string && data.studentNames.size() > 0 &&
-      data.program is string && data.program.size() > 0 &&
-      data.overallPerformance is number && 
-      data.overallPerformance >= 1 && 
-      data.overallPerformance <= 10 &&
-      data.tasksAssigned is string && data.tasksAssigned.size() > 0 &&
-      data.trainingProvided is string && data.trainingProvided.size() > 0 &&
-      data.technicalSkills is string && data.technicalSkills.size() > 0 &&
-      data.recommendations is string && data.recommendations.size() > 0 &&
-      data.industryMentor is string && data.industryMentor.size() > 0 &&
-      data.recommendToStudents is string &&
-      (data.recommendToStudents == 'yes' || data.recommendToStudents == 'no') &&
+      reqData.surveyType == 'company' &&
+      reqData.meetingDate is string && reqData.meetingDate.size() > 0 &&
+      reqData.companyName is string && reqData.companyName.size() > 0 &&
+      reqData.studentNames is string && reqData.studentNames.size() > 0 &&
+      reqData.program is string && reqData.program.size() > 0 &&
+      reqData.overallPerformance is number && 
+      reqData.overallPerformance >= 1 && 
+      reqData.overallPerformance <= 10 &&
+      reqData.tasksAssigned is string && reqData.tasksAssigned.size() > 0 &&
+      reqData.trainingProvided is string && reqData.trainingProvided.size() > 0 &&
+      reqData.technicalSkills is string && reqData.technicalSkills.size() > 0 &&
+      reqData.recommendations is string && reqData.recommendations.size() > 0 &&
+      reqData.industryMentor is string && reqData.industryMentor.size() > 0 &&
+      reqData.recommendToStudents is string &&
+      (reqData.recommendToStudents == 'yes' || reqData.recommendToStudents == 'no') &&
 
       // Overall score validation
-      data.totalScore is number &&
-      data.totalScore >= 0 &&
-      data.totalScore <= 10 &&
-      data.maxPossibleScore == 10 &&
+      reqData.totalScore is number &&
+      reqData.totalScore >= 0 &&
+      reqData.totalScore <= 10 &&
+      reqData.maxPossibleScore == 10 &&
 
       // Metadata validation
-      data.submittedAt is timestamp &&
-      data.submittedBy is string &&
-      data.status is string;
+      reqData.submittedAt is timestamp &&
+      reqData.submittedBy is string &&
+      reqData.status is string;
     }
 
     // Validate company evaluation
@@ -175,9 +280,11 @@ service cloud.firestore {
       return data.keys().hasAll([
         'companyName',
         'studentName',
+        'studentId',
         'program',
         'schoolYear',
         'semester',
+        'userRole',
         'workEnvironment',
         'performanceSupport',
         'experienceQuality',
@@ -188,9 +295,12 @@ service cloud.firestore {
       // Basic Information validation
       data.companyName is string && data.companyName.size() > 0 &&
       data.studentName is string && data.studentName.size() > 0 &&
+      data.studentId is string && data.studentId.size() > 0 &&
       data.program is string && data.program.size() > 0 &&
       data.schoolYear is string && data.schoolYear.size() > 0 &&
       data.semester is string && data.semester.size() > 0 &&
+      data.userRole is string && 
+      (data.userRole == 'student' || data.userRole == 'company' || data.userRole == 'adviser') &&
 
       // Work Environment validation
       data.workEnvironment is map &&
@@ -244,6 +354,118 @@ service cloud.firestore {
       data.status == 'submitted';
     }
 
+    // Flexible validation for student data updates
+    function isValidStudentDataUpdate() {
+      let data = request.resource.data;
+      return 
+      // Validate required string fields
+      data.name is string && data.name.size() > 0 &&
+      data.gender is string && data.gender.size() > 0 &&
+      data.program is string && data.program.size() > 0 &&
+      data.semester is string && data.semester.size() > 0 &&
+      data.schoolYear is string && data.schoolYear.size() > 0 &&
+      data.partnerCompany is string && data.partnerCompany.size() > 0 &&
+      data.location is string && data.location.size() > 0 &&
+      data.college is string && data.college.size() > 0 &&
+      
+      // Optional fields validation for fields that must exist
+      (!data.keys().hasAny(['section']) || data.section is string) &&
+      (!data.keys().hasAny(['middleInitial']) || data.middleInitial is string) &&
+      (!data.keys().hasAny(['contactPerson']) || data.contactPerson is string) &&
+      (!data.keys().hasAny(['concerns']) || data.concerns is string) &&
+      (!data.keys().hasAny(['solutions']) || data.solutions is string) &&
+      (!data.keys().hasAny(['recommendations']) || data.recommendations is string) &&
+      (!data.keys().hasAny(['evaluation']) || data.evaluation is string) &&
+      (!data.keys().hasAny(['startDate']) || data.startDate is string) &&
+      (!data.keys().hasAny(['endDate']) || data.endDate is string) &&
+      
+      // Metadata validation
+      data.createdBy is string &&
+      data.updatedBy is string &&
+      data.createdAt is string &&
+      data.updatedAt is string;
+    }
+
+    // Validate section data
+    function isValidSectionData() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'sectionName',
+        'college',
+        'instructorId',
+        'instructorName',
+        'createdAt',
+        'updatedAt',
+        'createdBy',
+        'updatedBy'
+      ]) &&
+      // Validate required fields
+      data.sectionName is string && data.sectionName.size() > 0 &&
+      data.college is string && data.college.size() > 0 &&
+      data.instructorId is string && data.instructorId.size() > 0 &&
+      data.instructorName is string && data.instructorName.size() > 0 &&
+      // Metadata validation
+      data.createdAt is string &&
+      data.updatedAt is string &&
+      data.createdBy is string &&
+      data.updatedBy is string;
+    }
+
+    // Validate section student data
+    function isValidSectionStudent() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'studentName',
+        'studentId',
+        'addedAt',
+        'addedBy'
+      ]) &&
+      // Validate required fields
+      data.studentName is string && data.studentName.size() > 0 &&
+      data.studentId is string && data.studentId.size() > 0 &&
+      // Metadata validation
+      data.addedAt is string &&
+      data.addedBy is string;
+    }
+
+    // Validate company data
+    function isValidCompanyData() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'companyName',
+        'normalizedName',
+        'createdAt',
+        'updatedAt',
+        'createdBy',
+        'updatedBy'
+      ]) &&
+      // Validate required fields
+      data.companyName is string && data.companyName.size() > 0 &&
+      data.normalizedName is string && data.normalizedName.size() > 0 &&
+      // Metadata validation
+      data.createdAt is string &&
+      data.updatedAt is string &&
+      data.createdBy is string &&
+      data.updatedBy is string;
+    }
+    
+    // Validate company student data
+    function isValidCompanyStudent() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+        'studentName',
+        'studentId',
+        'addedAt',
+        'addedBy'
+      ]) &&
+      // Validate required fields
+      data.studentName is string && data.studentName.size() > 0 &&
+      data.studentId is string && data.studentId.size() > 0 &&
+      // Metadata validation
+      data.addedAt is string &&
+      data.addedBy is string;
+    }
+
     // COLLECTION RULES
 
     // Users Collection
@@ -257,26 +479,22 @@ service cloud.firestore {
                     ]) &&
                     (
                       // For admin accounts
-                      (request.resource.data.role == 'admin' &&
-                       request.resource.data.adminKeyVerified == true) ||
+                      (request.resource.data.role == 'admin') ||
                       // For instructor accounts
                       (request.resource.data.role == 'instructor' &&
-                       request.resource.data.college is string && 
-                       request.resource.data.college.size() > 0)
+                       request.resource.data.college is string)
                     );
-      allow update: if isAdmin() && 
+      allow update: if (isAdmin() || request.auth.uid == userId) && 
                     request.resource.data.keys().hasAll([
                       'firstName', 'lastName', 'email', 'role', 
                       'idNumber', 'phoneNumber', 'createdAt'
                     ]) &&
                     (
                       // For admin accounts
-                      (request.resource.data.role == 'admin' &&
-                       request.resource.data.adminKeyVerified == true) ||
+                      (request.resource.data.role == 'admin') ||
                       // For instructor accounts
                       (request.resource.data.role == 'instructor' &&
-                       request.resource.data.college is string && 
-                       request.resource.data.college.size() > 0)
+                       request.resource.data.college is string)
                     );
       allow delete: if isAdmin() && request.auth.uid != userId;
     }
@@ -300,45 +518,44 @@ service cloud.firestore {
     // StudentData Collection
     match /studentData/{docId} {
       allow read: if isAuthenticated() && 
-                   (isAdmin() || hasCollegeAccess(resource.data.college));
+                   (isAdmin() || 
+                   (isInstructor() && hasCollegeAccess(resource.data.college) && 
+                    (!resource.data.keys().hasAny(['section']) || 
+                     resource.data.section == null || 
+                     resource.data.section == "" || 
+                     hasSectionAccess(resource.data.college, resource.data.section))));
       allow create: if isAuthenticated() && 
                     isValidStudentData() &&
                     (isAdmin() || 
                       (isInstructor() && 
-                       request.resource.data.college == getUserCollege())) &&
+                       request.resource.data.college == getUserCollege() &&
+                       (request.resource.data.section == getUserSection() || 
+                        !getUserSection() || getUserSection() == ""))) &&
                     request.resource.data.createdBy == request.auth.uid &&
                     request.resource.data.updatedBy == request.auth.uid;
       allow update: if isAuthenticated() &&
-                    isValidStudentData() &&
+                    isValidStudentDataUpdate() &&
                     (isAdmin() || 
                       (isInstructor() && 
-                       request.resource.data.college == getUserCollege())) &&
+                       request.resource.data.college == getUserCollege() &&
+                       (request.resource.data.section == getUserSection() || 
+                        !getUserSection() || getUserSection() == ""))) &&
                     request.resource.data.updatedBy == request.auth.uid;
       allow delete: if isAuthenticated() && 
                     (isAdmin() || 
                       (isInstructor() && 
-                       resource.data.college == getUserCollege()));
+                       resource.data.college == getUserCollege() &&
+                       (!resource.data.keys().hasAny(['section']) || 
+                        resource.data.section == null || 
+                        resource.data.section == "" || 
+                        resource.data.section == getUserSection() || 
+                        !getUserSection() || getUserSection() == "")));
     }
 
     // Student Surveys Collection
     match /studentSurveys/{surveyId} {
       allow read: if true;  // Allow anyone to read
-      allow create: if request.resource.data.keys().hasAll([
-        'surveyType',
-        'studentName',
-        'companyName',
-        'program',
-        'schoolYear',
-        'semester',
-        'workAttitude',
-        'workPerformance',
-        'totalScore',
-        'maxPossibleScore',
-        'submittedAt',
-        'submittedBy',
-        'status'
-      ]) && 
-      request.resource.data.surveyType == 'student';  // Basic validation only
+      allow create: if isValidStudentSurvey();  // Use validation function
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -346,27 +563,7 @@ service cloud.firestore {
     // OJT Advisers Collection
     match /OJTadvisers/{surveyId} {
       allow read: if true;  // Allow anyone to read
-      allow create: if 
-        request.resource.data.keys().hasAll([
-          'surveyType',
-          'meetingDate',
-          'companyName',
-          'studentNames',
-          'overallPerformance',
-          'tasksAssigned',
-          'trainingProvided',
-          'technicalSkills',
-          'recommendations',
-          'industryMentor',
-          'recommendToStudents',
-          'program',
-          'totalScore',
-          'maxPossibleScore',
-          'submittedAt',
-          'submittedBy',
-          'status'
-        ]) && 
-        request.resource.data.surveyType == 'company';
+      allow create: if isValidCompanySurvey();  // Use validation function
       allow update: if false;
       allow delete: if false;
     }
@@ -404,6 +601,218 @@ service cloud.firestore {
          request.resource.data.college == getUserCollege() &&
          request.resource.data.instructorId == request.auth.uid)
       );
+    }
+
+    // Sections Collection - For storing section information
+    match /sections/{sectionId} {
+      // Allow anyone to read basic section information (including anonymous users)
+      allow read: if true;
+      
+      // Only admins and instructors for the relevant college can create sections
+      allow create: if isAuthenticated() && 
+                    isValidSectionData() &&
+                    (isAdmin() || 
+                      (isInstructor() && 
+                       request.resource.data.college == getUserCollege() &&
+                       request.resource.data.instructorId == request.auth.uid)) &&
+                    request.resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.updatedBy == request.auth.uid;
+      
+      // Only admins and the assigned instructor can update sections
+      allow update: if isAuthenticated() &&
+                    isValidSectionData() &&
+                    (isAdmin() || 
+                      (isInstructor() && 
+                       request.resource.data.college == getUserCollege() &&
+                       (resource.data.instructorId == request.auth.uid || 
+                        request.resource.data.instructorId == request.auth.uid))) &&
+                    request.resource.data.updatedBy == request.auth.uid;
+      
+      // Only admins can delete sections
+      allow delete: if isAdmin();
+      
+      // Section Students subcollection for students in this section
+      match /students/{studentId} {
+        // Anyone can read student names within sections (including anonymous users)
+        allow read: if true;
+        
+        // Only admins and the section's instructor can add students
+        allow create: if isAuthenticated() && 
+                      isValidSectionStudent() &&
+                      (isAdmin() || 
+                        (isInstructor() && 
+                         get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid)) &&
+                      request.resource.data.addedBy == request.auth.uid;
+        
+        // Only admins and the section's instructor can update student entries
+        allow update: if isAuthenticated() && 
+                      isValidSectionStudent() &&
+                      (isAdmin() || 
+                        (isInstructor() && 
+                         get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid)) &&
+                      request.resource.data.addedBy == request.auth.uid;
+        
+        // Only admins and the section's instructor can remove students
+        allow delete: if isAuthenticated() && 
+                      (isAdmin() || 
+                        (isInstructor() && 
+                         get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid));
+      }
+    }
+    
+    // Companies Collection - For organizing students by company
+    match /companies/{companyId} {
+      // Allow anyone to read basic company information
+      allow read: if true;
+      
+      // Only authenticated users can create company records
+      allow create: if isAuthenticated() && 
+                    isValidCompanyData() &&
+                    request.resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.updatedBy == request.auth.uid;
+      
+      // Only authenticated users can update company information
+      allow update: if isAuthenticated() &&
+                    isValidCompanyData() &&
+                    request.resource.data.updatedBy == request.auth.uid;
+      
+      // Only admins can delete companies
+      allow delete: if isAdmin();
+      
+      // Company Students subcollection
+      match /students/{studentId} {
+        // Anyone can read students within a company
+        allow read: if true;
+        
+        // Only authenticated users can add students to companies
+        allow create: if isAuthenticated() && 
+                      isValidCompanyStudent() &&
+                      request.resource.data.addedBy == request.auth.uid;
+        
+        // Only authenticated users can update student entries in companies
+        allow update: if isAuthenticated() && 
+                      isValidCompanyStudent() &&
+                      request.resource.data.addedBy == request.auth.uid;
+        
+        // Only admins and the instructor who added the student can remove them
+        allow delete: if isAuthenticated() && 
+                      (isAdmin() || request.auth.uid == resource.data.addedBy);
+      }
+    }
+
+    // NEW COLLECTION STRUCTURE: Departments
+    match /departments/{departmentId} {
+      // Allow anyone to read department information
+      allow read: if true;
+      
+      // Allow creation if department ID matches a valid college
+      allow create: if isValidCollege(departmentId);
+      
+      // Allow updates to departments
+      allow update: if isValidCollege(departmentId);
+      
+      // Only admins can delete departments
+      allow delete: if isAdmin();
+      
+      // Sections subcollection within departments
+      match /sections/{sectionId} {
+        // Allow reading of sections within a department
+        allow read: if true;
+        
+        // Allow creating sections
+        allow create: if true;
+        
+        // Allow updating sections
+        allow update: if true;
+        
+        // Only admins can delete sections
+        allow delete: if isAdmin();
+        
+        // Students subcollection within sections
+        match /students/{studentId} {
+          // Allow reading students within a section
+          allow read: if true;
+          
+          // Allow creating student records
+          allow create: if true;
+          
+          // Allow updating student records
+          allow update: if true;
+          
+          // Allow deleting student records
+          allow delete: if isAdmin();
+          
+          // Student-surveys subcollection
+          match /student-surveys/{surveyId} {
+            // Allow reading surveys
+            allow read: if true;
+            
+            // Allow creating surveys with validation
+            allow create: if true;
+            
+            // No updates to submitted surveys
+            allow update: if false;
+            
+            // Only admins can delete surveys
+            allow delete: if isAdmin();
+          }
+          
+          // Evaluations subcollection
+          match /evaluations/{evalId} {
+            // Allow reading evaluations
+            allow read: if true;
+            
+            // Allow creating evaluations with proper college validation
+            allow create: if 
+              // Ensure the college in the data matches the parent departmentId
+              request.resource.data.college == departmentId || 
+              // Or if it's a legacy format like "CICS" mapping to "COLLEGE OF COMPUTER STUDIES"
+              (departmentId == "COLLEGE OF COMPUTER STUDIES" && request.resource.data.college == "CICS") ||
+              // Also validate program is appropriate for the college if program field is present
+              (!request.resource.data.keys().hasAny(['program']) || 
+               isValidProgramForCollege(departmentId, request.resource.data.program));
+            
+            // No updates to submitted evaluations
+            allow update: if false;
+            
+            // Only admins can delete evaluations
+            allow delete: if isAdmin();
+          }
+        }
+      }
+      
+      // Companies subcollection within departments
+      match /companies/{companyId} {
+        // Allow reading companies
+        allow read: if true;
+        
+        // Allow creating company records
+        allow create: if true;
+        
+        // Allow updating company information
+        allow update: if true;
+        
+        // Only admins can delete companies
+        allow delete: if isAdmin();
+        
+        // Surveys subcollection within companies
+        match /surveys/{surveyId} {
+          // Allow reading surveys
+          allow read: if true;
+          
+          // Allow creating surveys with proper college validation
+          allow create: if 
+            // If program is specified, validate it's appropriate for the department
+            (!request.resource.data.keys().hasAny(['program']) || 
+             isValidProgramForCollege(departmentId, request.resource.data.program));
+          
+          // No updates to submitted surveys
+          allow update: if false;
+          
+          // Only admins can delete surveys
+          allow delete: if isAdmin();
+        }
+      }
     }
 
     // Add a specific rule for batch deletions

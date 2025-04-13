@@ -58,6 +58,9 @@ export const AuthProvider = ({ children }) => {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
+            console.log('User data from firestore:', userData);
+            console.log('Section value:', userData.section);
+            
             setCurrentUser({
               ...user,
               profile: userData,
@@ -80,6 +83,36 @@ export const AuthProvider = ({ children }) => {
 
     return () => unsubscribe();
   }, [firebaseAuth, handleSignOut]);
+
+  // Add a function to update user section
+  const updateUserSection = async (newSection) => {
+    if (!currentUser) return { success: false, error: 'No user is logged in' };
+    
+    try {
+      // Use the auth class method to update section
+      const result = await auth.updateUserSection(currentUser.uid, newSection);
+      
+      if (result.success) {
+        // Update the local state with the new section
+        setCurrentUser(prevUser => ({
+          ...prevUser,
+          profile: {
+            ...prevUser.profile,
+            section: newSection || ''
+          }
+        }));
+        
+        console.log('Section updated successfully:', newSection);
+        return result;
+      } else {
+        console.error('Failed to update section:', result.error);
+        return result;
+      }
+    } catch (error) {
+      console.error('Error in updateUserSection:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
   if (loading) {
     return (
@@ -187,7 +220,8 @@ export const AuthProvider = ({ children }) => {
     auth,
     currentUser,
     userRole,
-    handleSignOut
+    handleSignOut,
+    updateUserSection
   };
 
   return (

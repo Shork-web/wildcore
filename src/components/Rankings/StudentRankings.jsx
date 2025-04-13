@@ -28,9 +28,9 @@ import {
 import { styled } from '@mui/system';
 import { School, EmojiEvents, Star } from '@mui/icons-material';
 import { db } from '../../firebase-config';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
-import DepartmentRankings from './DepartmentRankings';
+import CollegeRanking from './CollegeRanking';
 
 const maroon = '#800000';
 
@@ -139,6 +139,80 @@ function TabPanel(props) {
   );
 }
 
+// Calculate evaluation score from text
+const calculateEvaluationScore = (evaluation) => {
+  if (!evaluation) return 0;
+  
+  const positiveKeywords = [
+    'excellent', 'outstanding', 'exceptional', 'great', 'good', 
+    'skilled', 'proficient', 'talented', 'impressive', 'dedicated',
+    'reliable', 'innovative', 'efficient', 'thorough', 'professional'
+  ];
+  
+  const normalizedText = evaluation.toLowerCase();
+  
+  // Base score from evaluation length (max 4 points)
+  let score = Math.min(evaluation.length / 100, 4);
+  
+  // Score from positive keywords (max 4 points)
+  const keywordScore = positiveKeywords.reduce((acc, keyword) => {
+    return acc + (normalizedText.includes(keyword) ? 0.4 : 0);
+  }, 0);
+  
+  // Add keyword score
+  score += Math.min(keywordScore, 4);
+  
+  // Add 2 points if evaluation is comprehensive (contains multiple sentences)
+  const sentences = evaluation.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  if (sentences.length >= 3) {
+    score += 2;
+  }
+  
+  return Math.min(score, 10); // Cap at 10
+};
+
+// Fetch and calculate student scores
+const fetchStudentScores = async (studentsList) => {
+  try {
+    // Fetch student surveys
+    const surveysRef = collection(db, 'studentSurveys');
+    const surveysSnapshot = await getDocs(surveysRef);
+    const surveyScores = {};
+    
+    surveysSnapshot.docs.forEach(doc => {
+      const survey = doc.data();
+      if (survey.studentId && survey.totalScore) {
+        if (!surveyScores[survey.studentId]) {
+          surveyScores[survey.studentId] = [];
+        }
+        // Normalize score to 10-point scale
+        const normalizedScore = (survey.totalScore / survey.maxPossibleScore) * 10;
+        surveyScores[survey.studentId].push(normalizedScore);
+      }
+    });
+
+    // Update students with combined scores
+    return studentsList.map(student => {
+      const surveyScore = surveyScores[student.id] 
+        ? (surveyScores[student.id].reduce((a, b) => a + b, 0) / surveyScores[student.id].length)
+        : 0;
+        
+      const evaluationScore = calculateEvaluationScore(student.evaluation || '');
+      
+      // Combine scores - 60% survey score, 40% evaluation score
+      const combinedScore = (surveyScore * 0.6) + (evaluationScore * 0.4);
+      
+      return {
+        ...student,
+        evaluationScore: Number(combinedScore.toFixed(1))
+      };
+    });
+  } catch (error) {
+    console.error("Error fetching scores:", error);
+    return studentsList;
+  }
+};
+
 function StudentRankings() {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
@@ -163,37 +237,54 @@ function StudentRankings() {
 
   useEffect(() => {
     let q;
-    
-    if (currentUser?.profile?.role === 'instructor') {
-      q = query(
-        collection(db, 'studentData'),
-        where('college', '==', currentUser.profile.college)
-      );
+    let userUnsubscribe;
+
+    // First get the user's current college and section
+    if (currentUser?.uid) {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      userUnsubscribe = onSnapshot(userDocRef, (userDoc) => {
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Query students based on user's college only (no section filtering)
+          q = query(
+            collection(db, 'studentData'),
+            where('college', '==', userData.college)
+          );
+          
+          // Set up the student data listener
+          const studentUnsubscribe = onSnapshot(q, 
+            async (querySnapshot) => {
+              const initialStudentsList = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }));
+              
+              const studentsWithScores = await fetchStudentScores(initialStudentsList);
+              setStudents(studentsWithScores);
+              setLoading(false);
+            },
+            (error) => {
+              console.error("Error fetching students:", error);
+              setError(error.message);
+              setLoading(false);
+            }
+          );
+
+          // Clean up student listener when user data changes
+          return () => {
+            studentUnsubscribe();
+          };
+        }
+      });
     } else {
       setError('Unauthorized access');
       setLoading(false);
-      return () => {};
     }
 
-    const unsubscribe = onSnapshot(q, 
-      (querySnapshot) => {
-        const studentsList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          // For the screenshot, we're setting all scores to 0 to match
-          evaluationScore: 0
-        }));
-        setStudents(studentsList);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching students:", error);
-        setError(error.message);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
+    // Clean up both listeners
+    return () => {
+      userUnsubscribe?.();
+    };
   }, [currentUser]);
 
   // Reset page when filters change
@@ -201,14 +292,51 @@ function StudentRankings() {
     setPagesMap({});
   }, [selectedProgram, selectedSemester, selectedYear]);
 
-  // Filter students based on selected filters
+  // Enhanced filtering with strict isolation between different data values
   const filteredStudents = students.filter(student => {
-    return (
-      (selectedProgram === 'All' || student.program === selectedProgram) &&
-      (selectedSemester === 'All' || student.semester === selectedSemester) &&
-      (selectedYear === 'All' || student.schoolYear === selectedYear)
-    );
+    // Strict equality check for program
+    const programMatch = selectedProgram === 'All' || student.program === selectedProgram;
+    
+    // Strict equality check for year
+    const yearMatch = selectedYear === 'All' || student.schoolYear === selectedYear;
+    
+    // Strict equality check for semester
+    const semesterMatch = selectedSemester === 'All' || student.semester === selectedSemester;
+    
+    // Log any near-matches that are being rejected
+    if (selectedProgram !== 'All' && !programMatch && student.program && 
+        student.program.includes(selectedProgram)) {
+      console.log(`Rankings - Rejected program near match: "${student.program}" vs "${selectedProgram}"`);
+    }
+    
+    if (selectedYear !== 'All' && !yearMatch && student.schoolYear && 
+        (student.schoolYear.includes(selectedYear) || selectedYear.includes(student.schoolYear))) {
+      console.log(`Rankings - Rejected year near match: "${student.schoolYear}" vs "${selectedYear}"`);
+    }
+    
+    return programMatch && yearMatch && semesterMatch;
   });
+
+  // Debugging for program filtering
+  useEffect(() => {
+    if (selectedProgram !== 'All') {
+      // Check for exact matches
+      const exactMatches = students.filter(s => s.program === selectedProgram);
+      console.log(`Filtering for program: "${selectedProgram}" - Found ${exactMatches.length} exact matches`);
+      
+      // Display any potential mismatch issues
+      const allPrograms = [...new Set(students.map(s => s.program))];
+      const similarPrograms = allPrograms.filter(p => 
+        p && p !== selectedProgram && (
+          p.includes(selectedProgram) || selectedProgram.includes(p)
+        )
+      );
+      
+      if (similarPrograms.length > 0) {
+        console.log("Potential program name confusion:", similarPrograms);
+      }
+    }
+  }, [selectedProgram, students]);
 
   // Sort students by evaluation score
   const rankedStudents = [...filteredStudents]
@@ -327,7 +455,7 @@ function StudentRankings() {
             }}
           >
             <Tab label="Student Rankings" />
-            <Tab label="Department Performance" />
+            <Tab label="College Performance" />
           </Tabs>
         </Box>
 
@@ -418,7 +546,7 @@ function StudentRankings() {
                                       alignItems: 'center',
                                       color: 'text.secondary'
                                     }}>
-                                      0.0
+                                      {student.evaluationScore.toFixed(1)}
                                       <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                                     </Box>
                                   </Box>
@@ -456,7 +584,7 @@ function StudentRankings() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <DepartmentRankings 
+          <CollegeRanking
             collegeFilter={currentUser?.profile?.college || 'All'}
             semesterFilter={selectedSemester}
             yearFilter={selectedYear}

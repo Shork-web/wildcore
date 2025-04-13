@@ -15,7 +15,7 @@ import ProtectedRoute from './components/UserHandling/ProtectedRoute';
 import Footer from './components/Layout/Footer';
 import Analytics from './components/Analytics/AnalyticsExport';
 import FAQ from './components/FAQ/FAQ';
-import StudentAnalytics from './components/Analytics/StudentAnalytics';
+import { StudentAnalytics } from './components/Analytics/AnalyticsExport';
 import StudentRankings from './components/Rankings/StudentRankings';
 import AdminRankings from './components/Rankings/AdminRankings';
 

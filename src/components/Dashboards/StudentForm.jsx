@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../../firebase-config';
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
 import { collegePrograms } from '../../utils/collegePrograms';
 import { 
@@ -254,6 +254,7 @@ class Student {
       recommendations: data.recommendations || '',
       evaluation: data.evaluation || '',
       college: data.college || '',
+      section: data.section || '',
       createdAt: data.createdAt || null,
       createdBy: data.createdBy || null,
       updatedAt: data.updatedAt || null,
@@ -278,6 +279,7 @@ class Student {
   get evaluation() { return this._data.evaluation; }
   get college() { return this._data.college; }
   get middleInitial() { return this._data.middleInitial; }
+  get section() { return this._data.section; }
 
   // Setters
   set name(value) { this._data.name = value; }
@@ -296,6 +298,7 @@ class Student {
   set evaluation(value) { this._data.evaluation = value; }
   set college(value) { this._data.college = value; }
   set middleInitial(value) { this._data.middleInitial = value; }
+  set section(value) { this._data.section = value; }
 
   // Methods
   toJSON() {
@@ -414,6 +417,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         recommendations: initialData.recommendations || '',
         evaluation: initialData.evaluation || '',
         college: initialData.college || currentUser?.profile?.college || '',
+        section: initialData.section || '',
         createdAt: initialData.createdAt,
         createdBy: initialData.createdBy
       });
@@ -534,6 +538,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
       const studentData = {
         ...formData.getAllData(),
         college: userData.college,
+        section: userData.section || '',
         startDate: formData.startDate || '',
         endDate: formData.endDate || '',
         concerns: formData.concerns || '',
@@ -550,6 +555,88 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         await addStudent(studentData);
       } else {
         const docRef = await addDoc(collection(db, 'studentData'), studentData);
+        
+        // Add student to the Sections collection if instructor has a section
+        if (userData.section) {
+          try {
+            // First ensure the section document exists
+            const sectionRef = doc(db, 'sections', userData.section);
+            const sectionDoc = await getDoc(sectionRef);
+            
+            if (!sectionDoc.exists()) {
+              // Create the section document if it doesn't exist
+              await setDoc(sectionRef, {
+                sectionName: userData.section,
+                college: userData.college,
+                instructorId: auth.currentUser.uid,
+                instructorName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                createdBy: auth.currentUser.uid,
+                updatedBy: auth.currentUser.uid
+              });
+            }
+            
+            // Add the student to the section's students subcollection
+            const studentRef = doc(sectionRef, 'students', docRef.id);
+            await setDoc(studentRef, {
+              studentName: studentData.name,
+              studentId: docRef.id,
+              addedAt: new Date().toISOString(),
+              addedBy: auth.currentUser.uid
+            });
+          } catch (sectionError) {
+            console.error('Error adding to section collection:', sectionError);
+            // Don't throw the error to prevent blocking the main form submission
+          }
+        }
+        
+        // Add student to the Companies collection
+        if (studentData.partnerCompany) {
+          try {
+            // Sanitize company name for use as document ID
+            const companyId = studentData.partnerCompany.trim()
+              .replace(/[^\w\s]/g, '')  // Remove special chars
+              .replace(/\s+/g, '_')     // Replace spaces with underscores
+              .toLowerCase();
+            
+            if (companyId) {
+              // Ensure company document exists
+              const companyRef = doc(db, 'companies', companyId);
+              const companyDoc = await getDoc(companyRef);
+              
+              if (!companyDoc.exists()) {
+                // Create company document if it doesn't exist
+                await setDoc(companyRef, {
+                  companyName: studentData.partnerCompany,
+                  normalizedName: companyId,
+                  studentCount: 0,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  createdBy: auth.currentUser.uid,
+                  updatedBy: auth.currentUser.uid
+                });
+              }
+              
+              // Add student to company's students subcollection
+              const studentRef = doc(companyRef, 'students', docRef.id);
+              await setDoc(studentRef, {
+                studentName: studentData.name,
+                studentId: docRef.id,
+                program: studentData.program || '',
+                section: studentData.section || '',
+                college: studentData.college || '',
+                startDate: studentData.startDate || '',
+                endDate: studentData.endDate || '',
+                addedAt: new Date().toISOString(),
+                addedBy: auth.currentUser.uid
+              });
+            }
+          } catch (companyError) {
+            console.error('Error adding to company collection:', companyError);
+            // Don't throw the error to prevent blocking the main form submission
+          }
+        }
         
         // Reset form fields after successful submission
         setFormData(new Student());

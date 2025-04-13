@@ -14,7 +14,6 @@ import {
   InputLabel, 
   Select, 
   MenuItem, 
-  CircularProgress, 
   Chip,
   Grid,
   Pagination,
@@ -22,12 +21,13 @@ import {
   useMediaQuery,
   Container,
   Tab,
-  Tabs
+  Tabs,
+  LinearProgress
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { School, EmojiEvents, Star, Business } from '@mui/icons-material';
 import { db } from '../../firebase-config';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, collectionGroup } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
 import { collegePrograms } from '../../utils/collegePrograms';
 
@@ -161,8 +161,26 @@ function AdminRankings() {
   
   // Derived state
   const availablePrograms = getAvailablePrograms();
-  const availableSemesters = ['All', 'First', 'Second', 'Summer'];
-  const availableYears = ['All', ...new Set(students.map(student => student.schoolYear || ''))].filter(Boolean).sort().reverse();
+  const availableSemesters = getAvailableSemesters();
+  const availableYears = getAvailableYears();
+
+  // Helper function to normalize semester values
+  const normalizeSemester = (semester) => {
+    if (!semester) return '';
+    
+    const semesterStr = semester.toString().trim().toLowerCase();
+    
+    if (semesterStr.includes('first') || semesterStr === '1' || semesterStr === '1st') {
+      return 'First';
+    } else if (semesterStr.includes('second') || semesterStr === '2' || semesterStr === '2nd') {
+      return 'Second';
+    } else if (semesterStr.includes('summer') || semesterStr === '3' || semesterStr === '3rd') {
+      return 'Summer';
+    }
+    
+    // If no match, return the original value with first letter capitalized
+    return semester.charAt(0).toUpperCase() + semester.slice(1);
+  };
 
   function getAvailablePrograms() {
     if (selectedCollege === 'All') {
@@ -170,6 +188,19 @@ function AdminRankings() {
     } else {
       return ['All', ...(collegePrograms[selectedCollege] || [])];
     }
+  }
+  
+  function getAvailableSemesters() {
+    // Extract all semesters from the student data, then add standard options
+    const dataOptions = [...new Set(students.map(student => student.semester || ''))].filter(Boolean);
+    const standardOptions = ['First', 'Second', 'Summer'];
+    
+    // Combine, deduplicate and sort options
+    return ['All', ...new Set([...dataOptions, ...standardOptions])].sort();
+  }
+  
+  function getAvailableYears() {
+    return ['All', ...new Set(students.map(student => student.schoolYear || ''))].filter(Boolean).sort().reverse();
   }
 
   useEffect(() => {
@@ -181,26 +212,281 @@ function AdminRankings() {
       }
 
       try {
-        const q = query(collection(db, 'studentData'));
-        const snapshot = await getDocs(q);
+        setLoading(true);
         
-        const studentsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          evaluationScore: calculateEvaluationScore(doc.data().evaluation || '')
-        }));
+        // Fetch from studentSurveys first, as that has public read access
+        console.log("Fetching from studentSurveys collection");
+        const surveysQuery = query(collection(db, 'studentSurveys'));
+        const surveysSnapshot = await getDocs(surveysQuery);
         
-        setStudents(studentsList);
-        setLoading(false);
+        // Try to fetch company data from the nested collection structure
+        console.log("Fetching from companies/tests/students collection");
+        const companyStudentsQuery = query(collectionGroup(db, 'students'));
+        let companyStudentsMap = {};
+        
+        // Also fetch the companies collection directly to get company names
+        let companiesMap = {};
+        try {
+          console.log("Fetching companies collection");
+          const companiesQuery = query(collection(db, 'companies'));
+          const companiesSnapshot = await getDocs(companiesQuery);
+          console.log(`Found ${companiesSnapshot.docs.length} companies`);
+          
+          // Create a map of company IDs to company names
+          companiesMap = companiesSnapshot.docs.reduce((map, doc) => {
+            const data = doc.data();
+            // Use the company name from the data, or the ID as fallback
+            map[doc.id] = {
+              id: doc.id,
+              name: data.name || data.companyName || doc.id,
+              ...data
+            };
+            return map;
+          }, {});
+          
+          console.log("Created map of companies:", Object.keys(companiesMap).length);
+        } catch (companiesError) {
+          console.error("Error fetching companies collection:", companiesError);
+          // Continue even if this fails
+        }
+        
+        try {
+          const companyStudentsSnapshot = await getDocs(companyStudentsQuery);
+          console.log(`Found ${companyStudentsSnapshot.docs.length} students in companies collection`);
+          
+          // Create a map of student IDs to company info
+          companyStudentsMap = companyStudentsSnapshot.docs.reduce((map, doc) => {
+            // Extract the path components to get company info
+            const pathSegments = doc.ref.path.split('/');
+            const companyId = pathSegments[1]; // The ID of the company
+            
+            // Try to extract company name from the data if available
+            const data = doc.data();
+            
+            // Look up company name from companiesMap if available, otherwise use what we can find
+            const companyInfo = companiesMap[companyId] || {};
+            const companyName = companyInfo.name || data.companyName || companyId;
+            
+            map[doc.id] = {
+              companyId,
+              companyName,
+              ...data
+            };
+            return map;
+          }, {});
+          
+          console.log("Created map of company students:", Object.keys(companyStudentsMap).length);
+        } catch (companyError) {
+          console.error("Error fetching from companies collection:", companyError);
+          // Continue with other sources even if this fails
+        }
+        
+        if (!surveysSnapshot.empty) {
+          console.log(`Found ${surveysSnapshot.docs.length} student surveys`);
+          
+          // Process student surveys data
+          const surveyData = surveysSnapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // Calculate score from survey data
+            let score = 0;
+            
+            // Use the totalScore if available (normalized to a 10-point scale)
+            if (data.totalScore !== undefined && data.maxPossibleScore) {
+              score = (data.totalScore / data.maxPossibleScore) * 10;
+            } 
+            // Otherwise try to calculate from workAttitude and workPerformance
+            else if (data.workAttitude && data.workPerformance) {
+              const attitudeScore = data.workAttitude.totalScore || 0;
+              const attitudeMax = data.workAttitude.maxPossibleScore || 40;
+              
+              const performanceScore = data.workPerformance.totalScore || 0;
+              const performanceMax = data.workPerformance.maxPossibleScore || 60;
+              
+              // Calculate combined score (normalized to 10)
+              const totalMax = attitudeMax + performanceMax;
+              const totalScore = attitudeScore + performanceScore;
+              
+              score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
+            }
+            
+            // Check if we have company data for this student
+            const companyData = companyStudentsMap[doc.id] || {};
+            
+            // Look for any company ID reference in the data
+            const companyIdFromData = data.companyId || data.company_id || '';
+            
+            // If we have a company ID but no company data, try to look it up in the companies map
+            let resolvedCompanyName = companyData.companyName;
+            if (!resolvedCompanyName && companyIdFromData && companiesMap[companyIdFromData]) {
+              resolvedCompanyName = companiesMap[companyIdFromData].name;
+            }
+            
+            // Handle different field names from different collections
+            return {
+              id: doc.id,
+              ...data,
+              // Normalize field names to ensure consistency
+              name: data.studentName || data.name || 'Unknown Student',
+              partnerCompany: resolvedCompanyName || 
+                              data.partnerCompany || 
+                              data.companyName || 
+                              data.company || 
+                              (companyIdFromData ? `Company ${companyIdFromData}` : 'Unknown Company'),
+              companyId: companyData.companyId || companyIdFromData || '',
+              college: data.college || 'Unknown College',
+              program: data.program || 'Unknown Program',
+              // Normalize semester data
+              semester: normalizeSemester(data.semester),
+              schoolYear: data.schoolYear || '',
+              evaluationScore: Math.round(score * 10) / 10,
+              source: 'surveys',
+              hasCompanyData: !!(companyData.companyId || (companyIdFromData && companiesMap[companyIdFromData]))
+            };
+          });
+          
+          // Set the data from surveys
+          setStudents(surveyData);
+          setLoading(false);
+        } else {
+          console.log("No surveys found, trying studentData collection");
+          
+          // Fallback to studentData if no surveys found
+          const q = query(collection(db, 'studentData'));
+          const snapshot = await getDocs(q);
+          
+          const studentsList = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // Check if we have company data for this student
+            const companyData = companyStudentsMap[doc.id] || {};
+            
+            // Look for any company ID reference in the data
+            const companyIdFromData = data.companyId || data.company_id || '';
+            
+            // If we have a company ID but no company data, try to look it up in the companies map
+            let resolvedCompanyName = companyData.companyName;
+            if (!resolvedCompanyName && companyIdFromData && companiesMap[companyIdFromData]) {
+              resolvedCompanyName = companiesMap[companyIdFromData].name;
+            }
+            
+            return {
+              id: doc.id,
+              ...data,
+              // Normalize field names to ensure consistency
+              name: data.name || data.studentName || 'Unknown Student',
+              partnerCompany: resolvedCompanyName || 
+                              data.partnerCompany || 
+                              data.companyName || 
+                              data.company || 
+                              (companyIdFromData ? `Company ${companyIdFromData}` : 'Unknown Company'),
+              companyId: companyData.companyId || companyIdFromData || '',
+              college: data.college || 'Unknown College',
+              program: data.program || 'Unknown Program',
+              // Normalize semester data
+              semester: normalizeSemester(data.semester),
+              schoolYear: data.schoolYear || '',
+              evaluationScore: calculateEvaluationScore(data.evaluation || ''),
+              source: 'studentData',
+              hasCompanyData: !!(companyData.companyId || (companyIdFromData && companiesMap[companyIdFromData]))
+            };
+          });
+          
+          console.log(`Found ${studentsList.length} student records`);
+          setStudents(studentsList);
+          setLoading(false);
+        }
       } catch (error) {
         console.error("Error fetching students:", error);
-        setError(error.message);
-        setLoading(false);
+        
+        // Try the fallback approach if first attempt fails
+        try {
+          console.log("First approach failed, trying fallback to studentData");
+          
+          // Create a new companiesMap for the fallback
+          let fallbackCompaniesMap = {};
+          
+          // Try to fetch companies data in the fallback approach
+          try {
+            console.log("Fetching companies collection for fallback");
+            const companiesQuery = query(collection(db, 'companies'));
+            const companiesSnapshot = await getDocs(companiesQuery);
+            
+            // Create a map of company IDs to company names
+            fallbackCompaniesMap = companiesSnapshot.docs.reduce((map, doc) => {
+              const data = doc.data();
+              map[doc.id] = {
+                id: doc.id,
+                name: data.name || data.companyName || doc.id,
+                ...data
+              };
+              return map;
+            }, {});
+            
+            console.log("Created fallback map of companies:", Object.keys(fallbackCompaniesMap).length);
+          } catch (companiesError) {
+            console.error("Error fetching companies for fallback:", companiesError);
+            // Continue even if this fails
+          }
+          
+          const q = query(collection(db, 'studentData'));
+          const snapshot = await getDocs(q);
+          
+          const studentsList = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // Look for any company ID reference in the data
+            const companyIdFromData = data.companyId || data.company_id || '';
+            
+            // Try to look up company name from companies map if we have a company ID
+            let resolvedCompanyName = null;
+            if (companyIdFromData && fallbackCompaniesMap[companyIdFromData]) {
+              resolvedCompanyName = fallbackCompaniesMap[companyIdFromData].name;
+            }
+            
+            return {
+              id: doc.id,
+              ...data,
+              // Normalize field names to ensure consistency
+              name: data.name || data.studentName || 'Unknown Student',
+              partnerCompany: resolvedCompanyName || 
+                              data.partnerCompany || 
+                              data.companyName || 
+                              data.company || 
+                              (companyIdFromData ? `Company ${companyIdFromData}` : 'Unknown Company'),
+              companyId: companyIdFromData || '',
+              college: data.college || 'Unknown College',
+              program: data.program || 'Unknown Program',
+              // Normalize semester data
+              semester: normalizeSemester(data.semester),
+              schoolYear: data.schoolYear || '',
+              evaluationScore: calculateEvaluationScore(data.evaluation || ''),
+              source: 'studentData',
+              hasCompanyData: !!(companyIdFromData && fallbackCompaniesMap[companyIdFromData])
+            };
+          });
+          
+          console.log(`Found ${studentsList.length} student records from fallback`);
+          setStudents(studentsList);
+          setLoading(false);
+        } catch (fallbackError) {
+          console.error("Error with fallback approach:", fallbackError);
+          setError(`Error loading data: ${error.message}. Fallback also failed.`);
+          setLoading(false);
+        }
       }
     }
 
     fetchStudents();
   }, [currentUser]);
+
+  useEffect(() => {
+    // After students are loaded, log all semester values for debugging
+    if (students.length > 0 && !loading) {
+      const allSemesters = [...new Set(students.map(s => s.semester))].filter(Boolean);
+      console.log("All available semester values:", allSemesters);
+    }
+  }, [students, loading]);
 
   // Reset page and program when college changes
   useEffect(() => {
@@ -219,30 +505,55 @@ function AdminRankings() {
     
     const positiveKeywords = [
       'excellent', 'outstanding', 'exceptional', 'great', 'good', 
-      'skilled', 'proficient', 'talented', 'impressive', 'dedicated'
+      'skilled', 'proficient', 'talented', 'impressive', 'dedicated',
+      'reliable', 'innovative', 'efficient', 'thorough', 'professional'
     ];
     
     const normalizedText = evaluation.toLowerCase();
-    let score = Math.min(evaluation.length / 100, 5); // Max 5 points for length
     
-    // Add points for positive keywords
-    positiveKeywords.forEach(keyword => {
-      if (normalizedText.includes(keyword)) {
-        score += 1;
-      }
-    });
+    // Base score from evaluation length (max 4 points)
+    let score = Math.min(evaluation.length / 100, 4);
+    
+    // Score from positive keywords (max 4 points)
+    const keywordScore = positiveKeywords.reduce((acc, keyword) => {
+      return acc + (normalizedText.includes(keyword) ? 0.4 : 0);
+    }, 0);
+    
+    // Add keyword score
+    score += Math.min(keywordScore, 4);
+    
+    // Add 2 points if evaluation is comprehensive (contains multiple sentences)
+    const sentences = evaluation.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    if (sentences.length >= 3) {
+      score += 2;
+    }
     
     return Math.min(score, 10); // Cap at 10
   };
 
   // Filter students based on selected filters
   const filteredStudents = students.filter(student => {
-    return (
-      (selectedCollege === 'All' || student.college === selectedCollege) &&
-      (selectedProgram === 'All' || student.program === selectedProgram) &&
-      (selectedSemester === 'All' || student.semester === selectedSemester) &&
-      (selectedYear === 'All' || student.schoolYear === selectedYear)
-    );
+    const collegeMatches = selectedCollege === 'All' || student.college === selectedCollege;
+    const programMatches = selectedProgram === 'All' || student.program === selectedProgram;
+    
+    // Get normalized versions for comparison
+    const normalizedStudentSemester = normalizeSemester(student.semester);
+    const normalizedSelectedSemester = normalizeSemester(selectedSemester);
+    
+    // Multiple ways to match semesters
+    const semesterMatches = 
+      selectedSemester === 'All' || 
+      normalizedStudentSemester === normalizedSelectedSemester ||
+      (student.semester && student.semester === selectedSemester) ||
+      (student.semester && student.semester.toLowerCase().includes(selectedSemester.toLowerCase()));
+    
+    const yearMatches = selectedYear === 'All' || student.schoolYear === selectedYear;
+    
+    if (selectedSemester !== 'All' && !semesterMatches && student.semester) {
+      console.log(`Non-matching semester: Student "${student.semester}" vs Selected "${selectedSemester}"`);
+    }
+    
+    return collegeMatches && programMatches && semesterMatches && yearMatches;
   });
 
   // Sort students by evaluation score
@@ -282,16 +593,21 @@ function AdminRankings() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4, height: '50vh', alignItems: 'center' }}>
-        <CircularProgress sx={{ color: maroon }} />
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="body1" color="text.secondary">
+          Loading university-wide rankings...
+        </Typography>
+        <LinearProgress sx={{ mt: 1, backgroundColor: 'rgba(128, 0, 0, 0.1)', '& .MuiLinearProgress-bar': { backgroundColor: maroon } }} />
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3, color: 'error.main', textAlign: 'center' }}>
-        <Typography variant="h6">Error: {error}</Typography>
+      <Box sx={{ mt: 2, color: 'error.main' }}>
+        <Typography variant="body1">
+          Error loading rankings: {error}
+        </Typography>
       </Box>
     );
   }
@@ -311,6 +627,27 @@ function AdminRankings() {
             University-Wide Student Rankings
           </Typography>
         </Box>
+        
+        <Typography 
+          variant="body2" 
+          color="text.secondary" 
+          sx={{ 
+            mb: 2, 
+            fontStyle: 'italic',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <Box component="span" sx={{ 
+            display: 'inline-block', 
+            width: 8, 
+            height: 8, 
+            borderRadius: '50%', 
+            bgcolor: 'info.main', 
+            mr: 1 
+          }} />
+          Showing all students for accurate comparison. Use filters above to narrow results by college, program, semester, or school year.
+        </Typography>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} md={3}>
@@ -431,9 +768,53 @@ function AdminRankings() {
                               {index + 1}
                             </RankingBadge>
                           </TableCell>
-                          <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
+                          <TableCell sx={{ py: 1 }}>
+                            <Typography 
+                              variant="body2" 
+                              fontWeight="medium" 
+                              sx={{ 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '200px',
+                                display: 'block'
+                              }}
+                              title={student.name || 'Unknown Student'}
+                            >
+                              {student.name || 'Unknown Student'}
+                            </Typography>
+                          </TableCell>
                           <TableCell sx={{ py: 1 }}>{student.program}</TableCell>
-                          <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
+                          <TableCell sx={{ py: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {student.hasCompanyData && (
+                                <Business 
+                                  fontSize="small" 
+                                  sx={{ 
+                                    mr: 0.5, 
+                                    color: maroon,
+                                    opacity: 0.7,
+                                    fontSize: '0.8rem'
+                                  }}
+                                />
+                              )}
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  maxWidth: student.hasCompanyData ? '180px' : '200px',
+                                  display: 'block',
+                                  color: student.hasCompanyData ? maroon : 'text.secondary',
+                                  fontWeight: student.hasCompanyData ? 'medium' : 'normal'
+                                }}
+                                title={student.partnerCompany || 'Unknown Company'}
+                              >
+                                {student.partnerCompany || 'Unknown Company'}
+                              </Typography>
+                            </Box>
+                          </TableCell>
                           <TableCell sx={{ py: 1, textAlign: 'center' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Box sx={{ 
@@ -523,9 +904,53 @@ function AdminRankings() {
                                       {actualRank}
                                     </RankingBadge>
                                   </TableCell>
-                                  <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
+                                  <TableCell sx={{ py: 1 }}>
+                                    <Typography 
+                                      variant="body2" 
+                                      fontWeight="medium" 
+                                      sx={{ 
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: '200px',
+                                        display: 'block'
+                                      }}
+                                      title={student.name || 'Unknown Student'}
+                                    >
+                                      {student.name || 'Unknown Student'}
+                                    </Typography>
+                                  </TableCell>
                                   <TableCell sx={{ py: 1 }}>{student.program}</TableCell>
-                                  <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
+                                  <TableCell sx={{ py: 1 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      {student.hasCompanyData && (
+                                        <Business 
+                                          fontSize="small" 
+                                          sx={{ 
+                                            mr: 0.5, 
+                                            color: maroon,
+                                            opacity: 0.7,
+                                            fontSize: '0.8rem'
+                                          }}
+                                        />
+                                      )}
+                                      <Typography 
+                                        variant="body2" 
+                                        sx={{ 
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                          maxWidth: student.hasCompanyData ? '180px' : '200px',
+                                          display: 'block',
+                                          color: student.hasCompanyData ? maroon : 'text.secondary',
+                                          fontWeight: student.hasCompanyData ? 'medium' : 'normal'
+                                        }}
+                                        title={student.partnerCompany || 'Unknown Company'}
+                                      >
+                                        {student.partnerCompany || 'Unknown Company'}
+                                      </Typography>
+                                    </Box>
+                                  </TableCell>
                                   <TableCell sx={{ py: 1, textAlign: 'center' }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                       <Box sx={{ 
@@ -639,11 +1064,55 @@ function AdminRankings() {
                                     {actualRank}
                                   </RankingBadge>
                                 </TableCell>
-                                <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
+                                <TableCell sx={{ py: 1 }}>
+                                  <Typography 
+                                    variant="body2" 
+                                    fontWeight="medium" 
+                                    sx={{ 
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: '200px',
+                                      display: 'block'
+                                    }}
+                                    title={student.name || 'Unknown Student'}
+                                  >
+                                    {student.name || 'Unknown Student'}
+                                  </Typography>
+                                </TableCell>
                                 {selectedCollege === 'All' && (
                                   <TableCell sx={{ py: 1 }}>{student.college}</TableCell>
                                 )}
-                                <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
+                                <TableCell sx={{ py: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    {student.hasCompanyData && (
+                                      <Business 
+                                        fontSize="small" 
+                                        sx={{ 
+                                          mr: 0.5, 
+                                          color: maroon,
+                                          opacity: 0.7,
+                                          fontSize: '0.8rem'
+                                        }}
+                                      />
+                                    )}
+                                    <Typography 
+                                      variant="body2" 
+                                      sx={{ 
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: student.hasCompanyData ? '180px' : '200px',
+                                        display: 'block',
+                                        color: student.hasCompanyData ? maroon : 'text.secondary',
+                                        fontWeight: student.hasCompanyData ? 'medium' : 'normal'
+                                      }}
+                                      title={student.partnerCompany || 'Unknown Company'}
+                                    >
+                                      {student.partnerCompany || 'Unknown Company'}
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <Box sx={{ 

@@ -155,12 +155,15 @@ export default function SignUp() {
     
     // Validation for phone number and ID number fields
     if (name === 'phoneNumber' || name === 'idNumber') {
-      // xx-xxxx-xxx
+      // Only allow numbers and hyphens
       const validatedValue = value.replace(/[^0-9-]/g, '');
-      setUserData(prev => ({
-        ...prev,
-        [name]: validatedValue
-      }));
+      // Ensure proper format: numbers and hyphens only
+      if (validatedValue === '' || /^[0-9-]*$/.test(validatedValue)) {
+        setUserData(prev => ({
+          ...prev,
+          [name]: validatedValue
+        }));
+      }
     } else {
       setUserData(prev => ({
         ...prev,
@@ -346,7 +349,7 @@ export default function SignUp() {
                   label="ID Number"
                   value={userData.idNumber}
                   onChange={handleChange}
-                  inputProps={{ inputMode: 'numeric', pattern: '[0-9-]*' }}
+                  inputProps={{ inputMode: 'numeric' }}
                   placeholder="Numbers and dashes only"
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -376,7 +379,7 @@ export default function SignUp() {
                   label="Phone Number"
                   value={userData.phoneNumber}
                   onChange={handleChange}
-                  inputProps={{ inputMode: 'numeric', pattern: '[0-9-]*' }}
+                  inputProps={{ inputMode: 'numeric' }}
                   placeholder="Numbers and dashes only"
                   sx={{
                     '& .MuiOutlinedInput-root': {

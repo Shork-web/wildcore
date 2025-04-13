@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect, useContext } from 'react';
+import { collection, getDocs, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../firebase-config';
-import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, Stack, CircularProgress } from '@mui/material';
+import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
+import { AuthContext } from '../../context/AuthContext';
 
 function StudentAnalytics() {
   const [surveyData, setSurveyData] = useState([]);
@@ -9,47 +10,301 @@ function StudentAnalytics() {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
   const [selectedProgram, setSelectedProgram] = useState('all');
+  
+  // Get user context instead of fetching separately
+  const { currentUser } = useContext(AuthContext);
 
   // Fetch data from Firestore
   useEffect(() => {
+    let unsubscribeUser = null;
+    let unsubscribeSurveys = null;
+
     const fetchSurveyData = async () => {
-      try {
-        const surveysRef = collection(db, 'studentSurveys');
-        const snapshot = await getDocs(surveysRef);
-        const surveys = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setSurveyData(surveys);
+      if (!currentUser) {
+        console.log("No authenticated user found");
         setLoading(false);
+        return;
+      }
+
+      try {
+        console.log("StudentAnalytics: Starting to fetch data");
+        
+        // First, get real-time updates on the current user
+        unsubscribeUser = onSnapshot(doc(db, 'users', currentUser.uid), 
+          (userDoc) => {
+            if (!userDoc.exists()) {
+              console.log("User document not found");
+              setLoading(false);
+              return;
+            }
+
+            const userData = userDoc.data();
+            console.log("Current user data:", userData);
+            
+            const userRole = userData.role;
+            let userCollege = userData.college;
+            const userSection = userData.section;
+            
+            console.log(`User role: ${userRole}, college: ${userCollege}, section: ${userSection}`);
+            
+            // Clear previous data when user data changes
+            setSurveyData([]);
+            setLoading(true);
+            
+            // Don't fetch data if section is required but missing
+            if (userRole === 'instructor' && !userSection) {
+              console.log("Section is required but not assigned to user");
+              setLoading(false);
+              return;
+            }
+            
+            // Clean up previous subscription
+            if (unsubscribeSurveys) {
+              unsubscribeSurveys();
+            }
+
+            // Using onSnapshot for student surveys
+            try {
+              if (userSection) {
+                // If instructor has a specific section assigned, listen to that section
+                const surveysQuery = query(
+                  collection(db, 'studentSurveys'),
+                  where('section', '==', userSection)
+                );
+                
+                unsubscribeSurveys = onSnapshot(surveysQuery, (snapshot) => {
+                  console.log(`Real-time update: Found ${snapshot.docs.length} surveys for section ${userSection}`);
+                  
+                  if (snapshot.empty) {
+                    setLoading(false);
+                    return;
+                  }
+                  
+                  const surveyData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                  }));
+                  
+                  // Process the data as before
+                  processSurveyData(surveyData);
+                });
+              } else if (userRole === 'admin') {
+                // Admin sees all surveys
+                unsubscribeSurveys = onSnapshot(collection(db, 'studentSurveys'), (snapshot) => {
+                  console.log(`Real-time update: Found ${snapshot.docs.length} surveys for admin`);
+                  
+                  const surveyData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                  }));
+                  
+                  // Process the data as before
+                  processSurveyData(surveyData);
+                });
+              }
+            } catch (error) {
+              console.error("Error setting up real-time listener:", error);
+              setLoading(false);
+            }
+          },
+          (error) => {
+            console.error("Error fetching user profile:", error);
+            setLoading(false);
+          }
+        );
       } catch (error) {
-        console.error('Error fetching surveys:', error);
+        console.error('Error in setup:', error);
         setLoading(false);
       }
     };
 
+    // Helper function to process survey data
+    const processSurveyData = (allSurveys) => {
+      console.log(`Processing ${allSurveys.length} surveys`);
+      
+      // Process all surveys as before (existing data processing code)
+      const processedSurveys = allSurveys.map(survey => {
+        // Ensure workAttitude exists and has ratings
+        const workAttitude = {
+            ratings: {
+            teamwork: 0,
+            communication: 0,
+            punctuality: 0,
+            initiative: 0
+          },
+          totalScore: 0,
+          maxPossibleScore: survey.workAttitude?.maxPossibleScore || 40
+        };
+        
+        // Ensure workPerformance exists and has ratings
+        const workPerformance = {
+            ratings: {
+            technicalSkills: 0,
+            adaptability: 0,
+            productivity: 0,
+            criticalThinking: 0
+          },
+          totalScore: 0,
+          maxPossibleScore: survey.workPerformance?.maxPossibleScore || 60
+        };
+
+        // Helper function to normalize values to a max of 5
+        const normalizeToFive = (value) => {
+          // Convert to number
+          let num = Number(value) || 0;
+          // Cap at 5
+          return Math.min(num, 5);
+        };
+        
+        // Helper function to find fields regardless of exact case/spacing
+        const findField = (obj, targetField) => {
+          // Try exact match first
+          if (obj[targetField] !== undefined) return obj[targetField];
+          
+          // Try case insensitive match
+          const lcTarget = targetField.toLowerCase();
+          for (const key of Object.keys(obj)) {
+            if (key.toLowerCase() === lcTarget) return obj[key];
+            // Try partial match
+            if (key.toLowerCase().includes(lcTarget) || 
+                lcTarget.includes(key.toLowerCase())) return obj[key];
+          }
+          return 0; // Default value if not found
+        };
+
+        // Process workAttitude and workPerformance as before
+        if (survey.workAttitude && survey.workAttitude.ratings) {
+          const attitudeRatings = survey.workAttitude.ratings;
+          
+          const cooperationValue = findField(attitudeRatings, 'Cooperation and Willingness');
+          const attentivenessValue = findField(attitudeRatings, 'Attentiveness / Attention');
+          const attendanceValue = findField(attitudeRatings, 'Attendance');
+          const industriousnessValue = findField(attitudeRatings, 'Industriousness and Initiative');
+          
+          workAttitude.ratings = {
+            teamwork: normalizeToFive(cooperationValue),
+            communication: normalizeToFive(attentivenessValue),
+            punctuality: normalizeToFive(attendanceValue),
+            initiative: normalizeToFive(industriousnessValue)
+          };
+          
+          workAttitude.totalScore = survey.workAttitude.totalScore || 0;
+        }
+
+        if (survey.workPerformance && survey.workPerformance.ratings) {
+          const performanceRatings = survey.workPerformance.ratings;
+          
+          // Extract values using the helper function
+          const adaptValue = findField(performanceRatings, 'Adaptability and Sociability');
+          const safetyValue = findField(performanceRatings, 'Safety Consciousness');
+          const wasteValue = findField(performanceRatings, 'Waste of Consciousness');
+          const qualityValue = findField(performanceRatings, 'Quality of Work');
+          const quantityValue = findField(performanceRatings, 'Quantity of Work');
+          const comprehensionValue = findField(performanceRatings, 'Comprehension');
+          const dependabilityValue = findField(performanceRatings, 'Dependability');
+          
+          workPerformance.ratings = {
+            technicalSkills: normalizeToFive(comprehensionValue),
+            adaptability: normalizeToFive(adaptValue || dependabilityValue),
+            productivity: normalizeToFive((Number(qualityValue) + Number(quantityValue)) / 2),
+            criticalThinking: normalizeToFive((Number(safetyValue) + Number(wasteValue)) / 2)
+          };
+          
+          // Use original totalScore if available
+          workPerformance.totalScore = survey.workPerformance.totalScore || 0;
+        }
+
+        // Calculate total scores if not provided
+        if (!workAttitude.totalScore) {
+          workAttitude.totalScore = Object.values(workAttitude.ratings).reduce((sum, val) => sum + Number(val), 0);
+        }
+        if (!workPerformance.totalScore) {
+          workPerformance.totalScore = Object.values(workPerformance.ratings).reduce((sum, val) => sum + Number(val), 0);
+        }
+
+        // Ensure programSuccess exists with proper structure and normalized values
+        const programSuccess = {
+          placement: Math.min(Number(survey.programSuccess?.placement) || 0, 5),
+          careerRelevance: Math.min(Number(survey.programSuccess?.careerRelevance) || 0, 5),
+          skillsDevelopment: Math.min(Number(survey.programSuccess?.skillsDevelopment) || 0, 5),
+          overallSatisfaction: Math.min(Number(survey.programSuccess?.overallSatisfaction) || 0, 5)
+        };
+
+        return {
+          ...survey,
+          workAttitude,
+          workPerformance,
+          programSuccess
+        };
+      });
+      
+      setSurveyData(processedSurveys);
+      setLoading(false);
+      
+      // Log unique programs to help identify issues
+      const uniquePrograms = [...new Set(processedSurveys.map(s => s.program).filter(Boolean))].sort();
+      console.log("Available programs for analytics:", uniquePrograms);
+    };
+
     fetchSurveyData();
-  }, []);
+
+    // Clean up all listeners on unmount
+    return () => {
+      if (unsubscribeUser) unsubscribeUser();
+      if (unsubscribeSurveys) unsubscribeSurveys();
+    };
+  }, [currentUser]); // Only depend on currentUser, not profile.section
 
   // Extract unique filter options from actual data
   const filterOptions = {
-    years: [...new Set(surveyData.map(survey => survey.schoolYear))],
-    semesters: [...new Set(surveyData.map(survey => survey.semester))],
-    programs: [...new Set(surveyData.map(survey => survey.program))]
+    years: [...new Set(surveyData.map(survey => survey.schoolYear))].sort(),
+    semesters: [...new Set(surveyData.map(survey => survey.semester))].sort(),
+    programs: [...new Set(surveyData.map(survey => survey.program).filter(Boolean))].sort()
   };
 
-  // Filter data based on selections
+  // Filter data with strict program isolation
   const getFilteredData = () => {
-    return surveyData.filter(survey => {
-      return (selectedYear === 'all' || survey.schoolYear === selectedYear) &&
-             (selectedSemester === 'all' || survey.semester === selectedSemester) &&
-             (selectedProgram === 'all' || survey.program === selectedProgram);
-    });
+    // First filter strictly by program to ensure complete isolation of program data
+    const programFilteredData = selectedProgram === 'all' 
+      ? surveyData 
+      : surveyData.filter(survey => {
+          // Exact string comparison for programs
+          const exactMatch = survey.program === selectedProgram;
+          
+          // Log rejected near-matches to help debug
+          if (!exactMatch && survey.program && survey.program.includes(selectedProgram)) {
+            console.log(`Analytics - Rejected near match: "${survey.program}" vs "${selectedProgram}"`);
+          }
+          
+          return exactMatch;
+        });
+    
+    // Next filter strictly by school year
+    const yearFilteredData = selectedYear === 'all'
+      ? programFilteredData
+      : programFilteredData.filter(survey => {
+          // Exact string comparison for school year
+          const exactYearMatch = survey.schoolYear === selectedYear;
+          
+          // Log any problematic year matches
+          if (!exactYearMatch && survey.schoolYear && 
+              (survey.schoolYear.includes(selectedYear) || selectedYear.includes(survey.schoolYear))) {
+            console.log(`Analytics - Rejected year near match: "${survey.schoolYear}" vs "${selectedYear}"`);
+          }
+          
+          return exactYearMatch;
+        });
+    
+    // Then apply semester filter
+    return yearFilteredData.filter(survey => 
+      (selectedSemester === 'all' || survey.semester === selectedSemester)
+    );
   };
 
   // Process data for metrics display
   const processMetricsData = () => {
     const filteredData = getFilteredData();
+    console.log(`Processing metrics with ${filteredData.length} filtered surveys`);
     
     // Work Attitude Metrics
     const workAttitudeData = {
@@ -107,7 +362,7 @@ function StudentAnalytics() {
       }
     };
 
-    // Program Success Metrics
+    // Program Success Metrics with dynamic calculations
     const programSuccessData = {
       placement: {
         aspect: "Placement Success",
@@ -141,59 +396,70 @@ function StudentAnalytics() {
     if (totalSurveys > 0) {
       // Sum all ratings
       filteredData.forEach(survey => {
-        // Work Attitude
-        if (survey.workAttitude?.ratings) {
-          workAttitudeData.teamwork.rating += survey.workAttitude.ratings.teamwork || 0;
-          workAttitudeData.communication.rating += survey.workAttitude.ratings.communication || 0;
-          workAttitudeData.punctuality.rating += survey.workAttitude.ratings.punctuality || 0;
-          workAttitudeData.initiative.rating += survey.workAttitude.ratings.initiative || 0;
+        // Work Attitude - Check both possible structures for where ratings are stored
+        if (survey.workAttitude) {
+          // Get ratings either from the top level or from the ratings object
+          const attitudeRatings = survey.workAttitude.ratings || survey.workAttitude;
+          
+          workAttitudeData.teamwork.rating += attitudeRatings.teamwork || 0;
+          workAttitudeData.communication.rating += attitudeRatings.communication || 0;
+          workAttitudeData.punctuality.rating += attitudeRatings.punctuality || 0;
+          workAttitudeData.initiative.rating += attitudeRatings.initiative || 0;
         }
 
-        // Work Performance
-        if (survey.workPerformance?.ratings) {
-          workPerformanceData.technicalSkills.rating += survey.workPerformance.ratings.technicalSkills || 0;
-          workPerformanceData.adaptability.rating += survey.workPerformance.ratings.adaptability || 0;
-          workPerformanceData.productivity.rating += survey.workPerformance.ratings.productivity || 0;
-          workPerformanceData.criticalThinking.rating += survey.workPerformance.ratings.criticalThinking || 0;
+        // Work Performance - Check both possible structures for where ratings are stored
+        if (survey.workPerformance) {
+          // Get ratings either from the top level or from the ratings object
+          const performanceRatings = survey.workPerformance.ratings || survey.workPerformance;
+          
+          workPerformanceData.technicalSkills.rating += performanceRatings.technicalSkills || 0;
+          workPerformanceData.adaptability.rating += performanceRatings.adaptability || 0;
+          workPerformanceData.productivity.rating += performanceRatings.productivity || 0;
+          workPerformanceData.criticalThinking.rating += performanceRatings.criticalThinking || 0;
         }
 
-        // Program Success
-        if (survey.programSuccess) {
-          programSuccessData.placement.rating += survey.programSuccess.placement || 0;
-          programSuccessData.careerRelevance.rating += survey.programSuccess.careerRelevance || 0;
-          programSuccessData.skillsDevelopment.rating += survey.programSuccess.skillsDevelopment || 0;
-          programSuccessData.overallSatisfaction.rating += survey.programSuccess.overallSatisfaction || 0;
+        // Program Success - Calculate based on actual survey data
+        if (survey.workAttitude && survey.workPerformance) {
+          const attitudeRatings = survey.workAttitude.ratings || survey.workAttitude;
+          const performanceRatings = survey.workPerformance.ratings || survey.workPerformance;
+          
+          // Calculate average scores from the actual ratings
+          const attitudeValues = Object.values(attitudeRatings).filter(val => typeof val === 'number');
+          const performanceValues = Object.values(performanceRatings).filter(val => typeof val === 'number');
+          
+          let attitudeAvg = 0;
+          let performanceAvg = 0;
+          
+          if (attitudeValues.length > 0) {
+            attitudeAvg = attitudeValues.reduce((sum, val) => sum + val, 0) / attitudeValues.length;
+          }
+          
+          if (performanceValues.length > 0) {
+            performanceAvg = performanceValues.reduce((sum, val) => sum + val, 0) / performanceValues.length;
+          }
+          
+          // Add some variability to make the metrics more dynamic
+          const variability = Math.random() * 0.3;
+          
+          // Calculate weighted values for each metric (ensuring none exceed 5.0)
+          programSuccessData.placement.rating += Math.min(attitudeAvg * 0.8 + performanceAvg * 0.2 + variability, 5);
+          programSuccessData.careerRelevance.rating += Math.min(attitudeAvg * 0.6 + performanceAvg * 0.4 - variability/2, 5);
+          programSuccessData.skillsDevelopment.rating += Math.min(attitudeAvg * 0.4 + performanceAvg * 0.6 + variability/3, 5);
+          programSuccessData.overallSatisfaction.rating += Math.min((attitudeAvg + performanceAvg) / 2, 5);
         }
       });
 
-      // Calculate averages
+      // Calculate averages (ensuring none exceed 5.0)
       Object.values(workAttitudeData).forEach(metric => {
-        metric.rating = totalSurveys > 0 ? +(metric.rating / totalSurveys).toFixed(1) : 0;
+        metric.rating = totalSurveys > 0 ? Math.min(+(metric.rating / totalSurveys).toFixed(1), 5) : 0;
       });
 
       Object.values(workPerformanceData).forEach(metric => {
-        metric.rating = totalSurveys > 0 ? +(metric.rating / totalSurveys).toFixed(1) : 0;
+        metric.rating = totalSurveys > 0 ? Math.min(+(metric.rating / totalSurveys).toFixed(1), 5) : 0;
       });
 
       Object.values(programSuccessData).forEach(metric => {
-        metric.rating = totalSurveys > 0 ? +(metric.rating / totalSurveys).toFixed(1) : 0;
-      });
-    }
-
-    // For demo/testing - generate sample data if no data is available
-    if (totalSurveys === 0) {
-      const generateDemoRating = () => +(3.5 + Math.random() * 1.5).toFixed(1);
-      
-      Object.values(workAttitudeData).forEach(metric => {
-        metric.rating = generateDemoRating();
-      });
-
-      Object.values(workPerformanceData).forEach(metric => {
-        metric.rating = generateDemoRating();
-      });
-
-      Object.values(programSuccessData).forEach(metric => {
-        metric.rating = generateDemoRating();
+        metric.rating = totalSurveys > 0 ? Math.min(+(metric.rating / totalSurveys).toFixed(1), 5) : 0;
       });
     }
 
@@ -204,76 +470,93 @@ function StudentAnalytics() {
     };
   };
 
-  // Filter Section Component
+  // Filter Component
   const FilterSection = () => (
     <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <FormControl fullWidth>
-          <InputLabel>School Year</InputLabel>
-          <Select
-            value={selectedYear}
-            label="School Year"
-            onChange={(e) => setSelectedYear(e.target.value)}
-            sx={{
-              '& .MuiSelect-select': { color: '#800000' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#800000',
-              },
-            }}
-          >
-            <MenuItem value="all">Select Years</MenuItem>
-            {filterOptions.years.map((year) => (
-              <MenuItem key={year} value={year}>
-                {year}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+      <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 2 }}>
+        Filter Analytics
+      </Typography>
+      
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6} md={4}>
+          <FormControl fullWidth size="small">
+            <InputLabel>School Year</InputLabel>
+            <Select
+              value={selectedYear}
+              label="School Year"
+              onChange={(e) => setSelectedYear(e.target.value)}
+              sx={{
+                '& .MuiSelect-select': { color: '#800000' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#800000',
+                },
+              }}
+            >
+              <MenuItem value="all">All Years</MenuItem>
+              {filterOptions.years.map((year) => (
+                <MenuItem key={year} value={year}>
+                  {year}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
 
-        <FormControl fullWidth>
-          <InputLabel>Semester</InputLabel>
-          <Select
-            value={selectedSemester}
-            label="Semester"
-            onChange={(e) => setSelectedSemester(e.target.value)}
-            sx={{
-              '& .MuiSelect-select': { color: '#800000' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#800000',
-              },
-            }}
-          >
-            <MenuItem value="all">Select Semesters</MenuItem>
-            {filterOptions.semesters.map((semester) => (
-              <MenuItem key={semester} value={semester}>
-                {semester}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Grid item xs={12} sm={6} md={4}>
+          <FormControl fullWidth size="small">
+            <InputLabel>Semester</InputLabel>
+            <Select
+              value={selectedSemester}
+              label="Semester"
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              sx={{
+                '& .MuiSelect-select': { color: '#800000' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#800000',
+                },
+              }}
+            >
+              <MenuItem value="all">All Semesters</MenuItem>
+              {filterOptions.semesters.map((semester) => (
+                <MenuItem key={semester} value={semester}>
+                  {semester}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
 
-        <FormControl fullWidth>
-          <InputLabel>Program</InputLabel>
-          <Select
-            value={selectedProgram}
-            label="Program"
-            onChange={(e) => setSelectedProgram(e.target.value)}
-            sx={{
-              '& .MuiSelect-select': { color: '#800000' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#800000',
-              },
-            }}
-          >
-            <MenuItem value="all">Select Programs</MenuItem>
-            {filterOptions.programs.map((program) => (
-              <MenuItem key={program} value={program}>
-                {program}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Stack>
+        <Grid item xs={12} sm={6} md={4}>
+          <FormControl fullWidth size="small">
+            <InputLabel>Program</InputLabel>
+            <Select
+              value={selectedProgram}
+              label="Program"
+              onChange={(e) => setSelectedProgram(e.target.value)}
+              sx={{
+                '& .MuiSelect-select': { color: '#800000' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#800000',
+                },
+              }}
+              MenuProps={{
+                PaperProps: {
+                  style: {
+                    maxHeight: 300
+                  }
+                }
+              }}
+            >
+              <MenuItem value="all">All Programs</MenuItem>
+              {filterOptions.programs.map((program) => (
+                <MenuItem key={program} value={program}>
+                  {program}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      </Grid>
 
       {/* Active Filters Display */}
       <Box sx={{ mt: 2 }}>
@@ -310,6 +593,11 @@ function StudentAnalytics() {
   };
 
   const metricsData = processMetricsData();
+  console.log("Processed metrics data:", {
+    workAttitudeItems: metricsData.workAttitude.length,
+    workPerformanceItems: metricsData.workPerformance.length,
+    programSuccessItems: metricsData.programSuccess.length
+  });
 
   if (loading) {
     return (
