@@ -402,6 +402,11 @@ function StudentList() {
   const [companySearch, setCompanySearch] = useState('');
   const [companies, setCompanies] = useState([]);
 
+  // Debug log for currentUser
+  useEffect(() => {
+    console.log('StudentList component - Current user:', currentUser);
+  }, [currentUser]);
+
   useEffect(() => {
     const unsubscribe = studentManager.subscribe(() => {
       const allStudents = studentManager.students;
@@ -420,6 +425,15 @@ function StudentList() {
     setCompanies(uniqueCompanies);
   }, [students]);
 
+  // Ensure data is refreshed when component mounts or when currentUser changes
+  useEffect(() => {
+    if (studentManager && currentUser) {
+      console.log('Refreshing data on component mount or when currentUser changes');
+      studentManager.refreshDataOnSectionChange(currentUser);
+    }
+  }, [currentUser, studentManager]);
+
+  // Original effect to refresh when section changes
   useEffect(() => {
     if (studentManager && currentUser?.profile?.section !== undefined) {
       console.log('Section detected in user profile:', currentUser.profile.section);

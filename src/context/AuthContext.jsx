@@ -26,12 +26,31 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-      setCurrentUser(user);
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setUserRole(userDoc.data().role);
+        try {
+          // Fetch user profile data
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            // Create an enhanced user object with profile data
+            const enhancedUser = {
+              ...user,
+              profile: userData,
+              role: userData.role
+            };
+            setCurrentUser(enhancedUser);
+            setUserRole(userData.role);
+          } else {
+            console.error('User document does not exist');
+            setCurrentUser(user);
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          setCurrentUser(user);
         }
+      } else {
+        setCurrentUser(null);
+        setUserRole(null);
       }
       setLoading(false);
     });

@@ -201,35 +201,59 @@ const fetchStudentScores = async (studentsList) => {
     
     surveysSnapshot.docs.forEach(doc => {
       const survey = doc.data();
-      if (survey.studentId && survey.totalScore) {
+      if (survey.studentId) {
+        let score = 0;
+        
+        // Use the totalScore if available (normalized to a 10-point scale)
+        if (survey.totalScore !== undefined && survey.maxPossibleScore) {
+          score = (survey.totalScore / survey.maxPossibleScore) * 10;
+        } 
+        // Otherwise try to calculate from workAttitude and workPerformance
+        else if (survey.workAttitude && survey.workPerformance) {
+          const attitudeScore = survey.workAttitude.totalScore || 0;
+          const attitudeMax = survey.workAttitude.maxPossibleScore || 40;
+          
+          const performanceScore = survey.workPerformance.totalScore || 0;
+          const performanceMax = survey.workPerformance.maxPossibleScore || 60;
+          
+          // Calculate combined score (normalized to 10)
+          const totalMax = attitudeMax + performanceMax;
+          const totalScore = attitudeScore + performanceScore;
+          
+          score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
+        }
+        
         if (!surveyScores[survey.studentId]) {
           surveyScores[survey.studentId] = [];
         }
-        // Normalize score to 10-point scale
-        const normalizedScore = (survey.totalScore / survey.maxPossibleScore) * 10;
-        surveyScores[survey.studentId].push(normalizedScore);
+        surveyScores[survey.studentId].push(score);
       }
     });
 
-    // Update students with combined scores
+    // Update students with scores, prioritizing survey data
     return studentsList.map(student => {
-      const surveyScore = surveyScores[student.id] 
-        ? (surveyScores[student.id].reduce((a, b) => a + b, 0) / surveyScores[student.id].length)
-        : 0;
-        
-      const evaluationScore = calculateEvaluationScore(student.evaluation || '');
+      let finalScore;
       
-      // Combine scores - 60% survey score, 40% evaluation score
-      const combinedScore = (surveyScore * 0.6) + (evaluationScore * 0.4);
+      // If survey data exists, use the average of all survey scores
+      if (surveyScores[student.id] && surveyScores[student.id].length > 0) {
+        finalScore = surveyScores[student.id].reduce((a, b) => a + b, 0) / surveyScores[student.id].length;
+      } else {
+        // Fallback to evaluation score if no survey data exists
+        finalScore = calculateEvaluationScore(student.evaluation || '');
+      }
       
       return {
         ...student,
-        evaluationScore: Number(combinedScore.toFixed(1))
+        evaluationScore: Math.round(finalScore * 10) / 10
       };
     });
   } catch (error) {
     console.error("Error fetching scores:", error);
-    return studentsList;
+    // Fallback to only using evaluation scores if survey fetch fails
+    return studentsList.map(student => ({
+      ...student,
+      evaluationScore: calculateEvaluationScore(student.evaluation || '')
+    }));
   }
 };
 
@@ -255,6 +279,24 @@ function StudentRankings() {
   const availableSemesters = ['All', 'First', 'Second', 'Summer'];
   const availableYears = ['All', ...new Set(students.map(student => student.schoolYear))].sort().reverse();
 
+  // Helper function to normalize semester values
+  const normalizeSemester = (semester) => {
+    if (!semester) return '';
+    
+    const semesterStr = semester.toString().trim().toLowerCase();
+    
+    if (semesterStr.includes('first') || semesterStr === '1' || semesterStr === '1st') {
+      return 'First';
+    } else if (semesterStr.includes('second') || semesterStr === '2' || semesterStr === '2nd') {
+      return 'Second';
+    } else if (semesterStr.includes('summer') || semesterStr === '3' || semesterStr === '3rd') {
+      return 'Summer';
+    }
+    
+    // If no match, return the original value with first letter capitalized
+    return semester.charAt(0).toUpperCase() + semester.slice(1);
+  };
+
   useEffect(() => {
     let q;
     let userUnsubscribe;
@@ -276,7 +318,9 @@ function StudentRankings() {
             async (querySnapshot) => {
               const initialStudentsList = querySnapshot.docs.map(doc => ({
                 id: doc.id,
-                ...doc.data()
+                ...doc.data(),
+                // Normalize semester data
+                semester: normalizeSemester(doc.data().semester)
               }));
               
               const studentsWithScores = await fetchStudentScores(initialStudentsList);
@@ -317,21 +361,22 @@ function StudentRankings() {
     // Strict equality check for program
     const programMatch = selectedProgram === 'All' || student.program === selectedProgram;
     
+    // Get normalized versions for comparison
+    const normalizedStudentSemester = normalizeSemester(student.semester);
+    const normalizedSelectedSemester = normalizeSemester(selectedSemester);
+    
+    // Multiple ways to match semesters
+    const semesterMatch = 
+      selectedSemester === 'All' || 
+      normalizedStudentSemester === normalizedSelectedSemester ||
+      (student.semester && student.semester === selectedSemester) ||
+      (student.semester && student.semester.toLowerCase().includes(selectedSemester.toLowerCase()));
+    
     // Strict equality check for year
     const yearMatch = selectedYear === 'All' || student.schoolYear === selectedYear;
     
-    // Strict equality check for semester
-    const semesterMatch = selectedSemester === 'All' || student.semester === selectedSemester;
-    
-    // Log any near-matches that are being rejected
-    if (selectedProgram !== 'All' && !programMatch && student.program && 
-        student.program.includes(selectedProgram)) {
-      console.log(`Rankings - Rejected program near match: "${student.program}" vs "${selectedProgram}"`);
-    }
-    
-    if (selectedYear !== 'All' && !yearMatch && student.schoolYear && 
-        (student.schoolYear.includes(selectedYear) || selectedYear.includes(student.schoolYear))) {
-      console.log(`Rankings - Rejected year near match: "${student.schoolYear}" vs "${selectedYear}"`);
+    if (selectedSemester !== 'All' && !semesterMatch && student.semester) {
+      console.log(`Non-matching semester: Student "${student.semester}" vs Selected "${selectedSemester}"`);
     }
     
     return programMatch && yearMatch && semesterMatch;
