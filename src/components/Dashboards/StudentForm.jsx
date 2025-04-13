@@ -17,6 +17,7 @@ import {
   Paper,
   useTheme,
   useMediaQuery,
+  CircularProgress,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../../firebase-config';
@@ -49,6 +50,22 @@ const StyledCard = styled(Card)(({ theme }) => ({
   flexDirection: 'column',
   width: '100%',
   maxWidth: '100%',
+  position: 'relative',
+}));
+
+const LoadingOverlay = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10,
+  backdropFilter: 'blur(2px)',
 }));
 
 const FormHeader = styled(Box)(({ theme }) => ({
@@ -395,7 +412,7 @@ class Student {
 }
 
 function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditing }) {
-  const { currentUser } = useContext(AuthContext);
+  const { currentUser, userRole } = useContext(AuthContext);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState(() => {
@@ -416,7 +433,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         solutions: initialData.solutions || '',
         recommendations: initialData.recommendations || '',
         evaluation: initialData.evaluation || '',
-        college: initialData.college || currentUser?.profile?.college || '',
+        college: initialData.college || '',
         section: initialData.section || '',
         createdAt: initialData.createdAt,
         createdBy: initialData.createdBy
@@ -430,6 +447,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userCollege, setUserCollege] = useState('');
 
   // Update the useState for nameFields to properly handle the name splitting
   const [nameFields, setNameFields] = useState(() => {
@@ -457,17 +475,48 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     };
   });
 
+  // Fetch user's college information from Firestore
   useEffect(() => {
-    if (currentUser?.profile?.role === 'admin') {
+    const fetchUserCollege = async () => {
+      if (currentUser) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUserCollege(userData.college || '');
+          }
+        } catch (error) {
+          console.error('Error fetching user college:', error);
+        }
+      }
+    };
+
+    fetchUserCollege();
+  }, [currentUser]);
+
+  // Update available programs based on user's college
+  useEffect(() => {
+    if (userRole === 'admin') {
       // For admin, get all programs from all colleges
       const allPrograms = Object.values(collegePrograms).flat();
       setAvailablePrograms(allPrograms);
-    } else if (currentUser?.profile?.college) {
-      // For instructors, keep existing college-specific programs
-      const programs = collegePrograms[currentUser.profile.college];
+    } else if (userCollege) {
+      // For instructors, get programs specific to their college
+      const programs = collegePrograms[userCollege] || [];
       setAvailablePrograms(programs);
     }
-  }, [currentUser]);
+  }, [userRole, userCollege]);
+
+  // Update formData.college when userCollege changes
+  useEffect(() => {
+    if (userCollege && !isEditing) {
+      setFormData(prevData => {
+        const newStudent = new Student(prevData.toJSON());
+        newStudent.update('college', userCollege);
+        return newStudent;
+      });
+    }
+  }, [userCollege, isEditing]);
 
   // Update the handleChange function to properly handle name changes
   const handleChange = (e) => {
@@ -678,6 +727,14 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
 
   return (
     <StyledCard>
+      {isSubmitting && (
+        <LoadingOverlay>
+          <CircularProgress size={60} sx={{ color: maroon, mb: 2 }} />
+          <Typography variant="h6" color={maroon} fontWeight="medium">
+            Saving Student Data...
+          </Typography>
+        </LoadingOverlay>
+      )}
       <FormHeader>
         <Typography variant="h5" align="center" fontWeight="bold">
           Student Internship Program Form
@@ -1010,7 +1067,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
               fullWidth 
               size="large"
               disabled={isSubmitting}
-              startIcon={isEditing ? <Edit /> : <Add />}
+              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : (isEditing ? <Edit /> : <Add />)}
             >
               {isSubmitting 
                 ? 'Saving...' 
