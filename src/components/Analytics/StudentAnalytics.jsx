@@ -3,6 +3,26 @@ import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../firebase-config';
 import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
 import { AuthContext } from '../../context/AuthContext';
+import { keyframes } from '@mui/system';
+
+// Define rotation animations
+const rotateOuter = keyframes`
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+`;
+
+const rotateInner = keyframes`
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
+`;
 
 function StudentAnalytics() {
   const [surveyData, setSurveyData] = useState([]);
@@ -601,8 +621,64 @@ function StudentAnalytics() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '70vh' }}>
-        <CircularProgress sx={{ color: '#800000' }} />
+      <Box 
+        sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '70vh',
+          width: '100%',
+          p: 3,
+          textAlign: 'center'
+        }}
+      >
+        <Box 
+          sx={{ 
+            position: 'relative', 
+            mb: 4,
+            width: 80,
+            height: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <CircularProgress
+            size={80}
+            thickness={2}
+            sx={{
+              color: '#FFD700',
+              position: 'absolute',
+              animation: `${rotateOuter} 3s linear infinite`,
+            }}
+          />
+          <CircularProgress
+            size={60}
+            thickness={3}
+            sx={{
+              color: '#800000',
+              position: 'absolute',
+              animation: `${rotateInner} 2s linear infinite`,
+            }}
+          />
+        </Box>
+        <Typography 
+          variant="h5" 
+          sx={{ 
+            mb: 2,
+            fontWeight: 'bold',
+            background: 'linear-gradient(45deg, #800000 30%, #FFD700 90%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          Loading Student Analytics
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 400 }}>
+          Please wait while we process the student performance data...
+        </Typography>
       </Box>
     );
   }
