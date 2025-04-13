@@ -142,7 +142,7 @@ function AdminRankings() {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   
-  const { currentUser } = useContext(AuthContext);
+  const { currentUser, userRole } = useContext(AuthContext);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -205,7 +205,7 @@ function AdminRankings() {
 
   useEffect(() => {
     async function fetchStudents() {
-      if (currentUser?.profile?.role !== 'admin') {
+      if (!currentUser || userRole !== 'admin') {
         setError('Unauthorized access');
         setLoading(false);
         return;
@@ -478,7 +478,7 @@ function AdminRankings() {
     }
 
     fetchStudents();
-  }, [currentUser]);
+  }, [currentUser, userRole]);
 
   useEffect(() => {
     // After students are loaded, log all semester values for debugging
