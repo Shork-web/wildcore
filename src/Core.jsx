@@ -144,7 +144,7 @@ function MainContent() {
             <img
               src={logo}
               alt="WILD C.O.R.E Logo"
-              style={{ height: '40px', marginRight: '20px' }}
+              style={{ height: '70px', marginRight: '20px' }}
             />
           </Box>
           <Button color="inherit" component={Link} to="/">

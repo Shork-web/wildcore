@@ -421,12 +421,11 @@ function StudentList() {
   }, [students]);
 
   useEffect(() => {
-    // This effect will run whenever the currentUser or specifically the section changes
     if (studentManager && currentUser?.profile?.section !== undefined) {
       console.log('Section detected in user profile:', currentUser.profile.section);
       studentManager.refreshDataOnSectionChange(currentUser);
     }
-  }, [currentUser?.profile?.section, studentManager]);
+  }, [currentUser?.profile?.section, studentManager, currentUser]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);

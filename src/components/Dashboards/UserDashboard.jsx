@@ -228,8 +228,8 @@ function UserDashboard() {
       <BackgroundGradient />
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Title variant="h3">WILD C.O.R.E</Title>
-          <Subtitle variant="body1">Work-Integrated Learning and Development – Collaborative OJT Records and Evaluation</Subtitle>
+          <Title variant="h3">WILD R.O.U.T.E</Title>
+          <Subtitle variant="body1">Work-Integrated Learning and Development – Records of OJT, Updates, Training & Evaluation</Subtitle>
         </Box>
       </Box>
 
