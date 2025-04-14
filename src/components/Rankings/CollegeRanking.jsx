@@ -128,7 +128,7 @@ const ProgressBar = styled(LinearProgress)(({ theme, value, rank }) => ({
   }
 }));
 
-function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
+function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeFilter = 'all' }) {
   const [loading, setLoading] = useState(true);
   const [collegeStats, setCollegeStats] = useState([]);
   const [error, setError] = useState(null);
@@ -171,319 +171,312 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
   useEffect(() => {
     let unsubscribe = null;
 
-    function fetchCollegeStats() {
+    async function fetchCollegeStats() {
       try {
         setLoading(true);
         setError(null);
         
-        // Create query without any filters to get all data
-        console.log("Fetching all data from studentSurveys collection");
+        // Fetch data from both final and midterm collections
+        const finalSurveysRef = collection(db, 'studentSurveys_final');
+        const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
         
-        const surveysQuery = query(collection(db, 'studentSurveys'));
+        const [finalSnapshot, midtermSnapshot] = await Promise.all([
+          getDocs(finalSurveysRef),
+          getDocs(midtermSurveysRef)
+        ]);
         
-        unsubscribe = onSnapshot(surveysQuery, (snapshot) => {
-          console.log(`Found ${snapshot.docs.length} student surveys`);
-          
-          if (snapshot.empty) {
-            console.log("No survey data found");
-            setCollegeStats([]);
-            setLoading(false);
+        // Process data from both collections
+        const finalSurveys = finalSnapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+          surveyType: 'final'
+        }));
+        
+        const midtermSurveys = midtermSnapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+          surveyType: 'midterm'
+        }));
+        
+        // Combine all surveys
+        let allSurveys = [...finalSurveys, ...midtermSurveys];
+        console.log(`CollegeRanking: Retrieved ${finalSurveys.length} final and ${midtermSurveys.length} midterm surveys`);
+        
+        // Filter by survey type if specified
+        if (surveyTypeFilter !== 'all') {
+          allSurveys = allSurveys.filter(survey => survey.surveyType === surveyTypeFilter);
+          console.log(`Filtered to ${allSurveys.length} ${surveyTypeFilter} surveys`);
+        }
+        
+        // Apply filters (college, semester, year)
+        let filteredSurveys = allSurveys;
+        
+        // Apply college filter if specified
+        if (collegeFilter && collegeFilter !== 'All') {
+          filteredSurveys = filteredSurveys.filter(survey => 
+            survey.college === collegeFilter || 
+            survey.college?.toLowerCase() === collegeFilter.toLowerCase()
+          );
+        }
+        
+        // Apply semester filter if specified
+        if (semesterFilter && semesterFilter !== 'All') {
+          const normalizedSemester = normalizeSemester(semesterFilter);
+          filteredSurveys = filteredSurveys.filter(survey => 
+            normalizeSemester(survey.semester) === normalizedSemester
+          );
+        }
+        
+        // Apply year filter if specified
+        if (yearFilter && yearFilter !== 'All') {
+          const normalizedYear = normalizeYear(yearFilter);
+          filteredSurveys = filteredSurveys.filter(survey => 
+            normalizeYear(survey.schoolYear) === normalizedYear
+          );
+        }
+        
+        // Log all colleges and programs for debugging
+        const allColleges = new Set();
+        const allPrograms = new Set();
+        const allSections = new Set();
+        const allSemesters = new Set();
+        const allSchoolYears = new Set();
+        filteredSurveys.forEach(survey => {
+          if (survey.college) allColleges.add(survey.college);
+          if (survey.program) allPrograms.add(survey.program);
+          if (survey.section) allSections.add(`${survey.college}_${survey.section}`);
+          if (survey.semester) allSemesters.add(survey.semester);
+          if (survey.schoolYear) allSchoolYears.add(survey.schoolYear);
+        });
+        console.log("Available colleges in data:", [...allColleges]);
+        console.log("Available programs in data:", [...allPrograms]);
+        console.log("Available college-section combinations:", [...allSections]);
+        console.log("Available semesters in data:", [...allSemesters]);
+        console.log("Available school years in data:", [...allSchoolYears]);
+        
+        // Group data by college and program
+        const colleges = {};
+        
+        filteredSurveys.forEach(survey => {
+          // Skip if missing critical data
+          if (!survey.program || !survey.college) {
             return;
           }
           
-          // Log all colleges and programs for debugging
-          const allColleges = new Set();
-          const allPrograms = new Set();
-          const allSections = new Set();
-          const allSemesters = new Set();
-          const allSchoolYears = new Set();
-          snapshot.docs.forEach(doc => {
-            const survey = doc.data();
-            if (survey.college) allColleges.add(survey.college);
-            if (survey.program) allPrograms.add(survey.program);
-            if (survey.section) allSections.add(`${survey.college}_${survey.section}`);
-            if (survey.semester) allSemesters.add(survey.semester);
-            if (survey.schoolYear) allSchoolYears.add(survey.schoolYear);
-          });
-          console.log("Available colleges in data:", [...allColleges]);
-          console.log("Available programs in data:", [...allPrograms]);
-          console.log("Available college-section combinations:", [...allSections]);
-          console.log("Available semesters in data:", [...allSemesters]);
-          console.log("Available school years in data:", [...allSchoolYears]);
+          // Get or create college entry - we'll add ALL colleges
+          const collegeId = survey.college;
+          if (!colleges[collegeId]) {
+            colleges[collegeId] = {
+              id: collegeId,
+              name: collegeId,
+              college: collegeId,
+              students: new Map(), // Use Map to deduplicate students by ID
+              totalScore: 0,
+              averageScore: 0,
+              highestScore: 0,
+              studentCount: 0,
+              sections: {}, // Track sections within this college
+              programs: {}
+            };
+          }
           
-          // Group data by college and program
-          const colleges = {};
+          // Get or create program entry
+          const programId = survey.program;
+          if (!colleges[collegeId].programs[programId]) {
+            colleges[collegeId].programs[programId] = {
+              id: programId,
+              name: programId,
+              college: collegeId,
+              students: new Map(), // Use Map to deduplicate students
+              totalScore: 0,
+              averageScore: 0,
+              studentCount: 0,
+              surveyCount: 0,
+              sections: {} // Track sections within this program
+            };
+          }
           
-          snapshot.docs.forEach(doc => {
-            const survey = doc.data();
+          // Track section if available
+          if (survey.section) {
+            const sectionId = survey.section;
+            // Create unique section identifier that includes the college
+            const uniqueSectionId = `${collegeId}_${sectionId}`;
             
-            // Skip if missing critical data
-            if (!survey.program || !survey.college) {
-              return;
-            }
-            
-            // Apply filters using normalized semester values
-            // Get normalized versions for comparison
-            const normalizedSurveysSemester = normalizeSemester(survey.semester);
-            const normalizedSelectedSemester = normalizeSemester(semesterFilter);
-            
-            // Multiple ways to match semesters
-            const semesterMatches = 
-              semesterFilter === 'All' || 
-              normalizedSurveysSemester === normalizedSelectedSemester ||
-              (survey.semester && survey.semester === semesterFilter) ||
-              (survey.semester && survey.semester.toLowerCase().includes(semesterFilter.toLowerCase()));
-            
-            // Multiple ways to match years
-            const yearMatches = 
-              yearFilter === 'All' || 
-              survey.schoolYear === yearFilter ||
-              (survey.schoolYear && survey.schoolYear.toString().includes(yearFilter)) ||
-              (yearFilter && survey.schoolYear && survey.schoolYear.toString().includes(yearFilter));
-            
-            // Log mismatches for debugging
-            if (yearFilter !== 'All' && !yearMatches && survey.schoolYear) {
-              console.log(`Non-matching year: Survey "${survey.schoolYear}" vs Selected "${yearFilter}"`);
-            }
-            
-            const collegeMatches = collegeFilter === 'All' || survey.college === collegeFilter;
-            
-            // Skip this survey if it doesn't match the semester/year filters
-            if (!semesterMatches || !yearMatches) {
-              return;
-            }
-            
-            // Get or create college entry - we'll add ALL colleges
-            const collegeId = survey.college;
-            if (!colleges[collegeId]) {
-              colleges[collegeId] = {
-                id: collegeId,
-                name: collegeId,
+            // Add to college sections
+            if (!colleges[collegeId].sections[uniqueSectionId]) {
+              colleges[collegeId].sections[uniqueSectionId] = {
+                id: sectionId,
+                uniqueId: uniqueSectionId,
+                name: sectionId,
                 college: collegeId,
-                students: new Map(), // Use Map to deduplicate students by ID
+                students: new Map(),
                 totalScore: 0,
                 averageScore: 0,
-                highestScore: 0,
-                studentCount: 0,
-                sections: {}, // Track sections within this college
-                programs: {}
+                studentCount: 0
               };
             }
             
-            // Get or create program entry
-            const programId = survey.program;
-            if (!colleges[collegeId].programs[programId]) {
-              colleges[collegeId].programs[programId] = {
-                id: programId,
-                name: programId,
+            // Add to program sections
+            if (!colleges[collegeId].programs[programId].sections[uniqueSectionId]) {
+              colleges[collegeId].programs[programId].sections[uniqueSectionId] = {
+                id: sectionId,
+                uniqueId: uniqueSectionId,
+                name: sectionId,
                 college: collegeId,
-                students: new Map(), // Use Map to deduplicate students
+                program: programId,
+                students: new Map(),
                 totalScore: 0,
                 averageScore: 0,
-                studentCount: 0,
-                surveyCount: 0,
-                sections: {} // Track sections within this program
+                studentCount: 0
               };
             }
+          }
+          
+          // Calculate score from survey data
+          let score = 0;
+          
+          // Use the totalScore if available (normalized to a 10-point scale)
+          if (survey.totalScore !== undefined && survey.maxPossibleScore) {
+            score = (survey.totalScore / survey.maxPossibleScore) * 10;
+          } 
+          // Otherwise try to calculate from workAttitude and workPerformance
+          else if (survey.workAttitude && survey.workPerformance) {
+            const attitudeScore = survey.workAttitude.totalScore || 0;
+            const attitudeMax = survey.workAttitude.maxPossibleScore || 40;
             
-            // Track section if available
+            const performanceScore = survey.workPerformance.totalScore || 0;
+            const performanceMax = survey.workPerformance.maxPossibleScore || 60;
+            
+            // Calculate combined score (normalized to 10)
+            const totalMax = attitudeMax + performanceMax;
+            const totalScore = attitudeScore + performanceScore;
+            
+            score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
+          }
+          
+          // Add student to tracking with the survey score
+          const studentId = survey.studentId;
+          if (studentId) {
+            // Update program level
+            const programStudents = colleges[collegeId].programs[programId].students;
+            
+            if (!programStudents.has(studentId)) {
+              programStudents.set(studentId, {
+                id: studentId,
+                name: survey.studentName || 'Unknown',
+                section: survey.section || 'Unspecified',
+                scores: [score],
+                averageScore: score
+              });
+            } else {
+              const student = programStudents.get(studentId);
+              student.scores.push(score);
+              student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
+            }
+            
+            // Update college level
+            const collegeStudents = colleges[collegeId].students;
+            
+            if (!collegeStudents.has(studentId)) {
+              collegeStudents.set(studentId, {
+                id: studentId,
+                name: survey.studentName || 'Unknown',
+                program: programId,
+                section: survey.section || 'Unspecified',
+                scores: [score],
+                averageScore: score
+              });
+            } else {
+              const student = collegeStudents.get(studentId);
+              student.scores.push(score);
+              student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
+            }
+            
+            // If section exists, update section level
             if (survey.section) {
-              const sectionId = survey.section;
-              // Create unique section identifier that includes the college
-              const uniqueSectionId = `${collegeId}_${sectionId}`;
+              const uniqueSectionId = `${collegeId}_${survey.section}`;
               
-              // Add to college sections
-              if (!colleges[collegeId].sections[uniqueSectionId]) {
-                colleges[collegeId].sections[uniqueSectionId] = {
-                  id: sectionId,
-                  uniqueId: uniqueSectionId,
-                  name: sectionId,
-                  college: collegeId,
-                  students: new Map(),
-                  totalScore: 0,
-                  averageScore: 0,
-                  studentCount: 0
-                };
-              }
-              
-              // Add to program sections
-              if (!colleges[collegeId].programs[programId].sections[uniqueSectionId]) {
-                colleges[collegeId].programs[programId].sections[uniqueSectionId] = {
-                  id: sectionId,
-                  uniqueId: uniqueSectionId,
-                  name: sectionId,
-                  college: collegeId,
-                  program: programId,
-                  students: new Map(),
-                  totalScore: 0,
-                  averageScore: 0,
-                  studentCount: 0
-                };
-              }
-            }
-            
-            // Calculate score from survey data
-            let score = 0;
-            
-            // Use the totalScore if available (normalized to a 10-point scale)
-            if (survey.totalScore !== undefined && survey.maxPossibleScore) {
-              score = (survey.totalScore / survey.maxPossibleScore) * 10;
-            } 
-            // Otherwise try to calculate from workAttitude and workPerformance
-            else if (survey.workAttitude && survey.workPerformance) {
-              const attitudeScore = survey.workAttitude.totalScore || 0;
-              const attitudeMax = survey.workAttitude.maxPossibleScore || 40;
-              
-              const performanceScore = survey.workPerformance.totalScore || 0;
-              const performanceMax = survey.workPerformance.maxPossibleScore || 60;
-              
-              // Calculate combined score (normalized to 10)
-              const totalMax = attitudeMax + performanceMax;
-              const totalScore = attitudeScore + performanceScore;
-              
-              score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
-            }
-            
-            // Add student to tracking with the survey score
-            const studentId = survey.studentId;
-            if (studentId) {
-              // Update program level
-              const programStudents = colleges[collegeId].programs[programId].students;
-              
-              if (!programStudents.has(studentId)) {
-                programStudents.set(studentId, {
-                  id: studentId,
-                  name: survey.studentName || 'Unknown',
-                  section: survey.section || 'Unspecified',
-                  scores: [score],
-                  averageScore: score
-                });
-              } else {
-                const student = programStudents.get(studentId);
-                student.scores.push(score);
-                student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
-              }
-              
-              // Update college level
-              const collegeStudents = colleges[collegeId].students;
-              
-              if (!collegeStudents.has(studentId)) {
-                collegeStudents.set(studentId, {
-                  id: studentId,
-                  name: survey.studentName || 'Unknown',
-                  program: programId,
-                  section: survey.section || 'Unspecified',
-                  scores: [score],
-                  averageScore: score
-                });
-              } else {
-                const student = collegeStudents.get(studentId);
-                student.scores.push(score);
-                student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
-              }
-              
-              // If section exists, update section level
-              if (survey.section) {
-                const uniqueSectionId = `${collegeId}_${survey.section}`;
+              // Update section within college
+              if (colleges[collegeId].sections[uniqueSectionId]) {
+                const sectionStudents = colleges[collegeId].sections[uniqueSectionId].students;
                 
-                // Update section within college
-                if (colleges[collegeId].sections[uniqueSectionId]) {
-                  const sectionStudents = colleges[collegeId].sections[uniqueSectionId].students;
-                  
-                  if (!sectionStudents.has(studentId)) {
-                    sectionStudents.set(studentId, {
-                      id: studentId,
-                      name: survey.studentName || 'Unknown',
-                      program: programId,
-                      scores: [score],
-                      averageScore: score
-                    });
-                  } else {
-                    const student = sectionStudents.get(studentId);
-                    student.scores.push(score);
-                    student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
-                  }
+                if (!sectionStudents.has(studentId)) {
+                  sectionStudents.set(studentId, {
+                    id: studentId,
+                    name: survey.studentName || 'Unknown',
+                    program: programId,
+                    scores: [score],
+                    averageScore: score
+                  });
+                } else {
+                  const student = sectionStudents.get(studentId);
+                  student.scores.push(score);
+                  student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
                 }
+              }
+              
+              // Update section within program
+              if (colleges[collegeId].programs[programId].sections[uniqueSectionId]) {
+                const sectionStudents = colleges[collegeId].programs[programId].sections[uniqueSectionId].students;
                 
-                // Update section within program
-                if (colleges[collegeId].programs[programId].sections[uniqueSectionId]) {
-                  const sectionStudents = colleges[collegeId].programs[programId].sections[uniqueSectionId].students;
-                  
-                  if (!sectionStudents.has(studentId)) {
-                    sectionStudents.set(studentId, {
-                      id: studentId,
-                      name: survey.studentName || 'Unknown',
-                      scores: [score],
-                      averageScore: score
-                    });
-                  } else {
-                    const student = sectionStudents.get(studentId);
-                    student.scores.push(score);
-                    student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
-                  }
+                if (!sectionStudents.has(studentId)) {
+                  sectionStudents.set(studentId, {
+                    id: studentId,
+                    name: survey.studentName || 'Unknown',
+                    scores: [score],
+                    averageScore: score
+                  });
+                } else {
+                  const student = sectionStudents.get(studentId);
+                  student.scores.push(score);
+                  student.averageScore = student.scores.reduce((sum, s) => sum + s, 0) / student.scores.length;
                 }
               }
             }
-            
-            // Increment survey count for the program
-            colleges[collegeId].programs[programId].surveyCount++;
+          }
+          
+          // Increment survey count for the program
+          colleges[collegeId].programs[programId].surveyCount++;
+        });
+        
+        // Calculate final stats for programs and colleges
+        Object.values(colleges).forEach(college => {
+          // Convert student Maps to arrays and calculate totals
+          const studentArray = Array.from(college.students.values());
+          college.students = studentArray;
+          college.studentCount = studentArray.length;
+          
+          // Calculate college score from student averages
+          let totalStudentScore = 0;
+          let highestScore = 0;
+          
+          studentArray.forEach(student => {
+            totalStudentScore += student.averageScore;
+            highestScore = Math.max(highestScore, student.averageScore);
           });
           
-          // Calculate final stats for programs and colleges
-          Object.values(colleges).forEach(college => {
-            // Convert student Maps to arrays and calculate totals
-            const studentArray = Array.from(college.students.values());
-            college.students = studentArray;
-            college.studentCount = studentArray.length;
+          college.totalScore = totalStudentScore;
+          college.highestScore = Math.round(highestScore * 10) / 10;
+          college.averageScore = college.studentCount > 0 ? 
+            Math.round((totalStudentScore / college.studentCount) * 10) / 10 : 0;
+          
+          // Process each program
+          Object.values(college.programs).forEach(program => {
+            const programStudentArray = Array.from(program.students.values());
+            program.students = programStudentArray;
+            program.studentCount = programStudentArray.length;
             
-            // Calculate college score from student averages
-            let totalStudentScore = 0;
-            let highestScore = 0;
-            
-            studentArray.forEach(student => {
-              totalStudentScore += student.averageScore;
-              highestScore = Math.max(highestScore, student.averageScore);
+            let programTotalScore = 0;
+            programStudentArray.forEach(student => {
+              programTotalScore += student.averageScore;
             });
             
-            college.totalScore = totalStudentScore;
-            college.highestScore = Math.round(highestScore * 10) / 10;
-            college.averageScore = college.studentCount > 0 ? 
-              Math.round((totalStudentScore / college.studentCount) * 10) / 10 : 0;
+            program.totalScore = programTotalScore;
+            program.averageScore = program.studentCount > 0 ? 
+              Math.round((programTotalScore / program.studentCount) * 10) / 10 : 0;
             
-            // Process each program
-            Object.values(college.programs).forEach(program => {
-              const programStudentArray = Array.from(program.students.values());
-              program.students = programStudentArray;
-              program.studentCount = programStudentArray.length;
-              
-              let programTotalScore = 0;
-              programStudentArray.forEach(student => {
-                programTotalScore += student.averageScore;
-              });
-              
-              program.totalScore = programTotalScore;
-              program.averageScore = program.studentCount > 0 ? 
-                Math.round((programTotalScore / program.studentCount) * 10) / 10 : 0;
-              
-              // Process sections within programs
-              Object.values(program.sections).forEach(section => {
-                const sectionStudentArray = Array.from(section.students.values());
-                section.students = sectionStudentArray;
-                section.studentCount = sectionStudentArray.length;
-                
-                let sectionTotalScore = 0;
-                sectionStudentArray.forEach(student => {
-                  sectionTotalScore += student.averageScore;
-                });
-                
-                section.totalScore = sectionTotalScore;
-                section.averageScore = section.studentCount > 0 ? 
-                  Math.round((sectionTotalScore / section.studentCount) * 10) / 10 : 0;
-              });
-            });
-            
-            // Process sections within colleges
-            Object.values(college.sections).forEach(section => {
+            // Process sections within programs
+            Object.values(program.sections).forEach(section => {
               const sectionStudentArray = Array.from(section.students.values());
               section.students = sectionStudentArray;
               section.studentCount = sectionStudentArray.length;
@@ -499,228 +492,36 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
             });
           });
           
-          // Convert to array and sort by average score
-          // Don't filter out colleges with no students - show everything
-          const collegeArray = Object.values(colleges);
-          
-          // Sort by average score
-          collegeArray.sort((a, b) => b.averageScore - a.averageScore);
-          
-          console.log("Processed college stats:", collegeArray);
-          
-          setCollegeStats(collegeArray);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching studentSurveys:", error);
-          
-          // Try accessing studentData collection as a fallback
-          console.log("Attempting to fetch from studentData as a fallback");
-          
-          const studentDataQuery = query(collection(db, 'studentData'));
-          const fallbackUnsubscribe = onSnapshot(studentDataQuery, (studentSnapshot) => {
-            console.log(`Found ${studentSnapshot.docs.length} student data records`);
+          // Process sections within colleges
+          Object.values(college.sections).forEach(section => {
+            const sectionStudentArray = Array.from(section.students.values());
+            section.students = sectionStudentArray;
+            section.studentCount = sectionStudentArray.length;
             
-            // Process student data to build college stats
-            const colleges = {};
-            
-            studentSnapshot.docs.forEach(doc => {
-              const student = doc.data();
-              const studentId = doc.id;
-              
-              // Skip if missing critical data
-              if (!student.college) {
-                return;
-              }
-              
-              // Apply filters using normalized semester values
-              const normalizedStudentSemester = normalizeSemester(student.semester);
-              const normalizedSelectedSemester = normalizeSemester(semesterFilter);
-              
-              // Multiple ways to match semesters
-              const semesterMatches = 
-                semesterFilter === 'All' || 
-                normalizedStudentSemester === normalizedSelectedSemester ||
-                (student.semester && student.semester === semesterFilter) ||
-                (student.semester && student.semester.toLowerCase().includes(semesterFilter.toLowerCase()));
-                
-              // Multiple ways to match years
-              const yearMatches = 
-                yearFilter === 'All' || 
-                student.schoolYear === yearFilter ||
-                (student.schoolYear && student.schoolYear.toString().includes(yearFilter)) ||
-                (yearFilter && student.schoolYear && student.schoolYear.toString().includes(yearFilter));
-                
-              // Log mismatches for debugging
-              if (yearFilter !== 'All' && !yearMatches && student.schoolYear) {
-                console.log(`Non-matching year: Student "${student.schoolYear}" vs Selected "${yearFilter}"`);
-              }
-              
-              const collegeMatches = collegeFilter === 'All' || student.college === collegeFilter;
-              
-              if (!semesterMatches || !yearMatches) {
-                return;
-              }
-              
-              // Get or create college entry
-              const collegeId = student.college;
-              if (!colleges[collegeId]) {
-                colleges[collegeId] = {
-                  id: collegeId,
-                  name: collegeId,
-                  college: collegeId,
-                  students: [],
-                  totalScore: 0,
-                  averageScore: 0,
-                  highestScore: 0,
-                  studentCount: 0,
-                  sections: {},
-                  programs: {}
-                };
-              }
-              
-              // Get or create program
-              const program = student.program || 'Unspecified';
-              if (!colleges[collegeId].programs[program]) {
-                colleges[collegeId].programs[program] = {
-                  id: program,
-                  name: program,
-                  college: collegeId,
-                  students: [],
-                  totalScore: 0,
-                  averageScore: 0,
-                  studentCount: 0,
-                  sections: {}
-                };
-              }
-              
-              // Track section if available
-              if (student.section) {
-                const sectionId = student.section;
-                // Create unique section identifier that includes the college
-                const uniqueSectionId = `${collegeId}_${sectionId}`;
-                
-                // Add to college sections
-                if (!colleges[collegeId].sections[uniqueSectionId]) {
-                  colleges[collegeId].sections[uniqueSectionId] = {
-                    id: sectionId,
-                    uniqueId: uniqueSectionId,
-                    name: sectionId,
-                    college: collegeId,
-                    students: [],
-                    totalScore: 0,
-                    averageScore: 0,
-                    studentCount: 0
-                  };
-                }
-                
-                // Add to program sections
-                if (!colleges[collegeId].programs[program].sections[uniqueSectionId]) {
-                  colleges[collegeId].programs[program].sections[uniqueSectionId] = {
-                    id: sectionId,
-                    uniqueId: uniqueSectionId,
-                    name: sectionId,
-                    college: collegeId,
-                    program: program,
-                    students: [],
-                    totalScore: 0,
-                    averageScore: 0,
-                    studentCount: 0
-                  };
-                }
-              }
-              
-              // Calculate student score from evaluation
-              const studentScore = calculateEvaluationScore(student.evaluation || '');
-              
-              const studentObj = {
-                id: studentId,
-                name: student.name || 'Unknown Student',
-                score: studentScore,
-                program: program,
-                section: student.section || 'Unspecified'
-              };
-              
-              // Add student to program
-              colleges[collegeId].programs[program].students.push(studentObj);
-              colleges[collegeId].programs[program].totalScore += studentScore;
-              colleges[collegeId].programs[program].studentCount++;
-              
-              // Add student to college
-              colleges[collegeId].students.push(studentObj);
-              colleges[collegeId].totalScore += studentScore;
-              colleges[collegeId].highestScore = Math.max(colleges[collegeId].highestScore, studentScore);
-              colleges[collegeId].studentCount++;
-              
-              // If section exists, add student to section
-              if (student.section) {
-                const uniqueSectionId = `${collegeId}_${student.section}`;
-                
-                // Add to college section
-                if (colleges[collegeId].sections[uniqueSectionId]) {
-                  colleges[collegeId].sections[uniqueSectionId].students.push(studentObj);
-                  colleges[collegeId].sections[uniqueSectionId].totalScore += studentScore;
-                  colleges[collegeId].sections[uniqueSectionId].studentCount++;
-                }
-                
-                // Add to program section
-                if (colleges[collegeId].programs[program].sections[uniqueSectionId]) {
-                  colleges[collegeId].programs[program].sections[uniqueSectionId].students.push(studentObj);
-                  colleges[collegeId].programs[program].sections[uniqueSectionId].totalScore += studentScore;
-                  colleges[collegeId].programs[program].sections[uniqueSectionId].studentCount++;
-                }
-              }
+            let sectionTotalScore = 0;
+            sectionStudentArray.forEach(student => {
+              sectionTotalScore += student.averageScore;
             });
             
-            // Calculate averages
-            Object.values(colleges).forEach(college => {
-              // Calculate for programs
-              Object.values(college.programs).forEach(program => {
-                program.averageScore = program.studentCount > 0 ? 
-                  program.totalScore / program.studentCount : 0;
-                program.averageScore = Math.round(program.averageScore * 10) / 10;
-                
-                // Calculate for sections within programs
-                Object.values(program.sections).forEach(section => {
-                  section.averageScore = section.studentCount > 0 ? 
-                    section.totalScore / section.studentCount : 0;
-                  section.averageScore = Math.round(section.averageScore * 10) / 10;
-                });
-              });
-              
-              // Calculate for college
-              college.averageScore = college.studentCount > 0 ? 
-                college.totalScore / college.studentCount : 0;
-              college.averageScore = Math.round(college.averageScore * 10) / 10;
-              college.highestScore = Math.round(college.highestScore * 10) / 10;
-              
-              // Calculate for sections within college
-              Object.values(college.sections).forEach(section => {
-                section.averageScore = section.studentCount > 0 ? 
-                  section.totalScore / section.studentCount : 0;
-                section.averageScore = Math.round(section.averageScore * 10) / 10;
-              });
-            });
-            
-            // Convert to array and sort
-            const collegeArray = Object.values(colleges);
-            collegeArray.sort((a, b) => b.averageScore - a.averageScore);
-            
-            console.log("Processed college stats from studentData:", collegeArray);
-            
-            setCollegeStats(collegeArray);
-            setLoading(false);
-          }, (fallbackError) => {
-            console.error("Error with fallback approach:", fallbackError);
-            setError(`Error loading data: ${error.message}. Fallback also failed.`);
-            setLoading(false);
+            section.totalScore = sectionTotalScore;
+            section.averageScore = section.studentCount > 0 ? 
+              Math.round((sectionTotalScore / section.studentCount) * 10) / 10 : 0;
           });
-          
-          // Update unsubscribe to clean up the fallback listener
-          unsubscribe = fallbackUnsubscribe;
         });
         
+        // Convert to array and sort by average score
+        // Don't filter out colleges with no students - show everything
+        const collegeArray = Object.values(colleges);
+        
+        // Sort by average score
+        collegeArray.sort((a, b) => b.averageScore - a.averageScore);
+        
+        console.log("Processed college stats:", collegeArray);
+        
+        setCollegeStats(collegeArray);
+        setLoading(false);
       } catch (error) {
-        console.error("Error setting up data listener:", error);
+        console.error("Error fetching college stats:", error);
         setError("Failed to load rankings. Please try again later.");
         setLoading(false);
       }
@@ -733,7 +534,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
         unsubscribe();
       }
     };
-  }, [semesterFilter, yearFilter, collegeFilter]);
+  }, [collegeFilter, semesterFilter, yearFilter, surveyTypeFilter]);
   
   // Function to calculate a numeric score from evaluation text
   const calculateEvaluationScore = (evaluation) => {
@@ -870,6 +671,19 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
         >
           College Performance Rankings
         </Typography>
+        {surveyTypeFilter !== 'all' && (
+          <Chip 
+            label={`${surveyTypeFilter === 'midterm' ? 'Midterm' : 'Final'} Evaluation`}
+            size="small"
+            sx={{ 
+              ml: 2,
+              bgcolor: 'rgba(128, 0, 0, 0.08)',
+              color: '#800000',
+              fontWeight: 'medium',
+              border: '1px solid rgba(128, 0, 0, 0.2)'
+            }}
+          />
+        )}
       </Box>
       
       <Typography 

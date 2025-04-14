@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase-config';
-import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
+import { 
+  Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, 
+  Select, MenuItem, Paper, CircularProgress, Chip, Badge, Button, Tooltip
+} from '@mui/material';
 import { AuthContext } from '../../context/AuthContext';
 import { keyframes } from '@mui/system';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CancelIcon from '@mui/icons-material/Cancel';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
 // Define rotation animations
 const rotateOuter = keyframes`
@@ -30,6 +37,7 @@ function StudentAnalytics() {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
   const [selectedProgram, setSelectedProgram] = useState('all');
+  const [selectedSurveyType, setSelectedSurveyType] = useState('all');
   
   // Get user context instead of fetching separately
   const { currentUser } = useContext(AuthContext);
@@ -51,7 +59,7 @@ function StudentAnalytics() {
         
         // First, get real-time updates on the current user
         unsubscribeUser = onSnapshot(doc(db, 'users', currentUser.uid), 
-          (userDoc) => {
+          async (userDoc) => {
             if (!userDoc.exists()) {
               console.log("User document not found");
               setLoading(false);
@@ -83,47 +91,64 @@ function StudentAnalytics() {
               unsubscribeSurveys();
             }
 
-            // Using onSnapshot for student surveys
+            // Get data from both final and midterm collections
             try {
+              let finalSurveys = [];
+              let midtermSurveys = [];
+
               if (userSection) {
-                // If instructor has a specific section assigned, listen to that section
-                const surveysQuery = query(
-                  collection(db, 'studentSurveys'),
+                // If instructor has a specific section assigned
+                const finalQuery = query(
+                  collection(db, 'studentSurveys_final'),
                   where('section', '==', userSection)
                 );
                 
-                unsubscribeSurveys = onSnapshot(surveysQuery, (snapshot) => {
-                  console.log(`Real-time update: Found ${snapshot.docs.length} surveys for section ${userSection}`);
-                  
-                  if (snapshot.empty) {
-                    setLoading(false);
-                    return;
-                  }
-                  
-                  const surveyData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                  }));
-                  
-                  // Process the data as before
-                  processSurveyData(surveyData);
-                });
+                const midtermQuery = query(
+                  collection(db, 'studentSurveys_midterm'),
+                  where('section', '==', userSection)
+                );
+                
+                const finalSnapshot = await getDocs(finalQuery);
+                const midtermSnapshot = await getDocs(midtermQuery);
+                
+                finalSurveys = finalSnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data(),
+                  surveyType: 'final'
+                }));
+                
+                midtermSurveys = midtermSnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data(),
+                  surveyType: 'midterm'
+                }));
+                
+                console.log(`Retrieved ${finalSurveys.length} final surveys and ${midtermSurveys.length} midterm surveys for section ${userSection}`);
               } else if (userRole === 'admin') {
                 // Admin sees all surveys
-                unsubscribeSurveys = onSnapshot(collection(db, 'studentSurveys'), (snapshot) => {
-                  console.log(`Real-time update: Found ${snapshot.docs.length} surveys for admin`);
-                  
-                  const surveyData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                  }));
-                  
-                  // Process the data as before
-                  processSurveyData(surveyData);
-                });
+                const finalSnapshot = await getDocs(collection(db, 'studentSurveys_final'));
+                const midtermSnapshot = await getDocs(collection(db, 'studentSurveys_midterm'));
+                
+                finalSurveys = finalSnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data(),
+                  surveyType: 'final'
+                }));
+                
+                midtermSurveys = midtermSnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data(),
+                  surveyType: 'midterm'
+                }));
+                
+                console.log(`Admin view: Retrieved ${finalSurveys.length} final surveys and ${midtermSurveys.length} midterm surveys`);
               }
+              
+              // Combine the survey data and process it
+              const allSurveys = [...finalSurveys, ...midtermSurveys];
+              processSurveyData(allSurveys);
             } catch (error) {
-              console.error("Error setting up real-time listener:", error);
+              console.error("Error fetching survey data:", error);
               setLoading(false);
             }
           },
@@ -315,16 +340,26 @@ function StudentAnalytics() {
           return exactYearMatch;
         });
     
-    // Then apply semester filter
-    return yearFilteredData.filter(survey => 
-      (selectedSemester === 'all' || survey.semester === selectedSemester)
-    );
+    // Apply semester filter
+    const semesterFilteredData = selectedSemester === 'all'
+      ? yearFilteredData
+      : yearFilteredData.filter(survey => survey.semester === selectedSemester);
+    
+    // Finally, apply survey type filter (midterm/final)
+    return selectedSurveyType === 'all'
+      ? semesterFilteredData
+      : semesterFilteredData.filter(survey => survey.surveyType === selectedSurveyType);
   };
 
   // Process data for metrics display
   const processMetricsData = () => {
     const filteredData = getFilteredData();
     console.log(`Processing metrics with ${filteredData.length} filtered surveys`);
+    
+    if (filteredData.length > 0) {
+      // Debug info to help diagnose data issues
+      console.log(`Survey types in filtered data: ${[...new Set(filteredData.map(s => s.surveyType))].join(', ')}`);
+    }
     
     // Work Attitude Metrics
     const workAttitudeData = {
@@ -491,105 +526,409 @@ function StudentAnalytics() {
   };
 
   // Filter Component
-  const FilterSection = () => (
-    <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 2 }}>
-        Filter Analytics
-      </Typography>
-      
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={4}>
-          <FormControl fullWidth size="small">
-            <InputLabel>School Year</InputLabel>
-            <Select
-              value={selectedYear}
-              label="School Year"
-              onChange={(e) => setSelectedYear(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
+  const FilterSection = () => {
+    // Count active filters for the badge
+    const activeFilterCount = [
+      selectedProgram !== 'all',
+      selectedYear !== 'all',
+      selectedSemester !== 'all',
+      selectedSurveyType !== 'all'
+    ].filter(Boolean).length;
+    
+    // Handle reset all filters
+    const handleResetAllFilters = () => {
+      setSelectedProgram('all');
+      setSelectedYear('all');
+      setSelectedSemester('all');
+      setSelectedSurveyType('all');
+    };
+
+    return (
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 3, 
+          mb: 3, 
+          borderRadius: 2,
+          background: 'linear-gradient(to right, rgba(255,255,255,0.95), rgba(255,245,230,0.95))',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          overflow: 'hidden',
+          position: 'relative'
+        }}
+      >
+        {/* Header with title and reset button */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 2.5,
+          pb: 1,
+          borderBottom: '1px solid rgba(128, 0, 0, 0.1)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Badge 
+              badgeContent={activeFilterCount} 
+              color="primary"
+              sx={{ 
+                '& .MuiBadge-badge': { 
+                  backgroundColor: '#800000',
+                  fontWeight: 'bold'
+                } 
               }}
             >
-              <MenuItem value="all">All Years</MenuItem>
-              {filterOptions.years.map((year) => (
-                <MenuItem key={year} value={year}>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Semester</InputLabel>
-            <Select
-              value={selectedSemester}
-              label="Semester"
-              onChange={(e) => setSelectedSemester(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
-              }}
-            >
-              <MenuItem value="all">All Semesters</MenuItem>
-              {filterOptions.semesters.map((semester) => (
-                <MenuItem key={semester} value={semester}>
-                  {semester}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Program</InputLabel>
-            <Select
-              value={selectedProgram}
-              label="Program"
-              onChange={(e) => setSelectedProgram(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
-              }}
-              MenuProps={{
-                PaperProps: {
-                  style: {
-                    maxHeight: 300
+              <FilterAltIcon sx={{ mr: 1, color: '#800000' }} />
+            </Badge>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#800000' }}>
+              Analytics Filters
+            </Typography>
+          </Box>
+          
+          {activeFilterCount > 0 && (
+            <Tooltip title="Reset all filters">
+              <Button
+                size="small"
+                startIcon={<RestartAltIcon />}
+                onClick={handleResetAllFilters}
+                sx={{ 
+                  color: '#800000', 
+                  borderColor: 'rgba(128, 0, 0, 0.5)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                    borderColor: '#800000'
                   }
-                }
-              }}
-            >
-              <MenuItem value="all">All Programs</MenuItem>
-              {filterOptions.programs.map((program) => (
-                <MenuItem key={program} value={program}>
-                  {program}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-      </Grid>
+                }}
+                variant="outlined"
+              >
+                Reset
+              </Button>
+            </Tooltip>
+          )}
+        </Box>
+        
+        <Grid container spacing={2.5}>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>School Year</InputLabel>
+              <Select
+                value={selectedYear}
+                label="School Year"
+                onChange={(e) => setSelectedYear(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Years</MenuItem>
+                {filterOptions.years.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
 
-      {/* Active Filters Display */}
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="subtitle2" color="textSecondary">
-          Active Filters:
-          {selectedYear !== 'all' && ` Year: ${selectedYear},`}
-          {selectedSemester !== 'all' && ` Semester: ${selectedSemester},`}
-          {selectedProgram !== 'all' && ` Program: ${selectedProgram}`}
-          {(selectedYear === 'all' && selectedSemester === 'all' && selectedProgram === 'all') && ' None'}
-        </Typography>
-      </Box>
-    </Paper>
-  );
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Semester</InputLabel>
+              <Select
+                value={selectedSemester}
+                label="Semester"
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Semesters</MenuItem>
+                {filterOptions.semesters.map((semester) => (
+                  <MenuItem key={semester} value={semester}>
+                    {semester}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Program</InputLabel>
+              <Select
+                value={selectedProgram}
+                label="Program"
+                onChange={(e) => setSelectedProgram(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Programs</MenuItem>
+                {filterOptions.programs.map((program) => (
+                  <MenuItem key={program} value={program}>
+                    {program}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Survey Type</InputLabel>
+              <Select
+                value={selectedSurveyType}
+                label="Survey Type"
+                onChange={(e) => setSelectedSurveyType(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Surveys</MenuItem>
+                <MenuItem value="midterm">Midterm Evaluation</MenuItem>
+                <MenuItem value="final">Final Evaluation</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        {/* Active Filters as Chips */}
+        {activeFilterCount > 0 && (
+          <Box sx={{ 
+            mt: 3, 
+            pt: 2, 
+            borderTop: '1px dashed rgba(128, 0, 0, 0.15)',
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            gap: 1 
+          }}>
+            {selectedProgram !== 'all' && (
+              <Chip
+                label={`Program: ${selectedProgram}`}
+                onDelete={() => setSelectedProgram('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedYear !== 'all' && (
+              <Chip
+                label={`Year: ${selectedYear}`}
+                onDelete={() => setSelectedYear('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedSemester !== 'all' && (
+              <Chip
+                label={`Semester: ${selectedSemester}`}
+                onDelete={() => setSelectedSemester('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedSurveyType !== 'all' && (
+              <Chip
+                label={`Survey: ${selectedSurveyType === 'midterm' ? 'Midterm Evaluation' : 'Final Evaluation'}`}
+                onDelete={() => setSelectedSurveyType('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+          </Box>
+        )}
+
+        {/* Results summary */}
+        <Box sx={{ mt: 2 }}>
+          {getFilteredData().length > 0 ? (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              bgcolor: 'rgba(128, 0, 0, 0.05)', 
+              p: 1, 
+              borderRadius: 1 
+            }}>
+              <AssessmentIcon sx={{ color: '#800000', mr: 1, fontSize: '1.2rem' }} />
+              <Typography variant="body2" sx={{ color: '#800000', fontWeight: 'medium' }}>
+                Showing analytics for {getFilteredData().length} {getFilteredData().length === 1 ? 'survey' : 'surveys'}
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              bgcolor: 'rgba(211, 47, 47, 0.05)', 
+              p: 1.5, 
+              borderRadius: 1,
+              border: '1px dashed rgba(211, 47, 47, 0.3)'
+            }}>
+              <Typography variant="body2" sx={{ color: '#d32f2f' }}>
+                No data found for the selected filters. Try adjusting your criteria.
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </Paper>
+    );
+  };
 
   // Get rating color based on score
   const getRatingColor = (rating) => {

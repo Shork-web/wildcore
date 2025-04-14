@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   Typography, 
   Box, 
@@ -26,9 +26,9 @@ import {
   CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { School, EmojiEvents, Star, Business } from '@mui/icons-material';
+import { School, EmojiEvents, Star, Business, FilterAlt } from '@mui/icons-material';
 import { db } from '../../firebase-config';
-import { collection, query, getDocs, collectionGroup } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
 import { collegePrograms } from '../../utils/collegePrograms';
 import { keyframes } from '@mui/system';
@@ -163,7 +163,7 @@ function AdminRankings() {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   
-  const { currentUser, userRole } = useContext(AuthContext);
+  const { userRole } = useContext(AuthContext);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -184,6 +184,9 @@ function AdminRankings() {
   const availablePrograms = getAvailablePrograms();
   const availableSemesters = getAvailableSemesters();
   const availableYears = getAvailableYears();
+
+  // Add survey type filter
+  const [selectedSurveyType, setSelectedSurveyType] = useState('all');
 
   // Helper function to normalize semester values
   const normalizeSemester = (semester) => {
@@ -224,89 +227,76 @@ function AdminRankings() {
     return ['All', ...new Set(students.map(student => student.schoolYear || ''))].filter(Boolean).sort().reverse();
   }
 
-  useEffect(() => {
-    async function fetchStudents() {
-      if (!currentUser || userRole !== 'admin') {
-        setError('Unauthorized access');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
+  // Update the fetchStudents function to use onSnapshot with useCallback
+  const fetchStudents = useCallback(() => {
+    try {
+      setLoading(true);
+      
+      // Set up listeners for both collections
+      console.log("Setting up real-time listeners for student surveys");
+      
+      // Create a listener for studentSurveys_final collection
+      const finalSurveysRef = collection(db, 'studentSurveys_final');
+      let midtermUnsubscribe = null;
+      
+      const finalUnsubscribe = onSnapshot(finalSurveysRef, (finalSnapshot) => {
+        console.log(`Received update from final surveys: ${finalSnapshot.docs.length} documents`);
         
-        // Fetch from studentSurveys first, as that has public read access
-        console.log("Fetching from studentSurveys collection");
-        const surveysQuery = query(collection(db, 'studentSurveys'));
-        const surveysSnapshot = await getDocs(surveysQuery);
-        
-        // Try to fetch company data from the nested collection structure
-        console.log("Fetching from companies/tests/students collection");
-        const companyStudentsQuery = query(collectionGroup(db, 'students'));
-        let companyStudentsMap = {};
-        
-        // Also fetch the companies collection directly to get company names
-        let companiesMap = {};
-        try {
-          console.log("Fetching companies collection");
-          const companiesQuery = query(collection(db, 'companies'));
-          const companiesSnapshot = await getDocs(companiesQuery);
-          console.log(`Found ${companiesSnapshot.docs.length} companies`);
+        // Process final survey data
+        const finalSurveyData = finalSnapshot.docs.map(doc => {
+          const data = doc.data();
           
-          // Create a map of company IDs to company names
-          companiesMap = companiesSnapshot.docs.reduce((map, doc) => {
-            const data = doc.data();
-            // Use the company name from the data, or the ID as fallback
-            map[doc.id] = {
-              id: doc.id,
-              name: data.name || data.companyName || doc.id,
-              ...data
-            };
-            return map;
-          }, {});
+          // Calculate score from survey data
+          let score = 0;
           
-          console.log("Created map of companies:", Object.keys(companiesMap).length);
-        } catch (companiesError) {
-          console.error("Error fetching companies collection:", companiesError);
-          // Continue even if this fails
-        }
-        
-        try {
-          const companyStudentsSnapshot = await getDocs(companyStudentsQuery);
-          console.log(`Found ${companyStudentsSnapshot.docs.length} students in companies collection`);
-          
-          // Create a map of student IDs to company info
-          companyStudentsMap = companyStudentsSnapshot.docs.reduce((map, doc) => {
-            // Extract the path components to get company info
-            const pathSegments = doc.ref.path.split('/');
-            const companyId = pathSegments[1]; // The ID of the company
+          // Use the totalScore if available (normalized to a 10-point scale)
+          if (data.totalScore !== undefined && data.maxPossibleScore) {
+            score = (data.totalScore / data.maxPossibleScore) * 10;
+          } 
+          // Otherwise try to calculate from workAttitude and workPerformance
+          else if (data.workAttitude && data.workPerformance) {
+            const attitudeScore = data.workAttitude.totalScore || 0;
+            const attitudeMax = data.workAttitude.maxPossibleScore || 40;
             
-            // Try to extract company name from the data if available
-            const data = doc.data();
+            const performanceScore = data.workPerformance.totalScore || 0;
+            const performanceMax = data.workPerformance.maxPossibleScore || 60;
             
-            // Look up company name from companiesMap if available, otherwise use what we can find
-            const companyInfo = companiesMap[companyId] || {};
-            const companyName = companyInfo.name || data.companyName || companyId;
+            // Calculate combined score (normalized to 10)
+            const totalMax = attitudeMax + performanceMax;
+            const totalScore = attitudeScore + performanceScore;
             
-            map[doc.id] = {
-              companyId,
-              companyName,
-              ...data
-            };
-            return map;
-          }, {});
+            score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
+          }
           
-          console.log("Created map of company students:", Object.keys(companyStudentsMap).length);
-        } catch (companyError) {
-          console.error("Error fetching from companies collection:", companyError);
-          // Continue with other sources even if this fails
-        }
+          return {
+            id: doc.id,
+            ...data,
+            // Normalize field names to ensure consistency
+            name: data.studentName || data.name || 'Unknown Student',
+            partnerCompany: data.partnerCompany || 
+                            data.companyName || 
+                            data.company || 
+                            'Unknown Company',
+            college: data.college || 'Unknown College',
+            program: data.program || 'Unknown Program',
+            // Normalize semester data
+            semester: normalizeSemester(data.semester),
+            schoolYear: data.schoolYear || '',
+            evaluationScore: Math.round(score * 10) / 10,
+            rawScore: score,  // Store the raw score for weighting
+            surveyType: 'final',
+            source: 'final_surveys',
+            studentId: data.studentId || doc.id  // Ensure we have a studentId for grouping
+          };
+        });
         
-        if (!surveysSnapshot.empty) {
-          console.log(`Found ${surveysSnapshot.docs.length} student surveys`);
+        // Create a listener for studentSurveys_midterm collection
+        const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
+        midtermUnsubscribe = onSnapshot(midtermSurveysRef, (midtermSnapshot) => {
+          console.log(`Received update from midterm surveys: ${midtermSnapshot.docs.length} documents`);
           
-          // Process student surveys data
-          const surveyData = surveysSnapshot.docs.map(doc => {
+          // Process midterm survey data
+          const midtermSurveyData = midtermSnapshot.docs.map(doc => {
             const data = doc.data();
             
             // Calculate score from survey data
@@ -331,175 +321,153 @@ function AdminRankings() {
               score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
             }
             
-            // Check if we have company data for this student
-            const companyData = companyStudentsMap[doc.id] || {};
-            
-            // Look for any company ID reference in the data
-            const companyIdFromData = data.companyId || data.company_id || '';
-            
-            // If we have a company ID but no company data, try to look it up in the companies map
-            let resolvedCompanyName = companyData.companyName;
-            if (!resolvedCompanyName && companyIdFromData && companiesMap[companyIdFromData]) {
-              resolvedCompanyName = companiesMap[companyIdFromData].name;
-            }
-            
-            // Handle different field names from different collections
             return {
               id: doc.id,
               ...data,
-              // Normalize field names to ensure consistency
               name: data.studentName || data.name || 'Unknown Student',
-              partnerCompany: resolvedCompanyName || 
-                              data.partnerCompany || 
+              partnerCompany: data.partnerCompany || 
                               data.companyName || 
                               data.company || 
-                              (companyIdFromData ? `Company ${companyIdFromData}` : 'Unknown Company'),
-              companyId: companyData.companyId || companyIdFromData || '',
+                              'Unknown Company',
               college: data.college || 'Unknown College',
               program: data.program || 'Unknown Program',
-              // Normalize semester data
               semester: normalizeSemester(data.semester),
               schoolYear: data.schoolYear || '',
               evaluationScore: Math.round(score * 10) / 10,
-              source: 'surveys',
-              hasCompanyData: !!(companyData.companyId || (companyIdFromData && companiesMap[companyIdFromData]))
+              rawScore: score,
+              surveyType: 'midterm',
+              source: 'midterm_surveys',
+              studentId: data.studentId || doc.id
             };
           });
           
-          // Set the data from surveys
-          setStudents(surveyData);
-          setLoading(false);
-        } else {
-          console.log("No surveys found, trying studentData collection");
-          
-          // Fallback to studentData if no surveys found
-          const q = query(collection(db, 'studentData'));
-          const snapshot = await getDocs(q);
-          
-          const studentsList = snapshot.docs.map(doc => {
-            const data = doc.data();
-            
-            // Check if we have company data for this student
-            const companyData = companyStudentsMap[doc.id] || {};
-            
-            // Look for any company ID reference in the data
-            const companyIdFromData = data.companyId || data.company_id || '';
-            
-            // If we have a company ID but no company data, try to look it up in the companies map
-            let resolvedCompanyName = companyData.companyName;
-            if (!resolvedCompanyName && companyIdFromData && companiesMap[companyIdFromData]) {
-              resolvedCompanyName = companiesMap[companyIdFromData].name;
-            }
-            
-            return {
-              id: doc.id,
-              ...data,
-              // Normalize field names to ensure consistency
-              name: data.name || data.studentName || 'Unknown Student',
-              partnerCompany: resolvedCompanyName || 
-                              data.partnerCompany || 
-                              data.companyName || 
-                              data.company || 
-                              (companyIdFromData ? `Company ${companyIdFromData}` : 'Unknown Company'),
-              companyId: companyData.companyId || companyIdFromData || '',
-              college: data.college || 'Unknown College',
-              program: data.program || 'Unknown Program',
-              // Normalize semester data
-              semester: normalizeSemester(data.semester),
-              schoolYear: data.schoolYear || '',
-              evaluationScore: calculateEvaluationScore(data.evaluation || ''),
-              source: 'studentData',
-              hasCompanyData: !!(companyData.companyId || (companyIdFromData && companiesMap[companyIdFromData]))
-            };
-          });
-          
-          console.log(`Found ${studentsList.length} student records`);
-          setStudents(studentsList);
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error fetching students:", error);
-        
-        // Try the fallback approach if first attempt fails
-        try {
-          console.log("First approach failed, trying fallback to studentData");
-          
-          // Create a new companiesMap for the fallback
-          let fallbackCompaniesMap = {};
-          
-          // Try to fetch companies data in the fallback approach
-          try {
-            console.log("Fetching companies collection for fallback");
-            const companiesQuery = query(collection(db, 'companies'));
-            const companiesSnapshot = await getDocs(companiesQuery);
-            
-            // Create a map of company IDs to company names
-            fallbackCompaniesMap = companiesSnapshot.docs.reduce((map, doc) => {
-              const data = doc.data();
-              map[doc.id] = {
-                id: doc.id,
-                name: data.name || data.companyName || doc.id,
-                ...data
-              };
-              return map;
-            }, {});
-            
-            console.log("Created fallback map of companies:", Object.keys(fallbackCompaniesMap).length);
-          } catch (companiesError) {
-            console.error("Error fetching companies for fallback:", companiesError);
-            // Continue even if this fails
-          }
-          
-          const q = query(collection(db, 'studentData'));
-          const snapshot = await getDocs(q);
-          
-          const studentsList = snapshot.docs.map(doc => {
-            const data = doc.data();
-            
-            // Look for any company ID reference in the data
-            const companyIdFromData = data.companyId || data.company_id || '';
-            
-            // Try to look up company name from companies map if we have a company ID
-            let resolvedCompanyName = null;
-            if (companyIdFromData && fallbackCompaniesMap[companyIdFromData]) {
-              resolvedCompanyName = fallbackCompaniesMap[companyIdFromData].name;
-            }
-            
-            return {
-              id: doc.id,
-              ...data,
-              // Normalize field names to ensure consistency
-              name: data.name || data.studentName || 'Unknown Student',
-              partnerCompany: resolvedCompanyName || 
-                              data.partnerCompany || 
-                              data.companyName || 
-                              data.company || 
-                              (companyIdFromData ? `Company ${companyIdFromData}` : 'Unknown Company'),
-              companyId: companyIdFromData || '',
-              college: data.college || 'Unknown College',
-              program: data.program || 'Unknown Program',
-              // Normalize semester data
-              semester: normalizeSemester(data.semester),
-              schoolYear: data.schoolYear || '',
-              evaluationScore: calculateEvaluationScore(data.evaluation || ''),
-              source: 'studentData',
-              hasCompanyData: !!(companyIdFromData && fallbackCompaniesMap[companyIdFromData])
-            };
-          });
-          
-          console.log(`Found ${studentsList.length} student records from fallback`);
-          setStudents(studentsList);
-          setLoading(false);
-        } catch (fallbackError) {
-          console.error("Error with fallback approach:", fallbackError);
-          setError(`Error loading data: ${error.message}. Fallback also failed.`);
-          setLoading(false);
-        }
-      }
-    }
+          // Group the surveys and process combined data
+          const studentMap = new Map();
 
-    fetchStudents();
-  }, [currentUser, userRole]);
+          // Process final surveys
+          finalSurveyData.forEach(survey => {
+            const studentId = survey.studentId;
+            if (!studentId) return;
+            
+            if (!studentMap.has(studentId)) {
+              studentMap.set(studentId, {
+                student: survey,
+                finalSurveys: [],
+                midtermSurveys: [],
+                finalAvgScore: 0,
+                midtermAvgScore: 0,
+                combinedScore: 0
+              });
+            }
+            
+            const studentData = studentMap.get(studentId);
+            studentData.finalSurveys.push(survey);
+          });
+
+          // Process midterm surveys
+          midtermSurveyData.forEach(survey => {
+            const studentId = survey.studentId;
+            if (!studentId) return;
+            
+            if (!studentMap.has(studentId)) {
+              studentMap.set(studentId, {
+                student: survey,
+                finalSurveys: [],
+                midtermSurveys: [],
+                finalAvgScore: 0,
+                midtermAvgScore: 0,
+                combinedScore: 0
+              });
+            }
+            
+            const studentData = studentMap.get(studentId);
+            studentData.midtermSurveys.push(survey);
+          });
+
+          // Calculate average scores and apply 50-50 weighting
+          studentMap.forEach((data, studentId) => {
+            // Calculate final average score
+            if (data.finalSurveys.length > 0) {
+              const totalFinalScore = data.finalSurveys.reduce((sum, survey) => sum + survey.rawScore, 0);
+              data.finalAvgScore = totalFinalScore / data.finalSurveys.length;
+            }
+            
+            // Calculate midterm average score
+            if (data.midtermSurveys.length > 0) {
+              const totalMidtermScore = data.midtermSurveys.reduce((sum, survey) => sum + survey.rawScore, 0);
+              data.midtermAvgScore = totalMidtermScore / data.midtermSurveys.length;
+            }
+            
+            // Apply 50-50 weighting if both types are available
+            if (data.finalSurveys.length > 0 && data.midtermSurveys.length > 0) {
+              // 50% weight to each type
+              data.combinedScore = (data.finalAvgScore * 0.5) + (data.midtermAvgScore * 0.5);
+            }
+            // Otherwise use available data (100% weight to what we have)
+            else if (data.finalSurveys.length > 0) {
+              data.combinedScore = data.finalAvgScore;
+            }
+            else if (data.midtermSurveys.length > 0) {
+              data.combinedScore = data.midtermAvgScore;
+            }
+            
+            // Update the student object with the combined score information
+            const baseStudent = data.student;
+            baseStudent.evaluationScore = Math.round(data.combinedScore * 10) / 10;
+            baseStudent.surveyScores = {
+              final: data.finalAvgScore > 0 ? Math.round(data.finalAvgScore * 10) / 10 : null,
+              midterm: data.midtermAvgScore > 0 ? Math.round(data.midtermAvgScore * 10) / 10 : null,
+              combined: baseStudent.evaluationScore
+            };
+            baseStudent.hasMidtermData = data.midtermSurveys.length > 0;
+            baseStudent.hasFinalData = data.finalSurveys.length > 0;
+            
+            // For all surveys view, set the surveyType to combined
+            if (baseStudent.hasMidtermData && baseStudent.hasFinalData) {
+              baseStudent.surveyType = 'combined';
+            }
+          });
+
+          // Create a deduplicated array of students from the studentMap
+          const combinedData = Array.from(studentMap.values()).map(data => data.student);
+
+          // Use the combined data with weighted scores
+          setStudents(combinedData);
+          setLoading(false);
+        });
+      });
+      
+      // Store unsubscribe functions for cleanup
+      return () => {
+        console.log("Cleaning up real-time listeners");
+        if (finalUnsubscribe) finalUnsubscribe();
+        if (midtermUnsubscribe) midtermUnsubscribe();
+      };
+    } catch (error) {
+      console.error("Error setting up survey listeners:", error);
+      setLoading(false);
+      setError(`Error loading data: ${error.message}`);
+      return () => {}; // Return empty cleanup function
+    }
+  }, []);  // No dependencies needed because we're using external constants and setState
+
+  useEffect(() => {
+    if (!userRole || userRole !== 'admin') {
+      setError('Unauthorized access');
+      setLoading(false);
+      return;
+    }
+    
+    // Set up real-time listeners and store the unsubscribe function
+    const unsubscribe = fetchStudents();
+    
+    // Clean up the listeners when component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [userRole, fetchStudents]);
 
   useEffect(() => {
     // After students are loaded, log all semester values for debugging
@@ -520,38 +488,6 @@ function AdminRankings() {
     setPage(1);
   }, [selectedProgram, selectedSemester, selectedYear]);
 
-  // Function to calculate a numeric score from evaluation text
-  const calculateEvaluationScore = (evaluation) => {
-    if (!evaluation) return 0;
-    
-    const positiveKeywords = [
-      'excellent', 'outstanding', 'exceptional', 'great', 'good', 
-      'skilled', 'proficient', 'talented', 'impressive', 'dedicated',
-      'reliable', 'innovative', 'efficient', 'thorough', 'professional'
-    ];
-    
-    const normalizedText = evaluation.toLowerCase();
-    
-    // Base score from evaluation length (max 4 points)
-    let score = Math.min(evaluation.length / 100, 4);
-    
-    // Score from positive keywords (max 4 points)
-    const keywordScore = positiveKeywords.reduce((acc, keyword) => {
-      return acc + (normalizedText.includes(keyword) ? 0.4 : 0);
-    }, 0);
-    
-    // Add keyword score
-    score += Math.min(keywordScore, 4);
-    
-    // Add 2 points if evaluation is comprehensive (contains multiple sentences)
-    const sentences = evaluation.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    if (sentences.length >= 3) {
-      score += 2;
-    }
-    
-    return Math.min(score, 10); // Cap at 10
-  };
-
   // Filter students based on selected filters
   const filteredStudents = students.filter(student => {
     const collegeMatches = selectedCollege === 'All' || student.college === selectedCollege;
@@ -570,11 +506,17 @@ function AdminRankings() {
     
     const yearMatches = selectedYear === 'All' || student.schoolYear === selectedYear;
     
+    // Improve survey type matching to check surveyScores
+    const surveyTypeMatches = 
+      selectedSurveyType === 'all' || 
+      (selectedSurveyType === 'final' && student.hasFinalData) ||
+      (selectedSurveyType === 'midterm' && student.hasMidtermData);
+    
     if (selectedSemester !== 'All' && !semesterMatches && student.semester) {
       console.log(`Non-matching semester: Student "${student.semester}" vs Selected "${selectedSemester}"`);
     }
     
-    return collegeMatches && programMatches && semesterMatches && yearMatches;
+    return collegeMatches && programMatches && semesterMatches && yearMatches && surveyTypeMatches;
   });
 
   // Sort students by evaluation score
@@ -737,7 +679,7 @@ function AdminRankings() {
         </Typography>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={2.4}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>College</InputLabel>
               <Select
@@ -754,7 +696,7 @@ function AdminRankings() {
             </StyledFormControl>
           </Grid>
           
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={2.4}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>Program</InputLabel>
               <Select
@@ -771,7 +713,7 @@ function AdminRankings() {
             </StyledFormControl>
           </Grid>
           
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={2.4}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>Semester</InputLabel>
               <Select
@@ -788,7 +730,7 @@ function AdminRankings() {
             </StyledFormControl>
           </Grid>
           
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={2.4}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>School Year</InputLabel>
               <Select
@@ -804,7 +746,50 @@ function AdminRankings() {
               </Select>
             </StyledFormControl>
           </Grid>
+          
+          <Grid item xs={12} md={2.4}>
+            <FormControl fullWidth variant="outlined" size="small">
+              <InputLabel>Evaluation Type</InputLabel>
+              <Select
+                value={selectedSurveyType}
+                onChange={(e) => setSelectedSurveyType(e.target.value)}
+                label="Evaluation Type"
+                startAdornment={<FilterAlt sx={{ color: 'rgba(128, 0, 0, 0.54)', mr: 1, ml: -0.5 }} fontSize="small" />}
+              >
+                <MenuItem value="all">All Evaluations</MenuItem>
+                <MenuItem value="midterm">Midterm Evaluation</MenuItem>
+                <MenuItem value="final">Final Evaluation</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
         </Grid>
+        
+        {selectedSurveyType !== 'all' && (
+          <Box sx={{ mb: 2 }}>
+            <Chip 
+              icon={<FilterAlt fontSize="small" />}
+              label={`${selectedSurveyType === 'midterm' ? 'Midterm' : 'Final'} Evaluation Data Only`}
+              color="primary"
+              sx={{ 
+                bgcolor: 'rgba(128, 0, 0, 0.1)',
+                color: '#800000',
+                fontWeight: 'medium',
+                border: '1px solid rgba(128, 0, 0, 0.2)',
+                '& .MuiChip-icon': {
+                  color: '#800000',
+                }
+              }}
+            />
+            <Typography 
+              variant="caption" 
+              sx={{ ml: 1, display: 'inline-block', color: 'text.secondary', fontStyle: 'italic' }}
+            >
+              {student => student.hasMidtermData && student.hasFinalData ? 
+                "Note: When viewing 'All Evaluations', scores use 50% weighting from each evaluation type." :
+                ""}
+            </Typography>
+          </Box>
+        )}
         
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs 
@@ -903,19 +888,21 @@ function AdminRankings() {
                             </Box>
                           </TableCell>
                           <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Box sx={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center',
-                                color: student.evaluationScore >= 8 
-                                  ? '#FFD700' 
-                                  : student.evaluationScore >= 6 
-                                    ? '#1976d2' 
-                                    : 'text.secondary'
-                              }}>
-                                {student.evaluationScore.toFixed(1)}
-                                <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
-                              </Box>
+                            <Box sx={{ 
+                              display: 'inline-flex', 
+                              alignItems: 'center',
+                              color: student.evaluationScore >= 8 
+                                ? '#FFD700' 
+                                : student.evaluationScore >= 6 
+                                  ? '#1976d2' 
+                                  : 'text.secondary'
+                            }}>
+                              {(selectedSurveyType === 'final' && student.surveyScores?.final
+                                ? student.surveyScores.final
+                                : selectedSurveyType === 'midterm' && student.surveyScores?.midterm
+                                  ? student.surveyScores.midterm 
+                                  : student.evaluationScore || 0).toFixed(1)}
+                              <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                             </Box>
                           </TableCell>
                         </StyledTableRow>
@@ -1039,19 +1026,21 @@ function AdminRankings() {
                                     </Box>
                                   </TableCell>
                                   <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <Box sx={{ 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center',
-                                        color: student.evaluationScore >= 8 
-                                          ? '#FFD700' 
-                                          : student.evaluationScore >= 6 
-                                            ? '#1976d2' 
-                                            : 'text.secondary'
-                                      }}>
-                                        {student.evaluationScore.toFixed(1)}
-                                        <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
-                                      </Box>
+                                    <Box sx={{ 
+                                      display: 'inline-flex', 
+                                      alignItems: 'center',
+                                      color: student.evaluationScore >= 8 
+                                        ? '#FFD700' 
+                                        : student.evaluationScore >= 6 
+                                          ? '#1976d2' 
+                                          : 'text.secondary'
+                                    }}>
+                                      {(selectedSurveyType === 'final' && student.surveyScores?.final
+                                        ? student.surveyScores.final
+                                        : selectedSurveyType === 'midterm' && student.surveyScores?.midterm
+                                          ? student.surveyScores.midterm 
+                                          : student.evaluationScore || 0).toFixed(1)}
+                                      <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                                     </Box>
                                   </TableCell>
                                 </StyledTableRow>
@@ -1201,19 +1190,21 @@ function AdminRankings() {
                                   </Box>
                                 </TableCell>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Box sx={{ 
-                                      display: 'inline-flex', 
-                                      alignItems: 'center',
-                                      color: student.evaluationScore >= 8 
-                                        ? '#FFD700' 
-                                        : student.evaluationScore >= 6 
-                                          ? '#1976d2' 
-                                          : 'text.secondary'
-                                    }}>
-                                      {student.evaluationScore.toFixed(1)}
-                                      <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
-                                    </Box>
+                                  <Box sx={{ 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center',
+                                    color: student.evaluationScore >= 8 
+                                      ? '#FFD700' 
+                                      : student.evaluationScore >= 6 
+                                        ? '#1976d2' 
+                                        : 'text.secondary'
+                                  }}>
+                                    {(selectedSurveyType === 'final' && student.surveyScores?.final
+                                      ? student.surveyScores.final
+                                      : selectedSurveyType === 'midterm' && student.surveyScores?.midterm
+                                        ? student.surveyScores.midterm 
+                                        : student.evaluationScore || 0).toFixed(1)}
+                                    <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                                   </Box>
                                 </TableCell>
                               </StyledTableRow>

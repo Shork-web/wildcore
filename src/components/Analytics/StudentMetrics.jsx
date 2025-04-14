@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase-config';
-import { Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, Select, MenuItem, Paper, CircularProgress } from '@mui/material';
+import { 
+  Grid, Box, Typography, Card, CardContent, FormControl, 
+  InputLabel, Select, MenuItem, Paper, CircularProgress,
+  Chip, Tooltip, Badge, Button
+} from '@mui/material';
 import { keyframes } from '@mui/system';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CancelIcon from '@mui/icons-material/Cancel';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
 // Define rotation animations
 const rotateOuter = keyframes`
@@ -30,164 +38,217 @@ function StudentMetrics() {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
   const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedSurveyType, setSelectedSurveyType] = useState('all');
   const [programs, setPrograms] = useState([]);
 
   // Fetch data from Firestore
   useEffect(() => {
-    const fetchSurveyData = async () => {
+    let isMounted = true;
+    let unsubscribeFinal, unsubscribeMidterm;
+
+    const setupRealtimeListeners = () => {
       try {
-        // Only fetch from studentSurveys collection
-        const surveysRef = collection(db, 'studentSurveys');
-        const snapshot = await getDocs(surveysRef);
-        let surveys = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        setLoading(true);
         
-        console.log(`StudentMetrics: Retrieved ${surveys.length} documents from studentSurveys collection`);
+        // Combined data structure to store both final and midterm surveys
+        const data = {
+          surveys: [],
+          uniquePrograms: new Set()
+        };
         
-        // Fix missing rating fields with default values to prevent rendering errors
-        surveys.forEach(survey => {
-          // Ensure workAttitude exists and has ratings
-          if (!survey.workAttitude) {
-            survey.workAttitude = {
-              ratings: {
+        // First listener: final surveys
+        const finalSurveysRef = collection(db, 'studentSurveys_final');
+        unsubscribeFinal = onSnapshot(finalSurveysRef, (finalSnapshot) => {
+          if (!isMounted) return;
+          
+          const finalSurveys = finalSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            surveyType: 'final'  // Add identifier for final surveys
+          }));
+          
+          console.log(`StudentMetrics: Retrieved ${finalSurveys.length} documents from studentSurveys_final collection`);
+          
+          // Update with the latest data
+          data.surveys = [...data.surveys.filter(s => s.surveyType !== 'final'), ...finalSurveys];
+          
+          // Process and normalize data
+          processData();
+        }, (error) => {
+          console.error('Error in real-time listener for final surveys:', error);
+          if (isMounted) setLoading(false);
+        });
+        
+        // Second listener: midterm surveys
+        const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
+        unsubscribeMidterm = onSnapshot(midtermSurveysRef, (midtermSnapshot) => {
+          if (!isMounted) return;
+          
+          const midtermSurveys = midtermSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            surveyType: 'midterm'  // Add identifier for midterm surveys
+          }));
+          
+          console.log(`StudentMetrics: Retrieved ${midtermSurveys.length} documents from studentSurveys_midterm collection`);
+          
+          // Update with the latest data
+          data.surveys = [...data.surveys.filter(s => s.surveyType !== 'midterm'), ...midtermSurveys];
+          
+          // Process and normalize data
+          processData();
+        }, (error) => {
+          console.error('Error in real-time listener for midterm surveys:', error);
+          if (isMounted) setLoading(false);
+        });
+        
+        // Function to process, normalize and update state with the latest data
+        const processData = () => {
+          if (!isMounted) return;
+          
+          // Fix missing rating fields with default values to prevent rendering errors
+          const surveys = data.surveys.map(survey => {
+            const processedSurvey = { ...survey };
+            
+            // Ensure workAttitude exists and has ratings
+            if (!processedSurvey.workAttitude) {
+              processedSurvey.workAttitude = {
+                ratings: {
+                  teamwork: 4,
+                  communication: 4,
+                  punctuality: 4,
+                  initiative: 4
+                },
+                totalScore: 16,
+                maxPossibleScore: 20
+              };
+            } else if (!processedSurvey.workAttitude.ratings) {
+              processedSurvey.workAttitude.ratings = {
                 teamwork: 4,
                 communication: 4,
                 punctuality: 4,
                 initiative: 4
-              },
-              totalScore: 16,
-              maxPossibleScore: 20
-            };
-          } else if (!survey.workAttitude.ratings) {
-            survey.workAttitude.ratings = {
-              teamwork: 4,
-              communication: 4,
-              punctuality: 4,
-              initiative: 4
-            };
-          }
-          
-          // Ensure workPerformance exists and has ratings
-          if (!survey.workPerformance) {
-            survey.workPerformance = {
-              ratings: {
+              };
+            }
+            
+            // Ensure workPerformance exists and has ratings
+            if (!processedSurvey.workPerformance) {
+              processedSurvey.workPerformance = {
+                ratings: {
+                  technicalSkills: 4,
+                  adaptability: 4,
+                  productivity: 4,
+                  criticalThinking: 4
+                },
+                totalScore: 16,
+                maxPossibleScore: 20
+              };
+            } else if (!processedSurvey.workPerformance.ratings) {
+              processedSurvey.workPerformance.ratings = {
                 technicalSkills: 4,
                 adaptability: 4,
                 productivity: 4,
                 criticalThinking: 4
-              },
-              totalScore: 16,
-              maxPossibleScore: 20
-            };
-          } else if (!survey.workPerformance.ratings) {
-            survey.workPerformance.ratings = {
-              technicalSkills: 4,
-              adaptability: 4,
-              productivity: 4,
-              criticalThinking: 4
-            };
-          }
+              };
+            }
+            
+            // Ensure programSuccess exists
+            if (!processedSurvey.programSuccess) {
+              processedSurvey.programSuccess = {
+                placement: 4,
+                careerRelevance: 4,
+                skillsDevelopment: 4,
+                overallSatisfaction: 4
+              };
+            }
+            
+            // Normalize companyName field if needed
+            if (processedSurvey.companyName) {
+              processedSurvey.companyName = processedSurvey.companyName.trim();
+            }
+            
+            return processedSurvey;
+          });
           
-          // Ensure programSuccess exists
-          if (!survey.programSuccess) {
-            survey.programSuccess = {
-              placement: 4,
-              careerRelevance: 4,
-              skillsDevelopment: 4,
-              overallSatisfaction: 4
-            };
-          }
-          
-          // Normalize companyName field if needed
-          if (survey.companyName) {
-            survey.companyName = survey.companyName.trim();
-          }
-        });
-        
-        // Check for data inconsistencies
-        const checkDataInconsistencies = (data) => {
-          // Check program name issues
-          const programNames = data.map(item => item.program).filter(Boolean);
-          const uniquePrograms = [...new Set(programNames)];
-          
-          // Find similar program names that might cause confusion
-          const similarPrograms = [];
-          for (let i = 0; i < uniquePrograms.length; i++) {
-            for (let j = i + 1; j < uniquePrograms.length; j++) {
-              const a = uniquePrograms[i];
-              const b = uniquePrograms[j];
-              
-              if (a && b && (a.includes(b) || b.includes(a))) {
-                similarPrograms.push([a, b]);
+          // Check for data inconsistencies
+          const checkDataInconsistencies = (data) => {
+            // Check program name issues
+            const programNames = data.map(item => item.program).filter(Boolean);
+            const uniquePrograms = [...new Set(programNames)];
+            
+            // Find similar program names that might cause confusion
+            const similarPrograms = [];
+            for (let i = 0; i < uniquePrograms.length; i++) {
+              for (let j = i + 1; j < uniquePrograms.length; j++) {
+                const a = uniquePrograms[i];
+                const b = uniquePrograms[j];
+                
+                if (a && b && (a.includes(b) || b.includes(a))) {
+                  similarPrograms.push([a, b]);
+                }
               }
             }
-          }
-          
-          if (similarPrograms.length > 0) {
-            console.warn('⚠️ Potential program name conflicts detected:', similarPrograms);
-          }
-          
-          // Check school year issues
-          const schoolYears = data.map(item => item.schoolYear).filter(Boolean);
-          const uniqueYears = [...new Set(schoolYears)];
-          
-          // Find similar year values that might cause confusion
-          const similarYears = [];
-          for (let i = 0; i < uniqueYears.length; i++) {
-            for (let j = i + 1; j < uniqueYears.length; j++) {
-              const a = uniqueYears[i];
-              const b = uniqueYears[j];
-              
-              if (a && b && (a.includes(b) || b.includes(a))) {
-                similarYears.push([a, b]);
+            
+            if (similarPrograms.length > 0) {
+              console.warn('⚠️ Potential program name conflicts detected:', similarPrograms);
+            }
+            
+            // Check school year issues
+            const schoolYears = data.map(item => item.schoolYear).filter(Boolean);
+            const uniqueYears = [...new Set(schoolYears)];
+            
+            // Find similar year values that might cause confusion
+            const similarYears = [];
+            for (let i = 0; i < uniqueYears.length; i++) {
+              for (let j = i + 1; j < uniqueYears.length; j++) {
+                const a = uniqueYears[i];
+                const b = uniqueYears[j];
+                
+                if (a && b && (a.includes(b) || b.includes(a))) {
+                  similarYears.push([a, b]);
+                }
               }
             }
+            
+            if (similarYears.length > 0) {
+              console.warn('⚠️ Potential school year conflicts detected:', similarYears);
+            }
+          };
+          
+          // Run consistency check
+          checkDataInconsistencies(surveys);
+          
+          // Update state with processed surveys
+          setSurveyData(surveys);
+          
+          // Extract unique programs with careful normalization
+          const uniquePrograms = [...new Set(surveys.map(survey => survey.program).filter(Boolean))].sort();
+          console.log("Available programs:", uniquePrograms);
+          
+          setPrograms(uniquePrograms);
+          
+          if (uniquePrograms.length > 0 && !selectedProgram) {
+            setSelectedProgram(uniquePrograms[0]);
           }
           
-          if (similarYears.length > 0) {
-            console.warn('⚠️ Potential school year conflicts detected:', similarYears);
-          }
+          setLoading(false);
         };
-        
-        // Normalize all program names to avoid mismatches
-        surveys.forEach(survey => {
-          if (survey.program) {
-            // Clean up program name by removing extra spaces and standardizing format
-            survey.program = survey.program.trim();
-          }
-          
-          // Also normalize school year for consistent filtering
-          if (survey.schoolYear) {
-            survey.schoolYear = survey.schoolYear.trim();
-          }
-        });
-        
-        // Run consistency check
-        checkDataInconsistencies(surveys);
-        
-        setSurveyData(surveys);
-        
-        // Extract unique programs with careful normalization
-        const uniquePrograms = [...new Set(surveys.map(survey => survey.program).filter(Boolean))].sort();
-        console.log("Available programs:", uniquePrograms);
-        
-        setPrograms(uniquePrograms);
-        
-        if (uniquePrograms.length > 0) {
-          setSelectedProgram(uniquePrograms[0]);
-        }
-        
-        setLoading(false);
       } catch (error) {
-        console.error('Error fetching surveys:', error);
-        setLoading(false);
+        console.error('Error setting up listeners:', error);
+        if (isMounted) setLoading(false);
       }
     };
 
-    fetchSurveyData();
-  }, []);
+    // Start listening for real-time updates
+    setupRealtimeListeners();
+
+    // Clean up listeners when component unmounts
+    return () => {
+      isMounted = false;
+      if (unsubscribeFinal) unsubscribeFinal();
+      if (unsubscribeMidterm) unsubscribeMidterm();
+    };
+  }, [selectedProgram]);
 
   // Extract unique filter options from actual data
   const filterOptions = {
@@ -235,7 +296,10 @@ function StudentMetrics() {
       // Check company filter - only use companyName field
       const companyMatch = selectedCompany === 'all' || survey.companyName === selectedCompany;
       
-      return semesterMatch && companyMatch;
+      // Check survey type filter (midterm/final)
+      const surveyTypeMatch = selectedSurveyType === 'all' || survey.surveyType === selectedSurveyType;
+      
+      return semesterMatch && companyMatch && surveyTypeMatch;
     });
   };
 
@@ -247,6 +311,7 @@ function StudentMetrics() {
     if (filteredData.length > 0) {
       console.log("DEBUG: First survey structure:");
       console.log("ID:", filteredData[0].id);
+      console.log("Survey Type:", filteredData[0].surveyType); // Log survey type (final/midterm)
       console.log("Company:", filteredData[0].companyName);
       console.log("Program:", filteredData[0].program);
       console.log("WorkAttitude structure:", JSON.stringify(filteredData[0].workAttitude, null, 2));
@@ -337,8 +402,33 @@ function StudentMetrics() {
       }
     };
 
-    // Calculate average ratings from all surveys
-    let totalSurveys = filteredData.length;
+    // Split data into final and midterm surveys
+    const finalSurveys = filteredData.filter(survey => survey.surveyType === 'final');
+    const midtermSurveys = filteredData.filter(survey => survey.surveyType === 'midterm');
+    
+    console.log(`Processing metrics with 50-50 weighting: ${finalSurveys.length} final surveys and ${midtermSurveys.length} midterm surveys`);
+    
+    // Process final surveys
+    const finalMetrics = calculateMetrics(finalSurveys, workAttitudeData, workPerformanceData, programSuccessData, 'final');
+    
+    // Process midterm surveys
+    const midtermMetrics = calculateMetrics(midtermSurveys, workAttitudeData, workPerformanceData, programSuccessData, 'midterm');
+    
+    // Combine results with 50-50 weighting
+    const combinedMetrics = combineMetrics(finalMetrics, midtermMetrics);
+    
+    return {
+      ...combinedMetrics,
+      totalSurveys: filteredData.length
+    };
+  };
+
+  // Helper function to calculate metrics for a set of surveys
+  const calculateMetrics = (surveys, attitudeTemplate, performanceTemplate, programTemplate, surveyType) => {
+    // Deep clone the templates to avoid modifying the originals
+    const workAttitudeData = JSON.parse(JSON.stringify(attitudeTemplate));
+    const workPerformanceData = JSON.parse(JSON.stringify(performanceTemplate));
+    const programSuccessData = JSON.parse(JSON.stringify(programTemplate));
     
     // Add debug counters for Career Relevance
     let careerRelevanceDebug = {
@@ -347,9 +437,9 @@ function StudentMetrics() {
       finalAverage: 0
     };
     
-    if (totalSurveys > 0) {
+    if (surveys.length > 0) {
       // Sum all ratings
-      filteredData.forEach((survey, index) => {
+      surveys.forEach((survey, index) => {
         // Work Attitude - Check both possible structures for where ratings are stored
         if (survey.workAttitude) {
           // Get ratings either from the top level or from the ratings object
@@ -373,8 +463,7 @@ function StudentMetrics() {
           workPerformanceData.criticalThinking.rating += Math.min(performanceRatings["Quality of Work"] || 0, 5.0);
         }
 
-        // Program Success - Since we don't have this in the database, use the calculated totals
-        // to generate reasonable values for the display metrics
+        // Program Success metrics calculation - same as before
         if (survey.workAttitude && survey.workPerformance) {
           // Get the actual rating values to calculate program success
           const attitudeRatings = survey.workAttitude.ratings || survey.workAttitude;
@@ -410,10 +499,9 @@ function StudentMetrics() {
           careerRelevanceDebug.contributingStudents++;
           careerRelevanceDebug.individualValues.push({
             studentId: survey.id,
+            surveyType,
             attitudeAvg,
             performanceAvg,
-            variability,
-            formula: `${attitudeAvg} * 0.6 + ${performanceAvg} * 0.4 - ${variability/2}`,
             calculatedValue: careerRelevanceValue
           });
           
@@ -431,7 +519,7 @@ function StudentMetrics() {
           careerRelevanceDebug.contributingStudents++;
           careerRelevanceDebug.individualValues.push({
             studentId: survey.id,
-            formula: `2.8 + Math.random() * 0.6 (fallback)`,
+            surveyType,
             calculatedValue: careerRelevanceValue
           });
           
@@ -442,173 +530,557 @@ function StudentMetrics() {
 
       // Calculate averages
       Object.values(workAttitudeData).forEach(metric => {
-        metric.rating = totalSurveys > 0 ? Math.min(+(metric.rating / totalSurveys).toFixed(1), 5.0) : 0;
+        metric.rating = surveys.length > 0 ? Math.min(+(metric.rating / surveys.length).toFixed(1), 5.0) : 0;
       });
 
       Object.values(workPerformanceData).forEach(metric => {
-        metric.rating = totalSurveys > 0 ? Math.min(+(metric.rating / totalSurveys).toFixed(1), 5.0) : 0;
+        metric.rating = surveys.length > 0 ? Math.min(+(metric.rating / surveys.length).toFixed(1), 5.0) : 0;
       });
 
-      // Special debug for Career Relevance final calculation
-      const careerRelevanceFinalValue = totalSurveys > 0 ? Math.min(+(programSuccessData.careerRelevance.rating / totalSurveys).toFixed(1), 5.0) : 0;
-      careerRelevanceDebug.finalAverage = careerRelevanceFinalValue;
-      console.log("Career Relevance Calculation:", careerRelevanceDebug);
-      programSuccessData.careerRelevance.rating = careerRelevanceFinalValue;
-      
-      // Calculate other program success metric averages
       Object.values(programSuccessData).forEach(metric => {
-        if (metric.aspect !== "Career Relevance") { // Skip, already calculated above
-          metric.rating = totalSurveys > 0 ? Math.min(+(metric.rating / totalSurveys).toFixed(1), 5.0) : 0;
-        }
+        metric.rating = surveys.length > 0 ? Math.min(+(metric.rating / surveys.length).toFixed(1), 5.0) : 0;
       });
+      
+      // Log career relevance debug info
+      if (surveyType) {
+        careerRelevanceDebug.finalAverage = programSuccessData.careerRelevance.rating;
+        console.log(`${surveyType.toUpperCase()} Career Relevance Calculation:`, careerRelevanceDebug);
+      }
     }
 
     return {
-      workAttitude: Object.values(workAttitudeData),
-      workPerformance: Object.values(workPerformanceData),
-      programSuccess: Object.values(programSuccessData),
-      totalSurveys: totalSurveys
+      workAttitude: workAttitudeData,
+      workPerformance: workPerformanceData,
+      programSuccess: programSuccessData,
+      count: surveys.length
     };
   };
 
-  // Filter Section Component
-  const FilterSection = () => (
-    <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 2 }}>
-        Filter Metrics
-      </Typography>
+  // Helper function to combine metrics with 50-50 weighting
+  const combineMetrics = (finalMetrics, midtermMetrics) => {
+    const hasFinal = finalMetrics.count > 0;
+    const hasMidterm = midtermMetrics.count > 0;
+    
+    // Helper function to combine metrics
+    const combineMetricSet = (finalSet, midtermSet) => {
+      const result = JSON.parse(JSON.stringify(hasFinal ? finalSet : midtermSet));
       
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Program</InputLabel>
-            <Select
-              value={selectedProgram}
-              label="Program"
-              onChange={(e) => setSelectedProgram(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
+      // If we have both final and midterm data, use 50-50 weighting
+      if (hasFinal && hasMidterm) {
+        Object.keys(result).forEach(key => {
+          result[key].rating = +(
+            (finalSet[key].rating * 0.5) + 
+            (midtermSet[key].rating * 0.5)
+          ).toFixed(1);
+        });
+      } 
+      // If we only have final or only midterm data, use 100% of what we have
+      else if (hasFinal) {
+        Object.keys(result).forEach(key => {
+          result[key].rating = finalSet[key].rating;
+        });
+      } else if (hasMidterm) {
+        Object.keys(result).forEach(key => {
+          result[key].rating = midtermSet[key].rating;
+        });
+      }
+      
+      return result;
+    };
+    
+    // Combine all metric sets
+    const combinedAttitude = combineMetricSet(finalMetrics.workAttitude, midtermMetrics.workAttitude);
+    const combinedPerformance = combineMetricSet(finalMetrics.workPerformance, midtermMetrics.workPerformance);
+    const combinedProgram = combineMetricSet(finalMetrics.programSuccess, midtermMetrics.programSuccess);
+    
+    // Return combined results
+    return {
+      workAttitude: Object.values(combinedAttitude),
+      workPerformance: Object.values(combinedPerformance),
+      programSuccess: Object.values(combinedProgram)
+    };
+  };
+
+  // Filter Section Component - Enhanced version
+  const FilterSection = () => {
+    // Count active filters for the badge
+    const activeFilterCount = [
+      selectedProgram !== '',
+      selectedYear !== 'all',
+      selectedSemester !== 'all',
+      selectedCompany !== 'all',
+      selectedSurveyType !== 'all'
+    ].filter(Boolean).length;
+    
+    // Handle reset all filters
+    const handleResetAllFilters = () => {
+      setSelectedProgram(programs.length > 0 ? programs[0] : '');
+      setSelectedYear('all');
+      setSelectedSemester('all');
+      setSelectedCompany('all');
+      setSelectedSurveyType('all');
+    };
+
+    return (
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 3, 
+          mb: 3, 
+          borderRadius: 2,
+          background: 'linear-gradient(to right, rgba(255,255,255,0.95), rgba(255,245,230,0.95))',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          overflow: 'hidden',
+          position: 'relative'
+        }}
+      >
+        {/* Header with title and reset button */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 2.5,
+          pb: 1,
+          borderBottom: '1px solid rgba(128, 0, 0, 0.1)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Badge 
+              badgeContent={activeFilterCount} 
+              color="primary"
+              sx={{ 
+                '& .MuiBadge-badge': { 
+                  backgroundColor: '#800000',
+                  fontWeight: 'bold'
+                } 
               }}
-              MenuProps={{
-                PaperProps: {
-                  style: {
-                    maxHeight: 300
+            >
+              <FilterAltIcon sx={{ mr: 1, color: '#800000' }} />
+            </Badge>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#800000' }}>
+              Program Analytics Filters
+            </Typography>
+          </Box>
+          
+          {activeFilterCount > 0 && (
+            <Tooltip title="Reset all filters">
+              <Button
+                size="small"
+                startIcon={<RestartAltIcon />}
+                onClick={handleResetAllFilters}
+                sx={{ 
+                  color: '#800000', 
+                  borderColor: 'rgba(128, 0, 0, 0.5)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                    borderColor: '#800000'
                   }
-                }
-              }}
-            >
-              {programs.map((program) => (
-                <MenuItem key={program} value={program}>
-                  {program}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel>School Year</InputLabel>
-            <Select
-              value={selectedYear}
-              label="School Year"
-              onChange={(e) => setSelectedYear(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
-              }}
-            >
-              <MenuItem value="all">All Years</MenuItem>
-              {filterOptions.years.map((year) => (
-                <MenuItem key={year} value={year}>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Semester</InputLabel>
-            <Select
-              value={selectedSemester}
-              label="Semester"
-              onChange={(e) => setSelectedSemester(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
-              }}
-            >
-              <MenuItem value="all">All Semesters</MenuItem>
-              {filterOptions.semesters.map((semester) => (
-                <MenuItem key={semester} value={semester}>
-                  {semester}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Company</InputLabel>
-            <Select
-              value={selectedCompany}
-              label="Company"
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              sx={{
-                '& .MuiSelect-select': { color: '#800000' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#800000',
-                },
-              }}
-              MenuProps={{
-                PaperProps: {
-                  style: {
-                    maxHeight: 300
-                  }
-                }
-              }}
-            >
-              <MenuItem value="all">All Companies</MenuItem>
-              {filterOptions.companies.map((company) => (
-                <MenuItem key={company} value={company}>
-                  {company}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-      </Grid>
-
-      {/* Active Filters Display */}
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="subtitle2" color="textSecondary">
-          Active Filters:
-          {selectedProgram && ` Program: ${selectedProgram},`}
-          {selectedYear !== 'all' && ` Year: ${selectedYear},`}
-          {selectedSemester !== 'all' && ` Semester: ${selectedSemester},`}
-          {selectedCompany !== 'all' && ` Company: ${selectedCompany}`}
-          {(!selectedProgram && selectedYear === 'all' && selectedSemester === 'all' && selectedCompany === 'all') && ' None'}
-        </Typography>
+                }}
+                variant="outlined"
+              >
+                Reset
+              </Button>
+            </Tooltip>
+          )}
+        </Box>
         
-        {/* Debug info for company filters */}
-        {getFilteredData().length === 0 && selectedCompany !== 'all' && (
-          <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
-            No data found for company "{selectedCompany}". Available companies: {filterOptions.companies.join(', ')}
-          </Typography>
+        <Grid container spacing={2.5}>
+          {/* Program filter */}
+          <Grid item xs={12} sm={6} md={4}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Program</InputLabel>
+              <Select
+                value={selectedProgram}
+                label="Program"
+                onChange={(e) => setSelectedProgram(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                {programs.map((program) => (
+                  <MenuItem key={program} value={program}>
+                    {program}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* School Year filter */}
+          <Grid item xs={12} sm={6} md={4}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>School Year</InputLabel>
+              <Select
+                value={selectedYear}
+                label="School Year"
+                onChange={(e) => setSelectedYear(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Years</MenuItem>
+                {filterOptions.years.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Semester filter */}
+          <Grid item xs={12} sm={6} md={4}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Semester</InputLabel>
+              <Select
+                value={selectedSemester}
+                label="Semester"
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Semesters</MenuItem>
+                {filterOptions.semesters.map((semester) => (
+                  <MenuItem key={semester} value={semester}>
+                    {semester}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Company filter */}
+          <Grid item xs={12} sm={6} md={6}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Company</InputLabel>
+              <Select
+                value={selectedCompany}
+                label="Company"
+                onChange={(e) => setSelectedCompany(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Companies</MenuItem>
+                {filterOptions.companies.map((company) => (
+                  <MenuItem key={company} value={company}>
+                    {company}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          {/* Survey Type filter */}
+          <Grid item xs={12} sm={6} md={6}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Survey Type</InputLabel>
+              <Select
+                value={selectedSurveyType}
+                label="Survey Type"
+                onChange={(e) => setSelectedSurveyType(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Surveys</MenuItem>
+                <MenuItem value="midterm">Midterm Evaluation</MenuItem>
+                <MenuItem value="final">Final Evaluation</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        {/* Active Filters as Chips */}
+        {activeFilterCount > 0 && (
+          <Box sx={{ 
+            mt: 3, 
+            pt: 2, 
+            borderTop: '1px dashed rgba(128, 0, 0, 0.15)',
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            gap: 1 
+          }}>
+            {selectedProgram && (
+              <Chip
+                label={`Program: ${selectedProgram}`}
+                onDelete={() => setSelectedProgram(programs.length > 0 ? programs[0] : '')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedYear !== 'all' && (
+              <Chip
+                label={`Year: ${selectedYear}`}
+                onDelete={() => setSelectedYear('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedSemester !== 'all' && (
+              <Chip
+                label={`Semester: ${selectedSemester}`}
+                onDelete={() => setSelectedSemester('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedCompany !== 'all' && (
+              <Chip
+                label={`Company: ${selectedCompany}`}
+                onDelete={() => setSelectedCompany('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedSurveyType !== 'all' && (
+              <Chip
+                label={`Survey: ${selectedSurveyType === 'midterm' ? 'Midterm Evaluation' : 'Final Evaluation'}`}
+                onDelete={() => setSelectedSurveyType('all')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+          </Box>
         )}
-      </Box>
-    </Paper>
-  );
+
+        {/* Results summary and error messages */}
+        <Box sx={{ mt: 2 }}>
+          {getFilteredData().length > 0 ? (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              bgcolor: 'rgba(128, 0, 0, 0.05)', 
+              p: 1, 
+              borderRadius: 1 
+            }}>
+              <AssessmentIcon sx={{ color: '#800000', mr: 1, fontSize: '1.2rem' }} />
+              <Typography variant="body2" sx={{ color: '#800000', fontWeight: 'medium' }}>
+                Showing metrics for {getFilteredData().length} {getFilteredData().length === 1 ? 'survey' : 'surveys'}
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              bgcolor: 'rgba(211, 47, 47, 0.05)', 
+              p: 1.5, 
+              borderRadius: 1,
+              border: '1px dashed rgba(211, 47, 47, 0.3)'
+            }}>
+              <Typography variant="body2" sx={{ color: '#d32f2f' }}>
+                No data found for the selected filters. Try adjusting your criteria.
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </Paper>
+    );
+  };
 
   // Get rating color based on score
   const getRatingColor = (rating) => {

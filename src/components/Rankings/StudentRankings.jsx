@@ -26,7 +26,7 @@ import {
   Tab
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { School, EmojiEvents, Star } from '@mui/icons-material';
+import { School, EmojiEvents, Star, FilterAlt } from '@mui/icons-material';
 import { db } from '../../firebase-config';
 import { collection, query, where, onSnapshot, getDocs, doc } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
@@ -194,13 +194,32 @@ const calculateEvaluationScore = (evaluation) => {
 // Fetch and calculate student scores
 const fetchStudentScores = async (studentsList) => {
   try {
-    // Fetch student surveys
-    const surveysRef = collection(db, 'studentSurveys');
-    const surveysSnapshot = await getDocs(surveysRef);
+    // Fetch student surveys from both collections
+    const finalSurveysRef = collection(db, 'studentSurveys_final');
+    const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
+    
+    const finalSnapshot = await getDocs(finalSurveysRef);
+    const midtermSnapshot = await getDocs(midtermSurveysRef);
+    
+    const finalSurveys = finalSnapshot.docs.map(doc => ({
+      ...doc.data(),
+      surveyType: 'final',
+      id: doc.id
+    }));
+    
+    const midtermSurveys = midtermSnapshot.docs.map(doc => ({
+      ...doc.data(),
+      surveyType: 'midterm',
+      id: doc.id
+    }));
+    
+    // Combine all surveys
+    const allSurveys = [...finalSurveys, ...midtermSurveys];
+    console.log(`Rankings: Retrieved ${finalSurveys.length} final and ${midtermSurveys.length} midterm surveys`);
+    
     const surveyScores = {};
     
-    surveysSnapshot.docs.forEach(doc => {
-      const survey = doc.data();
+    allSurveys.forEach(survey => {
       if (survey.studentId) {
         let score = 0;
         
@@ -224,22 +243,52 @@ const fetchStudentScores = async (studentsList) => {
         }
         
         if (!surveyScores[survey.studentId]) {
-          surveyScores[survey.studentId] = [];
+          surveyScores[survey.studentId] = {
+            final: [],
+            midterm: [],
+            all: []
+          };
         }
-        surveyScores[survey.studentId].push(score);
+        
+        // Add to the appropriate survey type array
+        if (survey.surveyType === 'final') {
+          surveyScores[survey.studentId].final.push(score);
+        } else if (survey.surveyType === 'midterm') {
+          surveyScores[survey.studentId].midterm.push(score);
+        }
+        
+        // Add to the combined array
+        surveyScores[survey.studentId].all.push(score);
       }
     });
 
-    // Update students with scores, prioritizing survey data
+    // Update students with scores, using the selected survey type
     return studentsList.map(student => {
       let finalScore;
       
       // If survey data exists, use the average of all survey scores
-      if (surveyScores[student.id] && surveyScores[student.id].length > 0) {
-        finalScore = surveyScores[student.id].reduce((a, b) => a + b, 0) / surveyScores[student.id].length;
+      if (surveyScores[student.id]) {
+        finalScore = surveyScores[student.id].all.reduce((a, b) => a + b, 0) / 
+                     surveyScores[student.id].all.length;
+                     
+        // Store different survey type scores for filtering later
+        student.surveyScores = {
+          final: surveyScores[student.id].final.length > 0 ? 
+                surveyScores[student.id].final.reduce((a, b) => a + b, 0) / 
+                surveyScores[student.id].final.length : null,
+          midterm: surveyScores[student.id].midterm.length > 0 ? 
+                  surveyScores[student.id].midterm.reduce((a, b) => a + b, 0) / 
+                  surveyScores[student.id].midterm.length : null,
+          all: finalScore
+        };
       } else {
         // Fallback to evaluation score if no survey data exists
         finalScore = calculateEvaluationScore(student.evaluation || '');
+        student.surveyScores = {
+          final: null,
+          midterm: null,
+          all: finalScore
+        };
       }
       
       return {
@@ -268,6 +317,7 @@ function StudentRankings() {
   const [selectedProgram, setSelectedProgram] = useState('All');
   const [selectedSemester, setSelectedSemester] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
+  const [selectedSurveyType, setSelectedSurveyType] = useState('all'); // New survey type filter
   const [tabValue, setTabValue] = useState(0);
   
   // Replace single page state with a map of program-specific keys to pages
@@ -354,7 +404,7 @@ function StudentRankings() {
   // Reset page when filters change
   useEffect(() => {
     setPagesMap({});
-  }, [selectedProgram, selectedSemester, selectedYear]);
+  }, [selectedProgram, selectedSemester, selectedYear, selectedSurveyType]);
 
   // Enhanced filtering with strict isolation between different data values
   const filteredStudents = students.filter(student => {
@@ -375,11 +425,15 @@ function StudentRankings() {
     // Strict equality check for year
     const yearMatch = selectedYear === 'All' || student.schoolYear === selectedYear;
     
+    // Survey type filter - check if the student has survey data of the selected type
+    const surveyTypeMatch = selectedSurveyType === 'all' || 
+      (student.surveyScores && student.surveyScores[selectedSurveyType] !== null);
+    
     if (selectedSemester !== 'All' && !semesterMatch && student.semester) {
       console.log(`Non-matching semester: Student "${student.semester}" vs Selected "${selectedSemester}"`);
     }
     
-    return programMatch && yearMatch && semesterMatch;
+    return programMatch && yearMatch && semesterMatch && surveyTypeMatch;
   });
 
   // Debugging for program filtering
@@ -403,9 +457,20 @@ function StudentRankings() {
     }
   }, [selectedProgram, students]);
 
-  // Sort students by evaluation score
+  // Sort students by evaluation score - updated to use the selected survey type scores
   const rankedStudents = [...filteredStudents]
-    .sort((a, b) => b.evaluationScore - a.evaluationScore);
+    .sort((a, b) => {
+      // Use the appropriate score based on the selected survey type
+      const scoreA = selectedSurveyType !== 'all' && a.surveyScores?.[selectedSurveyType] !== null
+        ? a.surveyScores[selectedSurveyType]
+        : a.evaluationScore;
+      
+      const scoreB = selectedSurveyType !== 'all' && b.surveyScores?.[selectedSurveyType] !== null
+        ? b.surveyScores[selectedSurveyType]
+        : b.evaluationScore;
+      
+      return scoreB - scoreA;
+    });
 
   // Group students by program
   const studentsByProgram = {};
@@ -512,7 +577,7 @@ function StudentRankings() {
     <Container maxWidth={false} sx={{ p: 2 }}>
       <Box>
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>Program</InputLabel>
               <Select
@@ -530,7 +595,7 @@ function StudentRankings() {
             </StyledFormControl>
           </Grid>
           
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>Semester</InputLabel>
               <Select
@@ -547,7 +612,7 @@ function StudentRankings() {
             </StyledFormControl>
           </Grid>
           
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StyledFormControl fullWidth variant="outlined" size="small">
               <InputLabel>School Year</InputLabel>
               <Select
@@ -560,6 +625,22 @@ function StudentRankings() {
                     {year}
                   </MenuItem>
                 ))}
+              </Select>
+            </StyledFormControl>
+          </Grid>
+          
+          <Grid item xs={12} md={3}>
+            <StyledFormControl fullWidth variant="outlined" size="small">
+              <InputLabel>Survey Type</InputLabel>
+              <Select
+                value={selectedSurveyType}
+                onChange={(e) => setSelectedSurveyType(e.target.value)}
+                label="Survey Type"
+                startAdornment={<FilterAlt sx={{ color: 'rgba(128, 0, 0, 0.54)', mr: 1, ml: -0.5 }} fontSize="small" />}
+              >
+                <MenuItem value="all">All Surveys</MenuItem>
+                <MenuItem value="midterm">Midterm Evaluation</MenuItem>
+                <MenuItem value="final">Final Evaluation</MenuItem>
               </Select>
             </StyledFormControl>
           </Grid>
@@ -581,17 +662,31 @@ function StudentRankings() {
         </Box>
 
         <TabPanel value={tabValue} index={0}>
-          <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-            <EmojiEvents sx={{ mr: 1, color: maroon }} /> 
-            <Typography 
-              variant="h5" 
-              sx={{ 
-                fontWeight: 'bold',
-                color: maroon,
-              }}
-            >
-              Student Rankings by Program
-            </Typography>
+          <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <EmojiEvents sx={{ mr: 1, color: maroon }} /> 
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  fontWeight: 'bold',
+                  color: maroon,
+                }}
+              >
+                Student Rankings by Program
+              </Typography>
+            </Box>
+            
+            {selectedSurveyType !== 'all' && (
+              <Chip 
+                label={`Showing ${selectedSurveyType === 'midterm' ? 'Midterm' : 'Final'} Evaluation Scores`}
+                sx={{ 
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  fontWeight: 'medium',
+                  border: '1px solid rgba(128, 0, 0, 0.2)'
+                }}
+              />
+            )}
           </Box>
           
           <Divider sx={{ mb: 3, borderColor: 'rgba(128, 0, 0, 0.1)' }} />
@@ -651,6 +746,12 @@ function StudentRankings() {
                         <TableBody>
                           {displayedStudents.map((student, index) => {
                             const actualRank = (currentPage - 1) * studentsPerPage + index + 1;
+                            
+                            // Get the appropriate score based on the selected survey type
+                            const displayScore = selectedSurveyType !== 'all' && student.surveyScores?.[selectedSurveyType] !== null
+                              ? student.surveyScores[selectedSurveyType]
+                              : student.evaluationScore;
+                              
                             return (
                               <StyledTableRow key={student.id} rank={actualRank}>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
@@ -667,7 +768,7 @@ function StudentRankings() {
                                       alignItems: 'center',
                                       color: 'text.secondary'
                                     }}>
-                                      {student.evaluationScore.toFixed(1)}
+                                      {displayScore.toFixed(1)}
                                       <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                                     </Box>
                                   </Box>
@@ -709,6 +810,7 @@ function StudentRankings() {
             collegeFilter={currentUser?.profile?.college || 'All'}
             semesterFilter={selectedSemester}
             yearFilter={selectedYear}
+            surveyTypeFilter={selectedSurveyType} // Pass survey type filter
           />
         </TabPanel>
       </Box>

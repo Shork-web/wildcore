@@ -12,7 +12,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { db, auth } from '../../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc, getDocs } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
@@ -162,6 +162,7 @@ class StudentManager {
         program: studentData.program || '',
         section: studentData.section || '',
         college: studentData.college || '',
+        contactPerson: studentData.contactPerson || '',
         startDate: studentData.startDate || '',
         endDate: studentData.endDate || '',
         addedAt: new Date().toISOString(),
@@ -217,6 +218,93 @@ class StudentManager {
     }
   }
 
+  async ensureDepartmentExists(departmentId, departmentName) {
+    try {
+      const departmentRef = doc(db, 'departments', departmentId);
+      const departmentDoc = await getDoc(departmentRef);
+      
+      if (!departmentDoc.exists()) {
+        // Create department document
+        await setDoc(departmentRef, {
+          departmentName: departmentName,
+          normalizedName: departmentId,
+          studentCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: auth.currentUser?.uid,
+          updatedBy: auth.currentUser?.uid
+        });
+      }
+    } catch (error) {
+      console.error('Error ensuring department exists:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+
+  async addToDepartmentCollection(studentData, studentId) {
+    try {
+      if (!studentData?.college) return;
+      
+      // Sanitize department/college name for use as document ID
+      const departmentId = studentData.college.trim()
+        .replace(/[^\w\s]/g, '')
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+      
+      if (!departmentId) return;
+      
+      // Ensure department document exists
+      await this.ensureDepartmentExists(departmentId, studentData.college);
+      
+      // Add student to department's students subcollection
+      const departmentRef = doc(db, 'departments', departmentId);
+      const studentRef = doc(departmentRef, 'students', studentId);
+      
+      await setDoc(studentRef, {
+        studentName: studentData.name,
+        studentId: studentId,
+        program: studentData.program || '',
+        section: studentData.section || '',
+        semester: studentData.semester || '',
+        schoolYear: studentData.schoolYear || '',
+        addedAt: new Date().toISOString(),
+        addedBy: auth.currentUser?.uid
+      });
+    } catch (error) {
+      console.error('Error adding to department collection:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+
+  async updateSectionsStudentsCollection(studentData, studentId, oldSection) {
+    try {
+      // If section exists in the updated data
+      if (studentData.section) {
+        // Create a unique record ID for the section-student relationship
+        const relationshipId = `${studentData.section.replace(/\s+/g, '_')}_${studentId}`;
+        
+        // Add or update the record in sections-students collection
+        await setDoc(doc(db, 'sections-students', relationshipId), {
+          sectionId: studentData.section,
+          studentId: studentId,
+          studentName: studentData.name,
+          college: studentData.college || '',
+          program: studentData.program || '',
+          updatedAt: new Date().toISOString()
+        });
+      }
+      
+      // If old section exists and is different from new section, remove that relationship
+      if (oldSection && oldSection !== studentData.section) {
+        const oldRelationshipId = `${oldSection.replace(/\s+/g, '_')}_${studentId}`;
+        await deleteDoc(doc(db, 'sections-students', oldRelationshipId));
+      }
+    } catch (error) {
+      console.error('Error updating sections-students collection:', error);
+      // Don't throw error to prevent blocking main operation
+    }
+  }
+
   async updateStudent(studentId, updatedData) {
     try {
       // Critical fields that cannot be empty
@@ -258,13 +346,48 @@ class StudentManager {
         updatedBy: auth.currentUser?.uid
       };
 
-      // Check if the company changed
+      // Check if the company or section changed
       const studentRef = doc(db, 'studentData', studentId);
       const oldStudentDoc = await getDoc(studentRef);
       const oldCompanyName = oldStudentDoc.exists() ? oldStudentDoc.data().partnerCompany : null;
+      const oldSection = oldStudentDoc.exists() ? oldStudentDoc.data().section : null;
+      const oldCollege = oldStudentDoc.exists() ? oldStudentDoc.data().college : null;
       
       // Update main student document
       await updateDoc(studentRef, finalUpdatedData);
+      
+      // Update related survey data to maintain consistency across collections
+      try {
+        // Find all surveys for this student
+        const surveysQuery = query(
+          collection(db, 'studentSurveys'),
+          where('studentId', '==', studentId)
+        );
+        const surveysSnapshot = await getDocs(surveysQuery);
+        
+        console.log(`Found ${surveysSnapshot.docs.length} related surveys to update for student ${studentId}`);
+        
+        // Only update key fields that should match in both collections
+        const keyFieldsToUpdate = {
+          studentName: finalUpdatedData.name,
+          program: finalUpdatedData.program,
+          semester: finalUpdatedData.semester,
+          section: finalUpdatedData.section || '',
+          college: finalUpdatedData.college,
+          schoolYear: finalUpdatedData.schoolYear,
+          updatedAt: finalUpdatedData.updatedAt
+        };
+        
+        // Update each survey
+        const surveyUpdatePromises = surveysSnapshot.docs.map(surveyDoc => 
+          updateDoc(doc(db, 'studentSurveys', surveyDoc.id), keyFieldsToUpdate)
+        );
+        
+        await Promise.all(surveyUpdatePromises);
+      } catch (surveyUpdateError) {
+        console.error("Error updating related student surveys:", surveyUpdateError);
+        // Continue with main operation even if survey updates fail
+      }
       
       // Handle parallel collections
       
@@ -282,10 +405,47 @@ class StudentManager {
       // Add to (new) company collection
       await this.addToCompanyCollection(finalUpdatedData, studentId);
       
+      // 3. Update department collection
+      if (oldCollege && oldCollege !== finalUpdatedData.college) {
+        // If college changed, remove from old department and add to new
+        await this.removeFromDepartmentCollection(studentId, oldCollege);
+      }
+      
+      // Add to (new) department collection
+      await this.addToDepartmentCollection(finalUpdatedData, studentId);
+      
+      // 4. Update sections-students collection
+      await this.updateSectionsStudentsCollection(finalUpdatedData, studentId, oldSection);
+      
       return true;
     } catch (error) {
       console.error('Error updating student:', error);
       throw error;
+    }
+  }
+
+  async removeFromDepartmentCollection(studentId, college) {
+    try {
+      if (!college) return;
+      
+      // Sanitize department/college name for use as document ID
+      const departmentId = college.trim()
+        .replace(/[^\w\s]/g, '')
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+      
+      if (!departmentId) return;
+      
+      // Check if department document exists
+      const departmentRef = doc(db, 'departments', departmentId);
+      const studentsCollectionRef = collection(departmentRef, 'students');
+      const studentRef = doc(studentsCollectionRef, studentId);
+      
+      await deleteDoc(studentRef);
+      console.log(`Removed student ${studentId} from department ${departmentId}`);
+    } catch (error) {
+      console.error('Error removing from department collection:', error);
+      // Don't throw error to prevent blocking main operation
     }
   }
 
@@ -301,6 +461,56 @@ class StudentManager {
       // Remove from company collection
       if (studentData?.partnerCompany) {
         await this.removeFromCompanyCollection(studentId, studentData.partnerCompany);
+      }
+      
+      // Remove from department collection
+      if (studentData?.college) {
+        await this.removeFromDepartmentCollection(studentId, studentData.college);
+      }
+      
+      // Delete related records from studentSurveys collection
+      // This is important to avoid duplicate/orphaned data that affects rankings
+      try {
+        // Query for surveys related to this student
+        const surveysQuery = query(
+          collection(db, 'studentSurveys'),
+          where('studentId', '==', studentId)
+        );
+        const surveysSnapshot = await getDocs(surveysQuery);
+        
+        console.log(`Found ${surveysSnapshot.docs.length} related surveys to delete for student ${studentId}`);
+        
+        // Delete each survey document
+        const surveyDeletionPromises = surveysSnapshot.docs.map(surveyDoc => 
+          deleteDoc(doc(db, 'studentSurveys', surveyDoc.id))
+        );
+        
+        await Promise.all(surveyDeletionPromises);
+      } catch (surveysError) {
+        console.error("Error deleting related student surveys:", surveysError);
+        // Continue with main deletion even if survey deletion fails
+      }
+      
+      // Delete student from sections-students collection (many-to-many relationship)
+      try {
+        if (studentData?.section) {
+          const sectionsStudentsQuery = query(
+            collection(db, 'sections-students'),
+            where('studentId', '==', studentId)
+          );
+          const sectionsStudentsSnapshot = await getDocs(sectionsStudentsQuery);
+          
+          console.log(`Found ${sectionsStudentsSnapshot.docs.length} section-student relationships to delete`);
+          
+          const sectionStudentDeletionPromises = sectionsStudentsSnapshot.docs.map(doc => 
+            deleteDoc(doc.ref)
+          );
+          
+          await Promise.all(sectionStudentDeletionPromises);
+        }
+      } catch (sectionStudentsError) {
+        console.error("Error deleting from sections-students collection:", sectionStudentsError);
+        // Continue with main deletion even if this step fails
       }
       
       // Then delete from main collection
@@ -484,6 +694,7 @@ function StudentList() {
       semester: student.semester || '',
       schoolYear: student.schoolYear || '',
       partnerCompany: student.partnerCompany || '',
+      contactPerson: student.contactPerson || '',
       location: student.location || '',
       startDate: student.startDate || '',
       endDate: student.endDate || '',
@@ -573,6 +784,7 @@ function StudentList() {
       student.name?.toLowerCase().includes(query) ||
       student.program?.toLowerCase().includes(query) ||
       student.partnerCompany?.toLowerCase().includes(query) ||
+      student.contactPerson?.toLowerCase().includes(query) ||
       student.location?.toLowerCase().includes(query)
     );
     
@@ -965,25 +1177,25 @@ function StudentList() {
           <TableHead>
             <TableRow>
               <TableCell sx={{ 
-                width: '15%',
+                width: '14%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Name</TableCell>
               <TableCell sx={{ 
-                width: '12%',
+                width: '11%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Program</TableCell>
               <TableCell sx={{ 
-                width: '6%',
+                width: '5%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Gender</TableCell>
               <TableCell sx={{ 
-                width: '15%',
+                width: '13%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -993,21 +1205,27 @@ function StudentList() {
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Contact Person</TableCell>
+              <TableCell sx={{ 
+                width: '11%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Location</TableCell>
               <TableCell sx={{ 
-                width: '10%',
+                width: '8%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>Start Date</TableCell>
               <TableCell sx={{ 
-                width: '10%',
+                width: '8%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
               }}>End Date</TableCell>
               <TableCell sx={{ 
-                width: '10%',
+                width: '8%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1080,6 +1298,20 @@ function StudentList() {
                 }}>
                   <Tooltip title={student.partnerCompany} placement="top">
                     <span className="content">{student.partnerCompany}</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ 
+                  padding: '16px',
+                  '& .content': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    maxWidth: '100%'
+                  }
+                }}>
+                  <Tooltip title={student.contactPerson || 'N/A'} placement="top">
+                    <span className="content">{student.contactPerson || 'N/A'}</span>
                   </Tooltip>
                 </TableCell>
                 <TableCell sx={{ 
