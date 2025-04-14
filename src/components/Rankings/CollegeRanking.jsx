@@ -134,6 +134,40 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
   const [error, setError] = useState(null);
   const { currentUser } = useContext(AuthContext);
 
+  // Helper function to normalize semester values - same as in StudentRankings
+  const normalizeSemester = (semester) => {
+    if (!semester) return '';
+    
+    const semesterStr = semester.toString().trim().toLowerCase();
+    
+    if (semesterStr.includes('first') || semesterStr === '1' || semesterStr === '1st') {
+      return 'First';
+    } else if (semesterStr.includes('second') || semesterStr === '2' || semesterStr === '2nd') {
+      return 'Second';
+    } else if (semesterStr.includes('summer') || semesterStr === '3' || semesterStr === '3rd') {
+      return 'Summer';
+    }
+    
+    // If no match, return the original value with first letter capitalized
+    return semester.charAt(0).toUpperCase() + semester.slice(1);
+  };
+
+  // Helper function to normalize year values
+  const normalizeYear = (year) => {
+    if (!year) return '';
+    
+    // Convert to string
+    const yearStr = year.toString().trim();
+    
+    // Handle academic year formats like "2022-2023" or "2022/2023"
+    if (yearStr.includes('-') || yearStr.includes('/')) {
+      // For filtering, we'll consider it a match if any part matches
+      return yearStr;
+    }
+    
+    return yearStr;
+  };
+
   useEffect(() => {
     let unsubscribe = null;
 
@@ -161,15 +195,21 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
           const allColleges = new Set();
           const allPrograms = new Set();
           const allSections = new Set();
+          const allSemesters = new Set();
+          const allSchoolYears = new Set();
           snapshot.docs.forEach(doc => {
             const survey = doc.data();
             if (survey.college) allColleges.add(survey.college);
             if (survey.program) allPrograms.add(survey.program);
             if (survey.section) allSections.add(`${survey.college}_${survey.section}`);
+            if (survey.semester) allSemesters.add(survey.semester);
+            if (survey.schoolYear) allSchoolYears.add(survey.schoolYear);
           });
           console.log("Available colleges in data:", [...allColleges]);
           console.log("Available programs in data:", [...allPrograms]);
           console.log("Available college-section combinations:", [...allSections]);
+          console.log("Available semesters in data:", [...allSemesters]);
+          console.log("Available school years in data:", [...allSchoolYears]);
           
           // Group data by college and program
           const colleges = {};
@@ -182,10 +222,30 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
               return;
             }
             
-            // Apply filters only if explicitly requested
-            // Use these filters only for display filtering, not data availability
-            const semesterMatches = semesterFilter === 'All' || survey.semester === semesterFilter;
-            const yearMatches = yearFilter === 'All' || survey.schoolYear === yearFilter;
+            // Apply filters using normalized semester values
+            // Get normalized versions for comparison
+            const normalizedSurveysSemester = normalizeSemester(survey.semester);
+            const normalizedSelectedSemester = normalizeSemester(semesterFilter);
+            
+            // Multiple ways to match semesters
+            const semesterMatches = 
+              semesterFilter === 'All' || 
+              normalizedSurveysSemester === normalizedSelectedSemester ||
+              (survey.semester && survey.semester === semesterFilter) ||
+              (survey.semester && survey.semester.toLowerCase().includes(semesterFilter.toLowerCase()));
+            
+            // Multiple ways to match years
+            const yearMatches = 
+              yearFilter === 'All' || 
+              survey.schoolYear === yearFilter ||
+              (survey.schoolYear && survey.schoolYear.toString().includes(yearFilter)) ||
+              (yearFilter && survey.schoolYear && survey.schoolYear.toString().includes(yearFilter));
+            
+            // Log mismatches for debugging
+            if (yearFilter !== 'All' && !yearMatches && survey.schoolYear) {
+              console.log(`Non-matching year: Survey "${survey.schoolYear}" vs Selected "${yearFilter}"`);
+            }
+            
             const collegeMatches = collegeFilter === 'All' || survey.college === collegeFilter;
             
             // Skip this survey if it doesn't match the semester/year filters
@@ -294,7 +354,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
                 programStudents.set(studentId, {
                   id: studentId,
                   name: survey.studentName || 'Unknown',
-                  section: survey.section || 'Unknown',
+                  section: survey.section || 'Unspecified',
                   scores: [score],
                   averageScore: score
                 });
@@ -312,7 +372,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
                   id: studentId,
                   name: survey.studentName || 'Unknown',
                   program: programId,
-                  section: survey.section || 'Unknown',
+                  section: survey.section || 'Unspecified',
                   scores: [score],
                   averageScore: score
                 });
@@ -472,9 +532,29 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
                 return;
               }
               
-              // Apply filters only if explicitly requested
-              const semesterMatches = semesterFilter === 'All' || student.semester === semesterFilter;
-              const yearMatches = yearFilter === 'All' || student.schoolYear === yearFilter;
+              // Apply filters using normalized semester values
+              const normalizedStudentSemester = normalizeSemester(student.semester);
+              const normalizedSelectedSemester = normalizeSemester(semesterFilter);
+              
+              // Multiple ways to match semesters
+              const semesterMatches = 
+                semesterFilter === 'All' || 
+                normalizedStudentSemester === normalizedSelectedSemester ||
+                (student.semester && student.semester === semesterFilter) ||
+                (student.semester && student.semester.toLowerCase().includes(semesterFilter.toLowerCase()));
+                
+              // Multiple ways to match years
+              const yearMatches = 
+                yearFilter === 'All' || 
+                student.schoolYear === yearFilter ||
+                (student.schoolYear && student.schoolYear.toString().includes(yearFilter)) ||
+                (yearFilter && student.schoolYear && student.schoolYear.toString().includes(yearFilter));
+                
+              // Log mismatches for debugging
+              if (yearFilter !== 'All' && !yearMatches && student.schoolYear) {
+                console.log(`Non-matching year: Student "${student.schoolYear}" vs Selected "${yearFilter}"`);
+              }
+              
               const collegeMatches = collegeFilter === 'All' || student.college === collegeFilter;
               
               if (!semesterMatches || !yearMatches) {
@@ -556,7 +636,8 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
                 id: studentId,
                 name: student.name || 'Unknown Student',
                 score: studentScore,
-                program: program
+                program: program,
+                section: student.section || 'Unspecified'
               };
               
               // Add student to program
@@ -967,6 +1048,125 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter }) {
           </StyledCard>
         </Grid>
       </Grid>
+
+      {/* Student List by Section */}
+      <Box sx={{ mt: 3 }}>
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+          <School sx={{ mr: 1, color: maroon }} />
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontWeight: 'bold',
+              color: maroon,
+            }}
+          >
+            Top Students by Section
+          </Typography>
+        </Box>
+        
+        <Typography 
+          variant="body2" 
+          color="text.secondary" 
+          sx={{ 
+            mb: 2, 
+            fontStyle: 'italic',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <Box component="span" sx={{ 
+            display: 'inline-block', 
+            width: 8, 
+            height: 8, 
+            borderRadius: '50%', 
+            bgcolor: 'info.main', 
+            mr: 1 
+          }} />
+          Showing top students from each college with their section information
+        </Typography>
+        
+        {collegeStats.map((college) => {
+          // Get students from this college and sort by score
+          const sortedStudents = [...college.students]
+            .sort((a, b) => b.averageScore - a.averageScore)
+            .slice(0, 10); // Show top 10 students per college
+          
+          if (sortedStudents.length === 0) return null;
+          
+          return (
+            <StyledCard key={`students-${college.id}`} sx={{ mb: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <School fontSize="small" sx={{ mr: 1, color: maroon, opacity: 0.7 }} />
+                  <Typography variant="subtitle1" fontWeight="medium" color={maroon}>
+                    {college.name} - Top Students
+                  </Typography>
+                  <Chip 
+                    label={`${college.studentCount} students total`} 
+                    size="small" 
+                    sx={{ 
+                      ml: 2,
+                      bgcolor: 'rgba(128, 0, 0, 0.08)',
+                      color: maroon,
+                      fontWeight: 'medium',
+                      fontSize: '0.7rem'
+                    }}
+                  />
+                </Box>
+                
+                <TableContainer sx={{ borderRadius: 0, boxShadow: 'none' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: 'rgba(128, 0, 0, 0.03)' }}>
+                        <TableCell sx={{ fontWeight: 'bold', width: '8%', py: 1 }}>Rank</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: '30%', py: 1 }}>Student</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: '22%', py: 1 }}>Section</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: '30%', py: 1 }}>Program</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1, textAlign: 'center' }}>Score</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {sortedStudents.map((student, index) => (
+                        <StyledTableRow key={student.id} rank={index + 1}>
+                          <TableCell sx={{ py: 1, textAlign: 'center' }}>
+                            <RankBadge rank={index + 1}>
+                              {index + 1}
+                            </RankBadge>
+                          </TableCell>
+                          <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
+                          <TableCell sx={{ py: 1 }}>
+                            <Chip 
+                              label={student.section} 
+                              size="small" 
+                              sx={{ 
+                                bgcolor: 'rgba(128, 0, 0, 0.08)',
+                                color: maroon,
+                                fontWeight: 'medium',
+                                fontSize: '0.7rem'
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ py: 1 }}>{student.program}</TableCell>
+                          <TableCell sx={{ py: 1, textAlign: 'center' }}>
+                            <Box sx={{ 
+                              display: 'inline-flex', 
+                              alignItems: 'center',
+                              color: maroon,
+                              fontWeight: 'medium'
+                            }}>
+                              {(student.averageScore || 0).toFixed(1)}
+                            </Box>
+                          </TableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </StyledCard>
+          );
+        })}
+      </Box>
     </Box>
   );
 }

@@ -662,6 +662,20 @@ function StudentList() {
                   '& .MuiChip-label': { px: 1 }
                 }}
               />
+              
+              {currentUser?.profile?.section && (
+                <Chip 
+                  label={`Section: ${currentUser.profile.section}`}
+                  size="small"
+                  sx={{ 
+                    ml: 1,
+                    bgcolor: 'rgba(128, 0, 0, 0.1)',
+                    color: '#800000',
+                    fontWeight: 'medium',
+                    '& .MuiChip-label': { px: 1 }
+                  }}
+                />
+              )}
             </Card>
           )}
         </Box>
