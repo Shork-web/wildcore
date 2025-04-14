@@ -135,7 +135,7 @@ const Footer = () => {
             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
               <IconButton
                 component={Link}
-                href="https://www.facebook.com/CITUniversity"
+                href="https://www.facebook.com/CITUNEXUSS"
                 target="_blank"
                 sx={{ 
                   color: '#1877f2', // Facebook blue
@@ -184,7 +184,7 @@ const Footer = () => {
                 mt: 1,
               }}
             >
-              © {new Date().getFullYear()} WILD C.O.R.E
+              © {new Date().getFullYear()} WILD R.O.U.T.E
             </Typography>
           </Box>
         </Box>

@@ -143,7 +143,7 @@ function MainContent() {
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
             <img
               src={logo}
-              alt="WILD C.O.R.E Logo"
+              alt="WILD R.O.U.T.E Logo"
               style={{ height: '70px', marginRight: '20px' }}
             />
           </Box>
