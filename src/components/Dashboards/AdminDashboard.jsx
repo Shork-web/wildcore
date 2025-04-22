@@ -49,6 +49,7 @@ class DashboardManager {
       semesterDistribution: { First: 0, Second: 0, Summer: 0 },
       recentActivity: []
     };
+    this._lastUpdate = null;
   }
 
   // Getters
@@ -60,11 +61,14 @@ class DashboardManager {
   get semesterDistribution() { return { ...this._stats.semesterDistribution }; }
   get recentActivity() { return [...this._stats.recentActivity]; }
   get totalPrograms() { return Object.keys(this._stats.programDistribution).length; }
+  get lastUpdate() { return this._lastUpdate; }
 
   // Setters
   set students(data) {
+    console.log(`DashboardManager: Processing ${data.length} students`);
     this._students = [...data];
     this._updateStats();
+    this._lastUpdate = new Date();
   }
 
   // Methods
@@ -74,14 +78,17 @@ class DashboardManager {
     const semesterDist = { First: 0, Second: 0, Summer: 0 };
 
     this._students.forEach(student => {
-      // Gender distribution
-      genderDist[student.gender] = (genderDist[student.gender] || 0) + 1;
+      // Normalize gender (handle missing/null values)
+      const gender = student.gender || 'Other';
+      genderDist[gender] = (genderDist[gender] || 0) + 1;
 
-      // Program distribution
-      programDist[student.program] = (programDist[student.program] || 0) + 1;
+      // Program distribution (handle missing/null values)
+      const program = student.program || 'Unknown Program';
+      programDist[program] = (programDist[program] || 0) + 1;
 
-      // Semester distribution
-      semesterDist[student.semester] = (semesterDist[student.semester] || 0) + 1;
+      // Semester distribution (handle missing/null values)
+      const semester = student.semester || 'First';
+      semesterDist[semester] = (semesterDist[semester] || 0) + 1;
     });
 
     // Sort program distribution by count
@@ -89,15 +96,29 @@ class DashboardManager {
       Object.entries(programDist).sort(([,a], [,b]) => b - a)
     );
 
+    // Ensure dates are properly converted for sorting
+    const studentsWithDates = this._students.map(student => ({
+      ...student,
+      createdAt: student.createdAt instanceof Date 
+        ? student.createdAt 
+        : new Date(student.createdAt || Date.now())
+    }));
+
     this._stats = {
       totalStudents: this._students.length,
       genderDistribution: genderDist,
       programDistribution: sortedProgramDist,
       semesterDistribution: semesterDist,
-      recentActivity: this._students
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      recentActivity: studentsWithDates
+        .sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0);
+          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0);
+          return dateB - dateA;
+        })
         .slice(0, 5)
     };
+    
+    console.log("DashboardManager: Stats updated successfully");
   }
 
   getPercentage(value, total) {
@@ -109,29 +130,50 @@ function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardManager] = useState(() => new DashboardManager());
   const [error, setError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Force UI refresh when data changes
+  const refreshDashboard = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   useEffect(() => {
+    setIsLoading(true);
+    console.log("Setting up real-time listener for dashboard data...");
+
+    // Ensure we're getting the latest data from server
     const q = query(collection(db, 'studentData'));
+    
     const unsubscribe = onSnapshot(q, 
       (querySnapshot) => {
+        console.log(`Dashboard received update with ${querySnapshot.docs.length} students`);
         const studentsList = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          // Ensure dates are proper Date objects
+          createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt || new Date(),
         }));
+        
+        console.log("Processing student data for dashboard...");
         dashboardManager.students = studentsList;
         setIsLoading(false);
+        refreshDashboard();
       },
       (error) => {
-        console.error("Error fetching students:", error);
+        console.error("Error fetching students for dashboard:", error);
         setError(error.message);
         setIsLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    // Clean up listener on component unmount
+    return () => {
+      console.log("Cleaning up dashboard data listener");
+      unsubscribe();
+    };
   }, [dashboardManager]);
 
   const StatItem = ({ icon, value, label }) => (
@@ -276,7 +318,11 @@ function AdminDashboard() {
             WebkitTextFillColor: 'transparent',
           }}
         >
-          Students Overview
+          Students Overview {refreshTrigger > 0 && 
+            <Typography component="span" variant="caption" sx={{ fontSize: '0.5em', verticalAlign: 'top', opacity: 0.8 }}>
+              (Last update: {dashboardManager.lastUpdate?.toLocaleTimeString() || 'Never'})
+            </Typography>
+          }
         </Typography>
 
         <Grid container spacing={2}>

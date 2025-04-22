@@ -5,42 +5,59 @@ import { Assignment, History, HelpOutline, EmojiEvents, TrendingUp, Assessment }
 import { useNavigate } from 'react-router-dom';
 
 const DashboardContainer = styled(Container)(({ theme }) => ({
-  paddingTop: theme.spacing(4),
-  paddingBottom: theme.spacing(4),
+  paddingTop: theme.spacing(6),
+  paddingBottom: theme.spacing(6),
   position: 'relative',
+  '@media (max-width: 600px)': {
+    paddingTop: theme.spacing(4),
+    paddingBottom: theme.spacing(4),
+  },
 }));
 
 const Title = styled(Typography)(({ theme }) => ({
-  fontWeight: 'bold',
-  background: 'linear-gradient(45deg, #800000 30%, #B22222 90%)',
+  fontWeight: 800,
+  background: 'linear-gradient(45deg, #800000 30%, #CC0000 90%)',
   backgroundClip: 'text',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
-  marginBottom: theme.spacing(0.5),
-  fontSize: '2.2rem',
+  marginBottom: theme.spacing(1),
+  fontSize: '2.5rem',
+  letterSpacing: '-0.5px',
+  '@media (max-width: 600px)': {
+    fontSize: '2rem',
+  },
 }));
 
 const Subtitle = styled(Typography)(({ theme }) => ({
-  color: 'text.secondary',
-  marginBottom: theme.spacing(4),
-  fontSize: '1rem',
-  maxWidth: '600px',
+  color: 'rgba(0, 0, 0, 0.6)',
+  marginBottom: theme.spacing(5),
+  fontSize: '1.1rem',
+  maxWidth: '700px',
+  lineHeight: 1.6,
+  '@media (max-width: 600px)': {
+    fontSize: '1rem',
+  },
 }));
 
 const FeatureCard = styled(Card)(({ theme }) => ({
   height: '100%',
-  borderRadius: '16px',
-  transition: 'all 0.3s ease',
+  borderRadius: '24px',
+  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
   position: 'relative',
   overflow: 'hidden',
-  background: 'rgba(255, 255, 255, 0.9)',
-  backdropFilter: 'blur(10px)',
-  boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)',
+  background: 'rgba(255, 255, 255, 0.95)',
+  backdropFilter: 'blur(20px)',
+  boxShadow: '0 8px 32px rgba(31, 38, 135, 0.1)',
   border: '1px solid rgba(255, 255, 255, 0.18)',
   '&:hover': {
-    transform: 'translateY(-8px)',
-    boxShadow: '0 12px 24px rgba(128, 0, 0, 0.2)',
+    transform: 'translateY(-12px)',
+    boxShadow: '0 22px 43px rgba(128, 0, 0, 0.2)',
+    '& .icon-circle': {
+      transform: 'rotate(10deg) scale(1.1)',
+      boxShadow: '0 12px 30px rgba(128, 0, 0, 0.3)',
+    },
     '&::before': {
+      height: '100%',
       opacity: 1,
     }
   },
@@ -49,29 +66,30 @@ const FeatureCard = styled(Card)(({ theme }) => ({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: '5px',
-    height: '100%',
-    background: 'linear-gradient(180deg, #800000, #FF8C00)',
+    width: '6px',
+    height: '0%',
+    background: 'linear-gradient(180deg, #800000, #FF4444)',
     opacity: 0,
-    transition: 'opacity 0.3s ease',
+    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
   }
 }));
 
 const CardTitle = styled(Typography)(({ theme }) => ({
-  fontWeight: 'bold',
-  fontSize: '1.25rem',
-  background: 'linear-gradient(45deg, #800000, #B22222)',
+  fontWeight: 700,
+  fontSize: '1.4rem',
+  background: 'linear-gradient(45deg, #800000, #CC0000)',
   backgroundClip: 'text',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
-  marginBottom: theme.spacing(1.5),
+  marginBottom: theme.spacing(2),
+  letterSpacing: '-0.5px',
 }));
 
 const CardDescription = styled(Typography)(({ theme }) => ({
-  color: 'text.secondary',
-  fontSize: '0.875rem',
-  marginBottom: theme.spacing(2.5),
-  lineHeight: 1.6,
+  color: 'rgba(0, 0, 0, 0.7)',
+  fontSize: '0.95rem',
+  marginBottom: theme.spacing(3),
+  lineHeight: 1.7,
 }));
 
 const CardAction = styled(Box)(({ theme }) => ({
@@ -81,110 +99,131 @@ const CardAction = styled(Box)(({ theme }) => ({
 }));
 
 const ActionButton = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(0.8, 2),
-  background: 'linear-gradient(45deg, #800000, #B22222)',
+  padding: theme.spacing(1.2, 2.5),
+  background: 'linear-gradient(45deg, #800000, #CC0000)',
   color: 'white',
-  fontSize: '0.8rem',
-  fontWeight: 'bold',
-  borderRadius: '30px',
+  fontSize: '0.9rem',
+  fontWeight: '600',
+  borderRadius: '40px',
   display: 'inline-flex',
   alignItems: 'center',
   cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  boxShadow: '0 4px 15px rgba(128, 0, 0, 0.2)',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  boxShadow: '0 6px 20px rgba(128, 0, 0, 0.25)',
   '&:hover': {
-    boxShadow: '0 6px 20px rgba(128, 0, 0, 0.3)',
-    transform: 'translateX(5px)',
+    boxShadow: '0 8px 25px rgba(128, 0, 0, 0.35)',
+    transform: 'translateX(8px)',
   },
 }));
 
 const IconCircle = styled(Box)(({ theme }) => ({
-  background: 'linear-gradient(135deg, #800000, #B22222)',
+  background: 'linear-gradient(135deg, #800000, #CC0000)',
   color: 'white',
-  width: 56,
-  height: 56,
-  borderRadius: '16px',
+  width: 64,
+  height: 64,
+  borderRadius: '20px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  marginBottom: theme.spacing(2.5),
-  boxShadow: '0 8px 20px rgba(128, 0, 0, 0.2)',
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    transform: 'rotate(10deg) scale(1.1)',
-  }
+  marginBottom: theme.spacing(3),
+  boxShadow: '0 12px 25px rgba(128, 0, 0, 0.25)',
+  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+  '& svg': {
+    fontSize: '28px',
+  },
 }));
 
 const InfoCard = styled(Card)(({ theme }) => ({
   height: '100%',
-  borderRadius: '16px',
-  transition: 'all 0.3s ease',
-  background: 'rgba(255, 255, 255, 0.9)',
-  backdropFilter: 'blur(10px)',
-  boxShadow: '0 8px 32px rgba(31, 38, 135, 0.15)',
+  borderRadius: '24px',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  background: 'rgba(255, 255, 255, 0.95)',
+  backdropFilter: 'blur(20px)',
+  boxShadow: '0 8px 32px rgba(31, 38, 135, 0.1)',
   border: '1px solid rgba(255, 255, 255, 0.18)',
   position: 'relative',
   overflow: 'hidden',
   '&:hover': {
-    boxShadow: '0 12px 28px rgba(128, 0, 0, 0.25)',
+    boxShadow: '0 16px 40px rgba(128, 0, 0, 0.15)',
+    transform: 'translateY(-8px)',
   },
   '&::after': {
     content: '""',
     position: 'absolute',
     top: 0,
     right: 0,
-    width: '80px',
-    height: '80px',
-    background: 'radial-gradient(circle, rgba(128, 0, 0, 0.1) 0%, rgba(255, 255, 255, 0) 70%)',
-    borderRadius: '0 0 0 80px',
+    width: '120px',
+    height: '120px',
+    background: 'radial-gradient(circle, rgba(128, 0, 0, 0.08) 0%, rgba(255, 255, 255, 0) 70%)',
+    borderRadius: '0 0 0 120px',
     zIndex: 0,
   },
 }));
 
 const InfoTitle = styled(Typography)(({ theme }) => ({
-  fontWeight: 'bold',
-  fontSize: '1.2rem',
-  background: 'linear-gradient(45deg, #800000, #B22222)',
+  fontWeight: 700,
+  fontSize: '1.3rem',
+  background: 'linear-gradient(45deg, #800000, #CC0000)',
   backgroundClip: 'text',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
   display: 'flex',
   alignItems: 'center',
-  marginBottom: theme.spacing(2.5),
+  marginBottom: theme.spacing(3),
+  letterSpacing: '-0.5px',
 }));
 
 const InfoListItem = styled(Typography)(({ theme }) => ({
-  fontSize: '0.9rem',
-  marginBottom: theme.spacing(2),
-  paddingLeft: theme.spacing(2),
+  fontSize: '0.95rem',
+  marginBottom: theme.spacing(2.5),
+  paddingLeft: theme.spacing(2.5),
   position: 'relative',
-  lineHeight: 1.6,
-  color: 'rgba(0, 0, 0, 0.7)',
+  lineHeight: 1.7,
+  color: 'rgba(0, 0, 0, 0.75)',
   '&::before': {
     content: '""',
     position: 'absolute',
     left: 0,
-    top: '8px',
-    width: '6px',
-    height: '6px',
+    top: '10px',
+    width: '8px',
+    height: '8px',
     borderRadius: '50%',
     backgroundColor: '#800000',
+    transition: 'transform 0.2s ease',
   },
   '&:hover': {
     color: '#800000',
+    '&::before': {
+      transform: 'scale(1.5)',
+    }
   },
   transition: 'color 0.2s ease',
 }));
 
 const BackgroundGradient = styled(Box)(({ theme }) => ({
   position: 'absolute',
-  top: '10%',
-  right: '5%',
-  width: '300px',
-  height: '300px',
-  background: 'radial-gradient(circle, rgba(128, 0, 0, 0.05) 0%, rgba(255, 255, 255, 0) 70%)',
+  top: '5%',
+  right: '2%',
+  width: '400px',
+  height: '400px',
+  background: 'radial-gradient(circle, rgba(128, 0, 0, 0.03) 0%, rgba(255, 255, 255, 0) 70%)',
   borderRadius: '50%',
   zIndex: -1,
+  animation: 'pulse 8s ease-in-out infinite',
+  '@keyframes pulse': {
+    '0%': {
+      transform: 'scale(1)',
+      opacity: 0.5,
+    },
+    '50%': {
+      transform: 'scale(1.2)',
+      opacity: 0.8,
+    },
+    '100%': {
+      transform: 'scale(1)',
+      opacity: 0.5,
+    },
+  },
 }));
 
 const ArrowIcon = () => (
@@ -195,19 +234,19 @@ const ArrowIcon = () => (
 
 const FloatingHelpButton = styled(IconButton)(({ theme }) => ({
   position: 'fixed',
-  bottom: '30px',
-  right: '30px',
-  width: '56px',
-  height: '56px',
+  bottom: '40px',
+  right: '40px',
+  width: '60px',
+  height: '60px',
   borderRadius: '50%',
-  background: 'linear-gradient(135deg, #800000, #B22222)',
+  background: 'linear-gradient(135deg, #800000, #CC0000)',
   color: 'white',
-  boxShadow: '0 4px 20px rgba(128, 0, 0, 0.3)',
+  boxShadow: '0 6px 25px rgba(128, 0, 0, 0.35)',
   zIndex: 1000,
-  transition: 'all 0.3s ease',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   '&:hover': {
-    transform: 'scale(1.1) rotate(10deg)',
-    boxShadow: '0 6px 25px rgba(128, 0, 0, 0.4)',
+    transform: 'scale(1.15) rotate(15deg)',
+    boxShadow: '0 8px 30px rgba(128, 0, 0, 0.45)',
   },
 }));
 
@@ -226,11 +265,17 @@ function UserDashboard() {
   return (
     <DashboardContainer maxWidth="xl">
       <BackgroundGradient />
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Title variant="h3">WILD R.O.U.T.E</Title>
-          <Subtitle variant="body1">Work-Integrated Learning and Development – Records of OJT, Updates, Training & Evaluation</Subtitle>
-        </Box>
+      <Box sx={{ 
+        mb: 4, 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center',
+        textAlign: 'center'
+      }}>
+        <Title variant="h3">WILD R.O.U.T.E</Title>
+        <Subtitle variant="body1">
+          Work-Integrated Learning and Development – Records of OJT, Updates, Training & Evaluation
+        </Subtitle>
       </Box>
 
       <Grid container spacing={4}>

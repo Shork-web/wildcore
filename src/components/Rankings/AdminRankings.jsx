@@ -341,16 +341,16 @@ function AdminRankings() {
             };
           });
           
-          // Group the surveys and process combined data
+          // Group the surveys by student name (instead of studentId)
           const studentMap = new Map();
 
           // Process final surveys
           finalSurveyData.forEach(survey => {
-            const studentId = survey.studentId;
-            if (!studentId) return;
+            const studentName = survey.name;
+            if (!studentName || studentName === 'Unknown Student') return;
             
-            if (!studentMap.has(studentId)) {
-              studentMap.set(studentId, {
+            if (!studentMap.has(studentName)) {
+              studentMap.set(studentName, {
                 student: survey,
                 finalSurveys: [],
                 midtermSurveys: [],
@@ -360,17 +360,17 @@ function AdminRankings() {
               });
             }
             
-            const studentData = studentMap.get(studentId);
+            const studentData = studentMap.get(studentName);
             studentData.finalSurveys.push(survey);
           });
 
           // Process midterm surveys
           midtermSurveyData.forEach(survey => {
-            const studentId = survey.studentId;
-            if (!studentId) return;
+            const studentName = survey.name;
+            if (!studentName || studentName === 'Unknown Student') return;
             
-            if (!studentMap.has(studentId)) {
-              studentMap.set(studentId, {
+            if (!studentMap.has(studentName)) {
+              studentMap.set(studentName, {
                 student: survey,
                 finalSurveys: [],
                 midtermSurveys: [],
@@ -380,12 +380,12 @@ function AdminRankings() {
               });
             }
             
-            const studentData = studentMap.get(studentId);
+            const studentData = studentMap.get(studentName);
             studentData.midtermSurveys.push(survey);
           });
 
           // Calculate average scores and apply 50-50 weighting
-          studentMap.forEach((data, studentId) => {
+          studentMap.forEach((data, studentName) => {
             // Calculate final average score
             if (data.finalSurveys.length > 0) {
               const totalFinalScore = data.finalSurveys.reduce((sum, survey) => sum + survey.rawScore, 0);
@@ -412,7 +412,12 @@ function AdminRankings() {
             }
             
             // Update the student object with the combined score information
-            const baseStudent = data.student;
+            // Keep information from the most recent evaluation
+            const baseStudent = data.finalSurveys.length > 0 ? 
+              { ...data.finalSurveys[0] } : 
+              { ...data.midtermSurveys[0] };
+              
+            // Update with merged information
             baseStudent.evaluationScore = Math.round(data.combinedScore * 10) / 10;
             baseStudent.surveyScores = {
               final: data.finalAvgScore > 0 ? Math.round(data.finalAvgScore * 10) / 10 : null,
@@ -422,10 +427,13 @@ function AdminRankings() {
             baseStudent.hasMidtermData = data.midtermSurveys.length > 0;
             baseStudent.hasFinalData = data.finalSurveys.length > 0;
             
-            // For all surveys view, set the surveyType to combined
+            // If we have both types of data, mark it as combined
             if (baseStudent.hasMidtermData && baseStudent.hasFinalData) {
               baseStudent.surveyType = 'combined';
             }
+            
+            // Replace the original student data with this combined record
+            data.student = baseStudent;
           });
 
           // Create a deduplicated array of students from the studentMap
@@ -449,7 +457,7 @@ function AdminRankings() {
       setError(`Error loading data: ${error.message}`);
       return () => {}; // Return empty cleanup function
     }
-  }, []);  // No dependencies needed because we're using external constants and setState
+  }, []);
 
   useEffect(() => {
     if (!userRole || userRole !== 'admin') {

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase-config';
 import { 
   Grid, Box, Typography, Card, CardContent, FormControl, 
   InputLabel, Select, MenuItem, Paper, CircularProgress,
-  Chip, Tooltip, Badge, Button
+  Chip, Tooltip, Badge, Button, Divider
 } from '@mui/material';
 import { keyframes } from '@mui/system';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
@@ -40,6 +40,30 @@ function StudentMetrics() {
   const [selectedCompany, setSelectedCompany] = useState('all');
   const [selectedSurveyType, setSelectedSurveyType] = useState('all');
   const [programs, setPrograms] = useState([]);
+  const [companies, setCompanies] = useState(['all']);
+  const [error, setError] = useState(null);
+  const [years, setYears] = useState(['all']);
+  const [semesters, setSemesters] = useState(['all', '1st', '2nd', 'Summer']);
+  
+  // Store previous filter state to prevent reset issues
+  const filterCache = useRef({
+    program: '',
+    year: 'all',
+    semester: 'all',
+    company: 'all',
+    surveyType: 'all'
+  });
+
+  // Update filter cache whenever filters change
+  useEffect(() => {
+    filterCache.current = {
+      program: selectedProgram,
+      year: selectedYear,
+      semester: selectedSemester, 
+      company: selectedCompany,
+      surveyType: selectedSurveyType
+    };
+  }, [selectedProgram, selectedYear, selectedSemester, selectedCompany, selectedSurveyType]);
 
   // Fetch data from Firestore
   useEffect(() => {
@@ -53,7 +77,9 @@ function StudentMetrics() {
         // Combined data structure to store both final and midterm surveys
         const data = {
           surveys: [],
-          uniquePrograms: new Set()
+          uniquePrograms: new Set(),
+          uniqueCompanies: new Set(['all']),
+          uniqueYears: new Set(['all'])
         };
         
         // First listener: final surveys
@@ -67,15 +93,13 @@ function StudentMetrics() {
             surveyType: 'final'  // Add identifier for final surveys
           }));
           
-          console.log(`StudentMetrics: Retrieved ${finalSurveys.length} documents from studentSurveys_final collection`);
-          
           // Update with the latest data
           data.surveys = [...data.surveys.filter(s => s.surveyType !== 'final'), ...finalSurveys];
           
           // Process and normalize data
           processData();
         }, (error) => {
-          console.error('Error in real-time listener for final surveys:', error);
+          setError(error.message);
           if (isMounted) setLoading(false);
         });
         
@@ -90,15 +114,13 @@ function StudentMetrics() {
             surveyType: 'midterm'  // Add identifier for midterm surveys
           }));
           
-          console.log(`StudentMetrics: Retrieved ${midtermSurveys.length} documents from studentSurveys_midterm collection`);
-          
           // Update with the latest data
           data.surveys = [...data.surveys.filter(s => s.surveyType !== 'midterm'), ...midtermSurveys];
           
           // Process and normalize data
           processData();
         }, (error) => {
-          console.error('Error in real-time listener for midterm surveys:', error);
+          setError(error.message);
           if (isMounted) setLoading(false);
         });
         
@@ -165,96 +187,86 @@ function StudentMetrics() {
             // Normalize companyName field if needed
             if (processedSurvey.companyName) {
               processedSurvey.companyName = processedSurvey.companyName.trim();
+              // Add to unique companies
+              data.uniqueCompanies.add(processedSurvey.companyName);
+            }
+            
+            // Normalize semester value if it exists
+            if (processedSurvey.semester) {
+              processedSurvey.semester = normalizeSemester(processedSurvey.semester);
+            }
+            
+            // Extract unique years
+            if (processedSurvey.schoolYear) {
+              data.uniqueYears.add(processedSurvey.schoolYear);
             }
             
             return processedSurvey;
           });
           
-          // Check for data inconsistencies
-          const checkDataInconsistencies = (data) => {
-            // Check program name issues
-            const programNames = data.map(item => item.program).filter(Boolean);
-            const uniquePrograms = [...new Set(programNames)];
-            
-            // Find similar program names that might cause confusion
-            const similarPrograms = [];
-            for (let i = 0; i < uniquePrograms.length; i++) {
-              for (let j = i + 1; j < uniquePrograms.length; j++) {
-                const a = uniquePrograms[i];
-                const b = uniquePrograms[j];
-                
-                if (a && b && (a.includes(b) || b.includes(a))) {
-                  similarPrograms.push([a, b]);
-                }
-              }
-            }
-            
-            if (similarPrograms.length > 0) {
-              console.warn('⚠️ Potential program name conflicts detected:', similarPrograms);
-            }
-            
-            // Check school year issues
-            const schoolYears = data.map(item => item.schoolYear).filter(Boolean);
-            const uniqueYears = [...new Set(schoolYears)];
-            
-            // Find similar year values that might cause confusion
-            const similarYears = [];
-            for (let i = 0; i < uniqueYears.length; i++) {
-              for (let j = i + 1; j < uniqueYears.length; j++) {
-                const a = uniqueYears[i];
-                const b = uniqueYears[j];
-                
-                if (a && b && (a.includes(b) || b.includes(a))) {
-                  similarYears.push([a, b]);
-                }
-              }
-            }
-            
-            if (similarYears.length > 0) {
-              console.warn('⚠️ Potential school year conflicts detected:', similarYears);
-            }
-          };
+          // Extract unique programs with careful normalization
+          const uniquePrograms = [...new Set(surveys.map(survey => survey.program).filter(Boolean))].sort();
           
-          // Run consistency check
-          checkDataInconsistencies(surveys);
+          // Extract and normalize companies
+          const allCompanies = ['all', ...Array.from(data.uniqueCompanies).filter(c => c !== 'all')].sort();
+          
+          // Extract and normalize years
+          const allYears = ['all', ...Array.from(data.uniqueYears).filter(y => y !== 'all')].sort((a, b) => b.localeCompare(a));
+          
+          // Extract unique semester values
+          const uniqueSemesters = [...new Set(surveys.map(survey => survey.semester).filter(Boolean))];
+          const allSemesters = ['all', ...uniqueSemesters.sort()];
           
           // Update state with processed surveys
           setSurveyData(surveys);
-          
-          // Extract unique programs with careful normalization
-          const uniquePrograms = [...new Set(surveys.map(survey => survey.program).filter(Boolean))].sort();
-          console.log("Available programs:", uniquePrograms);
-          
           setPrograms(uniquePrograms);
+          setCompanies(allCompanies);
+          setYears(allYears);
+          setSemesters(allSemesters);
           
+          // Initialize first program if not set
           if (uniquePrograms.length > 0 && !selectedProgram) {
             setSelectedProgram(uniquePrograms[0]);
+          }
+          
+          // Restore filters from cache if component remounts
+          if (filterCache.current.program && programs.includes(filterCache.current.program)) {
+            setSelectedProgram(filterCache.current.program);
           }
           
           setLoading(false);
         };
       } catch (error) {
-        console.error('Error setting up listeners:', error);
+        setError(error.message);
         if (isMounted) setLoading(false);
       }
     };
 
-    // Start listening for real-time updates
     setupRealtimeListeners();
 
-    // Clean up listeners when component unmounts
     return () => {
       isMounted = false;
       if (unsubscribeFinal) unsubscribeFinal();
       if (unsubscribeMidterm) unsubscribeMidterm();
     };
-  }, [selectedProgram]);
+  }, []);  // Empty dependency array to ensure listeners are only set up once
 
-  // Extract unique filter options from actual data
-  const filterOptions = {
-    years: [...new Set(surveyData.map(survey => survey.schoolYear).filter(Boolean))],
-    semesters: [...new Set(surveyData.map(survey => survey.semester).filter(Boolean))],
-    companies: [...new Set(surveyData.map(survey => survey.companyName).filter(Boolean))]
+  // Filter data based on strict program matching to ensure proper isolation
+  // Helper function to normalize semester values - match with other components
+  const normalizeSemester = (semester) => {
+    if (!semester) return '';
+    
+    const semesterStr = semester.toString().trim().toLowerCase();
+    
+    if (semesterStr.includes('first') || semesterStr === '1' || semesterStr === '1st') {
+      return '1st';
+    } else if (semesterStr.includes('second') || semesterStr === '2' || semesterStr === '2nd') {
+      return '2nd';
+    } else if (semesterStr.includes('summer') || semesterStr === '3' || semesterStr === '3rd') {
+      return 'Summer';
+    }
+    
+    return semester;
   };
 
   // Filter data based on strict program matching to ensure proper isolation
@@ -262,36 +274,18 @@ function StudentMetrics() {
     // First filter by program to strictly isolate program data
     const programFilteredData = selectedProgram === '' 
       ? surveyData 
-      : surveyData.filter(survey => {
-          const exactMatch = survey.program === selectedProgram;
-          
-          // Log any near-matches that are being rejected
-          if (!exactMatch && survey.program && survey.program.includes(selectedProgram)) {
-            console.log(`Rejected near-match: "${survey.program}" vs selected "${selectedProgram}"`);
-          }
-          
-          return exactMatch;
-        });
+      : surveyData.filter(survey => survey.program === selectedProgram);
     
     // Next filter by school year with strict equality check
     const yearFilteredData = selectedYear === 'all'
       ? programFilteredData
-      : programFilteredData.filter(survey => {
-          const exactYearMatch = survey.schoolYear === selectedYear;
-          
-          // Log any near-matches for year that are being rejected
-          if (!exactYearMatch && survey.schoolYear && 
-             (survey.schoolYear.includes(selectedYear) || selectedYear.includes(survey.schoolYear))) {
-            console.log(`Rejected year near-match: "${survey.schoolYear}" vs selected "${selectedYear}"`);
-          }
-          
-          return exactYearMatch;
-        });
+      : programFilteredData.filter(survey => survey.schoolYear === selectedYear);
     
     // Then apply remaining filters
     return yearFilteredData.filter(survey => {
-      // Check semester filter
-      const semesterMatch = selectedSemester === 'all' || survey.semester === selectedSemester;
+      // Check semester filter with normalization
+      const normalizedSemester = normalizeSemester(survey.semester);
+      const semesterMatch = selectedSemester === 'all' || normalizedSemester === selectedSemester;
       
       // Check company filter - only use companyName field
       const companyMatch = selectedCompany === 'all' || survey.companyName === selectedCompany;
@@ -601,7 +595,7 @@ function StudentMetrics() {
     };
   };
 
-  // Filter Section Component - Enhanced version
+  // Filter Section Component - Enhanced version with company filter
   const FilterSection = () => {
     // Count active filters for the badge
     const activeFilterCount = [
@@ -657,7 +651,7 @@ function StudentMetrics() {
               <FilterAltIcon sx={{ mr: 1, color: '#800000' }} />
             </Badge>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Program Analytics Filters
+              Performance Analytics Filters
             </Typography>
           </Box>
           
@@ -685,7 +679,7 @@ function StudentMetrics() {
         
         <Grid container spacing={2.5}>
           {/* Program filter */}
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small" variant="outlined">
               <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Program</InputLabel>
               <Select
@@ -735,112 +729,8 @@ function StudentMetrics() {
             </FormControl>
           </Grid>
 
-          {/* School Year filter */}
-          <Grid item xs={12} sm={6} md={4}>
-            <FormControl fullWidth size="small" variant="outlined">
-              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>School Year</InputLabel>
-              <Select
-                value={selectedYear}
-                label="School Year"
-                onChange={(e) => setSelectedYear(e.target.value)}
-                sx={{
-                  bgcolor: 'white',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                  '.MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(128, 0, 0, 0.2)',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(128, 0, 0, 0.5)',
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#800000',
-                  },
-                  '& .MuiSelect-select': { color: '#800000' },
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      maxHeight: 300,
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                      '& .MuiMenuItem-root': {
-                        '&:hover': {
-                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
-                        },
-                        '&.Mui-selected': {
-                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
-                          }
-                        }
-                      }
-                    }
-                  }
-                }}
-              >
-                <MenuItem value="all">All Years</MenuItem>
-                {filterOptions.years.map((year) => (
-                  <MenuItem key={year} value={year}>
-                    {year}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          {/* Semester filter */}
-          <Grid item xs={12} sm={6} md={4}>
-            <FormControl fullWidth size="small" variant="outlined">
-              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Semester</InputLabel>
-              <Select
-                value={selectedSemester}
-                label="Semester"
-                onChange={(e) => setSelectedSemester(e.target.value)}
-                sx={{
-                  bgcolor: 'white',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                  '.MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(128, 0, 0, 0.2)',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(128, 0, 0, 0.5)',
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#800000',
-                  },
-                  '& .MuiSelect-select': { color: '#800000' },
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      maxHeight: 300,
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                      '& .MuiMenuItem-root': {
-                        '&:hover': {
-                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
-                        },
-                        '&.Mui-selected': {
-                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
-                          }
-                        }
-                      }
-                    }
-                  }
-                }}
-              >
-                <MenuItem value="all">All Semesters</MenuItem>
-                {filterOptions.semesters.map((semester) => (
-                  <MenuItem key={semester} value={semester}>
-                    {semester}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
           {/* Company filter */}
-          <Grid item xs={12} sm={6} md={6}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small" variant="outlined">
               <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Company</InputLabel>
               <Select
@@ -881,10 +771,111 @@ function StudentMetrics() {
                   }
                 }}
               >
-                <MenuItem value="all">All Companies</MenuItem>
-                {filterOptions.companies.map((company) => (
+                {companies.map((company) => (
                   <MenuItem key={company} value={company}>
-                    {company}
+                    {company === 'all' ? 'All Companies' : company}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* School Year filter */}
+          <Grid item xs={12} sm={6} md={2.4}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>School Year</InputLabel>
+              <Select
+                value={selectedYear}
+                label="School Year"
+                onChange={(e) => setSelectedYear(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                {years.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year === 'all' ? 'All Years' : year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Semester filter */}
+          <Grid item xs={12} sm={6} md={2.4}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Semester</InputLabel>
+              <Select
+                value={selectedSemester}
+                label="Semester"
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                  '& .MuiSelect-select': { color: '#800000' },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                {semesters.map((semester) => (
+                  <MenuItem key={semester} value={semester}>
+                    {semester === 'all' ? 'All Semesters' : semester}
                   </MenuItem>
                 ))}
               </Select>
@@ -892,7 +883,7 @@ function StudentMetrics() {
           </Grid>
           
           {/* Survey Type filter */}
-          <Grid item xs={12} sm={6} md={6}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small" variant="outlined">
               <InputLabel sx={{ color: 'rgba(128, 0, 0, 0.8)' }}>Survey Type</InputLabel>
               <Select
@@ -934,8 +925,8 @@ function StudentMetrics() {
                 }}
               >
                 <MenuItem value="all">All Surveys</MenuItem>
-                <MenuItem value="midterm">Midterm Evaluation</MenuItem>
-                <MenuItem value="final">Final Evaluation</MenuItem>
+                <MenuItem value="midterm">Midterm Only</MenuItem>
+                <MenuItem value="final">Final Only</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -955,6 +946,25 @@ function StudentMetrics() {
               <Chip
                 label={`Program: ${selectedProgram}`}
                 onDelete={() => setSelectedProgram(programs.length > 0 ? programs[0] : '')}
+                deleteIcon={<CancelIcon fontSize="small" />}
+                sx={{
+                  bgcolor: 'rgba(128, 0, 0, 0.08)',
+                  color: '#800000',
+                  border: '1px solid rgba(128, 0, 0, 0.2)',
+                  '& .MuiChip-deleteIcon': {
+                    color: 'rgba(128, 0, 0, 0.7)',
+                    '&:hover': {
+                      color: '#800000'
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {selectedCompany !== 'all' && (
+              <Chip
+                label={`Company: ${selectedCompany}`}
+                onDelete={() => setSelectedCompany('all')}
                 deleteIcon={<CancelIcon fontSize="small" />}
                 sx={{
                   bgcolor: 'rgba(128, 0, 0, 0.08)',
@@ -1008,25 +1018,6 @@ function StudentMetrics() {
               />
             )}
             
-            {selectedCompany !== 'all' && (
-              <Chip
-                label={`Company: ${selectedCompany}`}
-                onDelete={() => setSelectedCompany('all')}
-                deleteIcon={<CancelIcon fontSize="small" />}
-                sx={{
-                  bgcolor: 'rgba(128, 0, 0, 0.08)',
-                  color: '#800000',
-                  border: '1px solid rgba(128, 0, 0, 0.2)',
-                  '& .MuiChip-deleteIcon': {
-                    color: 'rgba(128, 0, 0, 0.7)',
-                    '&:hover': {
-                      color: '#800000'
-                    }
-                  }
-                }}
-              />
-            )}
-            
             {selectedSurveyType !== 'all' && (
               <Chip
                 label={`Survey: ${selectedSurveyType === 'midterm' ? 'Midterm Evaluation' : 'Final Evaluation'}`}
@@ -1047,37 +1038,6 @@ function StudentMetrics() {
             )}
           </Box>
         )}
-
-        {/* Results summary and error messages */}
-        <Box sx={{ mt: 2 }}>
-          {getFilteredData().length > 0 ? (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              bgcolor: 'rgba(128, 0, 0, 0.05)', 
-              p: 1, 
-              borderRadius: 1 
-            }}>
-              <AssessmentIcon sx={{ color: '#800000', mr: 1, fontSize: '1.2rem' }} />
-              <Typography variant="body2" sx={{ color: '#800000', fontWeight: 'medium' }}>
-                Showing metrics for {getFilteredData().length} {getFilteredData().length === 1 ? 'survey' : 'surveys'}
-              </Typography>
-            </Box>
-          ) : (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              bgcolor: 'rgba(211, 47, 47, 0.05)', 
-              p: 1.5, 
-              borderRadius: 1,
-              border: '1px dashed rgba(211, 47, 47, 0.3)'
-            }}>
-              <Typography variant="body2" sx={{ color: '#d32f2f' }}>
-                No data found for the selected filters. Try adjusting your criteria.
-              </Typography>
-            </Box>
-          )}
-        </Box>
       </Paper>
     );
   };
@@ -1101,6 +1061,27 @@ function StudentMetrics() {
     if (rating >= 4.5) return '#e8f5e9'; // Light green
     if (rating >= 4.0) return '#e3f2fd'; // Light blue
     return '#fff3e0'; // Light orange
+  };
+  
+  // Get average rating for a specific metric type
+  const getAverageRating = (metricType) => {
+    const metrics = metricsData[metricType];
+    if (!metrics || metrics.length === 0) return 0;
+    return metrics.reduce((sum, item) => sum + item.rating, 0) / metrics.length;
+  };
+  
+  // Get top metrics for a given data type
+  const getTopMetrics = (metricType) => {
+    const metrics = metricsData[metricType];
+    if (!metrics || metrics.length === 0) return [];
+    return [...metrics].sort((a, b) => b.rating - a.rating).slice(0, metrics.length > 2 ? 2 : metrics.length);
+  };
+  
+  // Get bottom metrics for a given data type
+  const getBottomMetrics = (metricType) => {
+    const metrics = metricsData[metricType];
+    if (!metrics || metrics.length === 0) return [];
+    return [...metrics].sort((a, b) => a.rating - b.rating).slice(0, metrics.length > 2 ? 2 : metrics.length);
   };
 
   const metricsData = processMetricsData();
@@ -1199,14 +1180,162 @@ function StudentMetrics() {
       </Grid>
 
       <Grid item xs={12}>
+        <Card elevation={3} sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: {xs: 'column', md: 'row'}, 
+              justifyContent: 'space-between',
+              alignItems: {xs: 'flex-start', md: 'center'},
+              mb: 2
+            }}>
+              <Box>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#800000', mb: 0.5 }}>
+                  Student Performance Dashboard
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {selectedProgram} • {selectedYear !== 'all' ? selectedYear : 'All Years'} • {selectedSemester !== 'all' ? `${selectedSemester} Semester` : 'All Semesters'}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 2, 
+                mt: {xs: 2, md: 0},
+                background: 'rgba(128, 0, 0, 0.03)',
+                p: 1.5,
+                borderRadius: 2,
+                border: '1px solid rgba(128, 0, 0, 0.1)'
+              }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                    Work Attitude
+                  </Typography>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 'bold', 
+                    color: getRatingColor(getAverageRating('workAttitude'))
+                  }}>
+                    {getAverageRating('workAttitude').toFixed(1)}
+                  </Typography>
+                </Box>
+                <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(128, 0, 0, 0.1)' }} />
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                    Performance
+                  </Typography>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 'bold', 
+                    color: getRatingColor(getAverageRating('workPerformance'))
+                  }}>
+                    {getAverageRating('workPerformance').toFixed(1)}
+                  </Typography>
+                </Box>
+                <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(128, 0, 0, 0.1)' }} />
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                    Overall
+                  </Typography>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 'bold', 
+                    color: getRatingColor((getAverageRating('workAttitude') + getAverageRating('workPerformance')) / 2)
+                  }}>
+                    {((getAverageRating('workAttitude') + getAverageRating('workPerformance')) / 2).toFixed(1)}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            <Box sx={{ 
+              bgcolor: 'rgba(128, 0, 0, 0.04)', 
+              p: 2, 
+              borderRadius: 2,
+              border: '1px dashed rgba(128, 0, 0, 0.15)'
+            }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium', color: '#800000', mb: 1 }}>
+                    Key Strengths:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {[...getTopMetrics('workAttitude'), ...getTopMetrics('workPerformance')].map((metric, index) => (
+                      <Chip 
+                        key={index}
+                        label={`${metric.aspect} (${metric.rating.toFixed(1)})`}
+                        size="small"
+                        sx={{ 
+                          bgcolor: getRatingBgColor(metric.rating),
+                          color: getRatingColor(metric.rating),
+                          fontWeight: 'medium'
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium', color: '#800000', mb: 1 }}>
+                    Areas for Improvement:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {[...getBottomMetrics('workAttitude'), ...getBottomMetrics('workPerformance')].map((metric, index) => (
+                      <Chip 
+                        key={index}
+                        label={`${metric.aspect} (${metric.rating.toFixed(1)})`}
+                        size="small"
+                        sx={{ 
+                          bgcolor: getRatingBgColor(metric.rating),
+                          color: getRatingColor(metric.rating),
+                          fontWeight: 'medium'
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12}>
         <Card elevation={3}>
           <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Work Attitude Assessment
-            </Typography>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              Evaluation of student behavior, cooperation, and professional conduct
-            </Typography>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: {xs: 'column', sm: 'row'}, 
+              justifyContent: 'space-between',
+              alignItems: {xs: 'flex-start', sm: 'center'},
+              mb: 2
+            }}>
+              <Box>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 0 }}>
+                  Work Attitude Assessment
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Evaluation of student behavior, cooperation, and professional conduct
+                </Typography>
+              </Box>
+              <Box sx={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                mt: {xs: 1, sm: 0},
+                bgcolor: getRatingBgColor(metricsData.workAttitude.reduce((sum, item) => sum + item.rating, 0) / metricsData.workAttitude.length),
+                px: 2,
+                py: 0.5,
+                borderRadius: 2
+              }}>
+                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                  Average:
+                </Typography>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  color: getRatingColor(metricsData.workAttitude.reduce((sum, item) => sum + item.rating, 0) / metricsData.workAttitude.length)
+                }}>
+                  {(metricsData.workAttitude.reduce((sum, item) => sum + item.rating, 0) / metricsData.workAttitude.length).toFixed(1)}
+                </Typography>
+              </Box>
+            </Box>
+            <Divider sx={{ mb: 3 }} />
             <Grid container spacing={3}>
               {/* Work Attitude Cards */}
               {metricsData.workAttitude.map((metric) => (
@@ -1219,9 +1348,28 @@ function StudentMetrics() {
                       transition: 'transform 0.2s',
                       '&:hover': {
                         transform: 'translateY(-5px)',
-                      }
+                      },
+                      position: 'relative',
+                      overflow: 'hidden'
                     }}
                   >
+                    {metric.rating >= 4.5 && (
+                      <Box 
+                        sx={{ 
+                          position: 'absolute', 
+                          top: 0, 
+                          right: 0, 
+                          bgcolor: '#2e7d32', 
+                          color: 'white',
+                          px: 1,
+                          borderBottomLeftRadius: 4,
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        TOP RATED
+                      </Box>
+                    )}
                     <CardContent>
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
                         <Box sx={{ flex: 1 }}>
@@ -1277,7 +1425,7 @@ function StudentMetrics() {
                         <Typography variant="caption" color="textSecondary">
                           out of 5.0
                         </Typography>
-            </Box>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -1290,12 +1438,43 @@ function StudentMetrics() {
       <Grid item xs={12}>
         <Card elevation={3}>
           <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Work Performance Metrics
-            </Typography>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              Detailed evaluation of student skills, efficiency, and job-specific performance
-            </Typography>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: {xs: 'column', sm: 'row'}, 
+              justifyContent: 'space-between',
+              alignItems: {xs: 'flex-start', sm: 'center'},
+              mb: 2
+            }}>
+              <Box>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 0 }}>
+                  Work Performance Metrics
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Detailed evaluation of student skills, efficiency, and job-specific performance
+                </Typography>
+              </Box>
+              <Box sx={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                mt: {xs: 1, sm: 0},
+                bgcolor: getRatingBgColor(metricsData.workPerformance.reduce((sum, item) => sum + item.rating, 0) / metricsData.workPerformance.length),
+                px: 2,
+                py: 0.5,
+                borderRadius: 2
+              }}>
+                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                  Average:
+                </Typography>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  color: getRatingColor(metricsData.workPerformance.reduce((sum, item) => sum + item.rating, 0) / metricsData.workPerformance.length)
+                }}>
+                  {(metricsData.workPerformance.reduce((sum, item) => sum + item.rating, 0) / metricsData.workPerformance.length).toFixed(1)}
+                </Typography>
+              </Box>
+            </Box>
+            <Divider sx={{ mb: 3 }} />
             <Grid container spacing={3}>
               {/* Work Performance Cards */}
               {metricsData.workPerformance.map((metric) => (
@@ -1308,9 +1487,28 @@ function StudentMetrics() {
                       transition: 'transform 0.2s',
                       '&:hover': {
                         transform: 'translateY(-5px)',
-                      }
+                      },
+                      position: 'relative',
+                      overflow: 'hidden'
                     }}
                   >
+                    {metric.rating >= 4.5 && (
+                      <Box 
+                        sx={{ 
+                          position: 'absolute', 
+                          top: 0, 
+                          right: 0, 
+                          bgcolor: '#2e7d32', 
+                          color: 'white',
+                          px: 1,
+                          borderBottomLeftRadius: 4,
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        TOP RATED
+                      </Box>
+                    )}
                     <CardContent>
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                         <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold', flex: 1 }}>
@@ -1348,72 +1546,10 @@ function StudentMetrics() {
                             {getRatingText(metric.rating)}
                           </span>
                         </Typography>
-            </Box>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12}>
-        <Card elevation={3}>
-          <CardContent>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-              Program Success Indicators
-            </Typography>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              Comprehensive evaluation of program effectiveness and student career outcomes
-            </Typography>
-            <Grid container spacing={3}>
-              {/* Program Success Cards */}
-              {metricsData.programSuccess.map((metric) => (
-                <Grid item xs={12} md={6} lg={3} key={metric.aspect}>
-                  <Card 
-                    elevation={2}
-                    sx={{
-                      height: '100%',
-                      backgroundColor: metric.rating >= 4.5 ? '#f7f7f7' : 'white',
-                      transition: 'transform 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-5px)',
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ color: '#800000', fontWeight: 'bold' }}>
-                        {metric.aspect}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                        {metric.description}
-                      </Typography>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <Typography variant="h4" sx={{ 
-                          color: getRatingColor(metric.rating),
-                          fontWeight: 'bold'
-                        }}>
-                          {metric.rating.toFixed(1)}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          out of 5.0
-                        </Typography>
-            </Box>
-                      <Typography variant="caption" sx={{ 
-                        display: 'block',
-                        mt: 1,
-                        color: getRatingColor(metric.rating)
-                      }}>
-                        {getRatingText(metric.rating)}
-                      </Typography>
-          </CardContent>
-        </Card>
-      </Grid>
               ))}
             </Grid>
           </CardContent>

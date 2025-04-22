@@ -63,6 +63,13 @@ service cloud.firestore {
              department == "CICS";  // For backward compatibility
     }
     
+    // Validate email format if provided
+    function isValidEmailFormat(email) {
+      // Return true for empty or valid email format
+      return email == "" || email == null || 
+             email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+    
     // Check if a program is valid for the specified college
     function isValidProgramForCollege(college, program) {
       // For College of Engineering and Architecture
@@ -134,13 +141,17 @@ service cloud.firestore {
     // Validate student data fields
     function isValidStudentData() {
       let data = request.resource.data;
-      return data.keys().hasAll([
+      let requiredFields = [
         'name', 'gender', 'program', 'semester', 'schoolYear',
         'partnerCompany', 'contactPerson', 'location', 'startDate', 'endDate',
-        'concerns', 'solutions', 'recommendations', 'evaluation',
         'createdBy', 'updatedBy', 'createdAt', 'updatedAt',
-        'college', 'section', 'middleInitial'
-      ]) &&
+        'college', 'section', 'middleInitial', 'email', 'internshipEmail',
+        'midtermsKey', 'finalsKey'
+      ];
+      
+      // Check if all required fields exist
+      return data.keys().hasAll(requiredFields) &&
+      
       // Validate required string fields
       data.name is string && data.name.size() > 0 &&
       data.gender is string && data.gender.size() > 0 &&
@@ -151,15 +162,23 @@ service cloud.firestore {
       data.location is string && data.location.size() > 0 &&
       data.college is string && data.college.size() > 0 &&
       data.section is string &&
+      
       // Optional fields can be empty but must exist
       data.middleInitial is string &&
       data.contactPerson is string &&
-      data.concerns is string &&
-      data.solutions is string &&
-      data.recommendations is string &&
-      data.evaluation is string &&
       data.startDate is string &&
       data.endDate is string &&
+      data.email is string && isValidEmailFormat(data.email) &&
+      data.internshipEmail is string && isValidEmailFormat(data.internshipEmail) &&
+      data.midtermsKey is string &&
+      data.finalsKey is string &&
+      
+      // Optional additional fields
+      (!data.keys().hasAny(['concerns']) || data.concerns is string) &&
+      (!data.keys().hasAny(['solutions']) || data.solutions is string) &&
+      (!data.keys().hasAny(['recommendations']) || data.recommendations is string) &&
+      (!data.keys().hasAny(['evaluation']) || data.evaluation is string) &&
+      
       // Metadata validation
       data.createdBy is string &&
       data.updatedBy is string &&
@@ -378,6 +397,10 @@ service cloud.firestore {
       (!data.keys().hasAny(['evaluation']) || data.evaluation is string) &&
       (!data.keys().hasAny(['startDate']) || data.startDate is string) &&
       (!data.keys().hasAny(['endDate']) || data.endDate is string) &&
+      (!data.keys().hasAny(['email']) || (data.email is string && isValidEmailFormat(data.email))) &&
+      (!data.keys().hasAny(['internshipEmail']) || (data.internshipEmail is string && isValidEmailFormat(data.internshipEmail))) &&
+      (!data.keys().hasAny(['midtermsKey']) || data.midtermsKey is string) &&
+      (!data.keys().hasAny(['finalsKey']) || data.finalsKey is string) &&
       
       // Metadata validation
       data.createdBy is string &&
@@ -423,6 +446,12 @@ service cloud.firestore {
       // Validate required fields
       data.studentName is string && data.studentName.size() > 0 &&
       data.studentId is string && data.studentId.size() > 0 &&
+      // Optional fields validation for fields that might exist
+      (!data.keys().hasAny(['program']) || data.program is string) &&
+      (!data.keys().hasAny(['email']) || (data.email is string && isValidEmailFormat(data.email))) &&
+      (!data.keys().hasAny(['internshipEmail']) || (data.internshipEmail is string && isValidEmailFormat(data.internshipEmail))) &&
+      (!data.keys().hasAny(['midtermsKey']) || data.midtermsKey is string) &&
+      (!data.keys().hasAny(['finalsKey']) || data.finalsKey is string) &&
       // Metadata validation
       data.addedAt is string &&
       data.addedBy is string;
@@ -461,6 +490,16 @@ service cloud.firestore {
       // Validate required fields
       data.studentName is string && data.studentName.size() > 0 &&
       data.studentId is string && data.studentId.size() > 0 &&
+      // Optional fields validation for fields that might exist
+      (!data.keys().hasAny(['program']) || data.program is string) &&
+      (!data.keys().hasAny(['section']) || data.section is string) &&
+      (!data.keys().hasAny(['college']) || data.college is string) &&
+      (!data.keys().hasAny(['startDate']) || data.startDate is string) &&
+      (!data.keys().hasAny(['endDate']) || data.endDate is string) &&
+      (!data.keys().hasAny(['email']) || (data.email is string && isValidEmailFormat(data.email))) &&
+      (!data.keys().hasAny(['internshipEmail']) || (data.internshipEmail is string && isValidEmailFormat(data.internshipEmail))) &&
+      (!data.keys().hasAny(['midtermsKey']) || data.midtermsKey is string) &&
+      (!data.keys().hasAny(['finalsKey']) || data.finalsKey is string) &&
       // Metadata validation
       data.addedAt is string &&
       data.addedBy is string;
@@ -517,13 +556,10 @@ service cloud.firestore {
 
     // StudentData Collection
     match /studentData/{docId} {
-      allow read: if isAuthenticated() && 
-                   (isAdmin() || 
-                   (isInstructor() && hasCollegeAccess(resource.data.college) && 
-                    (!resource.data.keys().hasAny(['section']) || 
-                     resource.data.section == null || 
-                     resource.data.section == "" || 
-                     hasSectionAccess(resource.data.college, resource.data.section))));
+      // Allow authenticated users to read for key validation
+      allow read: if true;  // Allow anyone to read for validation purposes
+
+      // Original rules for more specific operations
       allow create: if isAuthenticated() && 
                     isValidStudentData() &&
                     (isAdmin() || 
@@ -533,14 +569,32 @@ service cloud.firestore {
                         !getUserSection() || getUserSection() == ""))) &&
                     request.resource.data.createdBy == request.auth.uid &&
                     request.resource.data.updatedBy == request.auth.uid;
-      allow update: if isAuthenticated() &&
-                    isValidStudentDataUpdate() &&
-                    (isAdmin() || 
-                      (isInstructor() && 
-                       request.resource.data.college == getUserCollege() &&
-                       (request.resource.data.section == getUserSection() || 
-                        !getUserSection() || getUserSection() == ""))) &&
-                    request.resource.data.updatedBy == request.auth.uid;
+      // Combined update rule with special case for concerns/solutions
+      allow update: if isAuthenticated() && (
+                    // Special case for concerns and solutions only (partial update)
+                    (
+                      // Check if we're only updating a subset of fields related to concerns/solutions
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'concerns', 'solutions', 'recommendations', 'evaluation', 
+                        'updatedAt', 'updatedBy'
+                      ]) &&
+                      // We still validate the updater and ensure the format is correct
+                      // But we don't require specifically that the updater be the current user
+                      request.resource.data.updatedBy is string && 
+                      (request.resource.data.updatedAt is string || request.resource.data.updatedAt is timestamp)
+                    )
+                    ||
+                    // Original validation for full updates
+                    (
+                      isValidStudentDataUpdate() &&
+                      (isAdmin() || 
+                        (isInstructor() && 
+                         request.resource.data.college == getUserCollege() &&
+                         (request.resource.data.section == getUserSection() || 
+                          !getUserSection() || getUserSection() == ""))) &&
+                      request.resource.data.updatedBy == request.auth.uid
+                    )
+                   );
       allow delete: if isAuthenticated() && 
                     (isAdmin() || 
                       (isInstructor() && 
@@ -555,7 +609,22 @@ service cloud.firestore {
     // Student Surveys Collection
     match /studentSurveys/{surveyId} {
       allow read: if true;  // Allow anyone to read
-      allow create: if isValidStudentSurvey();  // Use validation function
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Period-specific Student Surveys Collections
+    match /studentSurveys_midterm/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /studentSurveys_final/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true;  // Allow anyone to create without validation
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -563,7 +632,60 @@ service cloud.firestore {
     // OJT Advisers Collection
     match /OJTadvisers/{surveyId} {
       allow read: if true;  // Allow anyone to read
-      allow create: if isValidCompanySurvey();  // Use validation function
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Period-specific OJT Advisers Collections
+    match /OJTadvisers_midterm/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /OJTadvisers_midterms/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /OJTadvisers_final/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /OJTadvisers_finals/{surveyId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Concerns and Solutions Collection
+    match /concerns_solutions/{docId} {
+      allow read: if true;  // Allow anyone to read 
+      allow create: if true; // Allow anyone to create
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Student Feedback Collection 
+    match /student_feedback/{docId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true; // Allow anyone to create 
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // General Feedback Collection
+    match /feedback/{docId} {
+      allow read: if true;  // Allow anyone to read
+      allow create: if true; // Allow anyone to create
       allow update: if false;
       allow delete: if false;
     }
@@ -571,7 +693,37 @@ service cloud.firestore {
     // Company Evaluations Collection Rules
     match /companyEvaluations/{surveyId} {
       allow read: if true;
-      allow create: if isValidCompanyEvaluation();
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Period-specific Company Evaluations Collections
+    match /companyEvaluations_midterm/{surveyId} {
+      allow read: if true;
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /companyEvaluations_final/{surveyId} {
+      allow read: if true;
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Legacy Collections
+    match /studentSurveys_legacy/{surveyId} {
+      allow read: if true;
+      allow create: if true;  // Allow anyone to create without validation
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /companyEvaluations_legacy/{surveyId} {
+      allow read: if true;
+      allow create: if true;  // Allow anyone to create without validation
       allow update: if false;
       allow delete: if false;
     }
@@ -705,11 +857,9 @@ service cloud.firestore {
       // Allow anyone to read department information
       allow read: if true;
       
-      // Allow creation if department ID matches a valid college
-      allow create: if isValidCollege(departmentId);
-      
-      // Allow updates to departments
-      allow update: if isValidCollege(departmentId);
+      // Allow creation and updates without department validation
+      allow create: if true;
+      allow update: if true;
       
       // Only admins can delete departments
       allow delete: if isAdmin();
@@ -762,20 +912,28 @@ service cloud.firestore {
             // Allow reading evaluations
             allow read: if true;
             
-            // Allow creating evaluations with proper college validation
-            allow create: if 
-              // Ensure the college in the data matches the parent departmentId
-              request.resource.data.college == departmentId || 
-              // Or if it's a legacy format like "CICS" mapping to "COLLEGE OF COMPUTER STUDIES"
-              (departmentId == "COLLEGE OF COMPUTER STUDIES" && request.resource.data.college == "CICS") ||
-              // Also validate program is appropriate for the college if program field is present
-              (!request.resource.data.keys().hasAny(['program']) || 
-               isValidProgramForCollege(departmentId, request.resource.data.program));
+            // Allow creating evaluations without validation
+            allow create: if true;
             
             // No updates to submitted evaluations
             allow update: if false;
             
             // Only admins can delete evaluations
+            allow delete: if isAdmin();
+          }
+          
+          // Period-specific evaluations
+          match /evaluations_midterm/{evalId} {
+            allow read: if true;
+            allow create: if true;
+            allow update: if false;
+            allow delete: if isAdmin();
+          }
+          
+          match /evaluations_final/{evalId} {
+            allow read: if true;
+            allow create: if true;
+            allow update: if false;
             allow delete: if isAdmin();
           }
         }
@@ -800,11 +958,8 @@ service cloud.firestore {
           // Allow reading surveys
           allow read: if true;
           
-          // Allow creating surveys with proper college validation
-          allow create: if 
-            // If program is specified, validate it's appropriate for the department
-            (!request.resource.data.keys().hasAny(['program']) || 
-             isValidProgramForCollege(departmentId, request.resource.data.program));
+          // Allow creating surveys without validation
+          allow create: if true;
           
           // No updates to submitted surveys
           allow update: if false;

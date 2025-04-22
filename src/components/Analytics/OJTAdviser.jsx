@@ -53,12 +53,9 @@ const rotateInner = keyframes`
 
 function OJTAdviser() {
   const [selectedCompany, setSelectedCompany] = useState('');
-  const [selectedYear, setSelectedYear] = useState('');
-  const [selectedSemester, setSelectedSemester] = useState('');
+  const [selectedSurveyType, setSelectedSurveyType] = useState('midterm');
   const [companies, setCompanies] = useState([]);
   const [evaluationsData, setEvaluationsData] = useState([]);
-  const [years, setYears] = useState([]);
-  const [semesters] = useState(['1st', '2nd', 'Summer']);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -67,43 +64,185 @@ function OJTAdviser() {
   const rowsPerPage = 7;
 
   useEffect(() => {
-    const q = query(collection(db, 'OJTadvisers'));
-    const unsubscribe = onSnapshot(q, 
-      (querySnapshot) => {
-        const data = querySnapshot.docs
-          .filter(doc => doc.data().status === 'submitted' && doc.data().surveyType === 'company')
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            companyName: doc.data().companyName,
-            meetingDate: doc.data().meetingDate,
-            students: doc.data().studentNames,
-            overallPerformance: doc.data().overallPerformance,
-            tasks: doc.data().tasksAssigned,
-            training: doc.data().trainingProvided,
-            technicalSkills: doc.data().technicalSkills,
-            recommendations: doc.data().recommendations,
-            industryMentor: doc.data().industryMentor,
-            program: doc.data().program,
-            recommended: doc.data().recommendToStudents,
-            totalScore: doc.data().totalScore,
-            maxPossibleScore: doc.data().maxPossibleScore
-          }));
-
-        setEvaluationsData(data);
-        setCompanies([...new Set(data.map(item => item.companyName))]);
-        setYears([...new Set(data.map(item => item.schoolYear))]);
+    // Reset page when survey type changes
+    setPage(1);
+    setLoading(true);
+    setError(null);
+    
+    // List of all possible collection names to try
+    const possibleCollections = [
+      selectedSurveyType === 'midterm' ? 'OJTadvisers_midterms' : 'OJTadvisers_finals',
+      selectedSurveyType === 'midterm' ? 'OJTadvisers_midterm' : 'OJTadvisers_final',
+      'OJTadvisers'
+    ];
+    
+    console.log('Trying collections:', possibleCollections);
+    
+    // Try collections sequentially
+    let currentIndex = 0;
+    let unsubscribe = null;
+    
+    const tryNextCollection = () => {
+      // If we've tried all collections without success
+      if (currentIndex >= possibleCollections.length) {
+        console.log('No data found in any collection');
+        setEvaluationsData([]);
+        setCompanies([]);
         setLoading(false);
-      },
-      (error) => {
-        console.error('Error fetching evaluations:', error);
-        setError(error.message);
-        setLoading(false);
+        return null;
       }
-    );
+      
+      const collectionName = possibleCollections[currentIndex];
+      console.log(`Trying collection ${currentIndex + 1}/${possibleCollections.length}: ${collectionName}`);
+      
+      const q = query(collection(db, collectionName));
+      
+      return onSnapshot(
+        q,
+        (querySnapshot) => {
+          console.log(`Collection ${collectionName} data count:`, querySnapshot.docs.length);
+          
+          // Log raw data for debugging
+          if (querySnapshot.docs.length > 0) {
+            console.log(`Using collection: ${collectionName}`);
+            console.log('Sample document:', querySnapshot.docs[0].id, querySnapshot.docs[0].data());
+          }
+          
+          const data = querySnapshot.docs
+            // Filter based on document type being "assessment" and matching evaluation period
+            .filter(doc => {
+              try {
+                const docData = doc.data();
+                
+                // Check if the document is of type "assessment"
+                const isAssessment = docData.type === "assessment";
+                
+                // Match the evaluation period with the selected survey type
+                const matchesSelectedPeriod = selectedSurveyType === 'midterm' 
+                  ? docData.evaluationPeriod === 'MIDTERMS'
+                  : docData.evaluationPeriod === 'FINALS';
+                
+                return isAssessment && matchesSelectedPeriod;
+                
+              } catch (err) {
+                console.error("Error filtering document:", err);
+                return false;
+              }
+            })
+            .map(doc => {
+              try {
+                const docData = doc.data();
+                
+                // Extract school year from submittedAt if not available directly
+                let schoolYear = docData.schoolYear;
+                let semester = docData.semester;
+                
+                if (docData.submittedAt) {
+                  // Try to extract year and semester from submittedAt
+                  try {
+                    const submittedDate = docData.submittedAt.toDate ? 
+                      docData.submittedAt.toDate() : 
+                      new Date(docData.submittedAt);
+                    
+                    // Format as academic year (e.g., "2024-2025")
+                    const year = submittedDate.getFullYear();
+                    if (!schoolYear) {
+                      schoolYear = `${year}-${year+1}`;
+                    }
+                    
+                    // Determine semester based on month if not available
+                    if (!semester) {
+                      const month = submittedDate.getMonth();
+                      // June-October: 1st semester, November-March: 2nd semester, April-May: Summer
+                      if (month >= 5 && month <= 9) {
+                        semester = '1st';
+                      } else if (month >= 10 || month <= 2) {
+                        semester = '2nd';
+                      } else {
+                        semester = 'Summer';
+                      }
+                    }
+                  } catch (err) {
+                    console.error("Error extracting data from submittedAt:", err);
+                    if (!schoolYear) schoolYear = "Unknown Year";
+                    if (!semester) semester = "Unknown";
+                  }
+                }
+                
+                return {
+                  id: doc.id,
+                  ...docData,
+                  companyName: docData.companyName || 'Unknown Company',
+                  meetingDate: docData.meetingDate || 'No Date',
+                  students: docData.studentNames || docData.students || 'No Students Listed',
+                  overallPerformance: docData.overallPerformance || 0,
+                  tasks: docData.tasksAssigned || 'No Tasks Listed',
+                  training: docData.trainingProvided || 'No Training Listed',
+                  technicalSkills: docData.technicalSkills || 'No Skills Listed',
+                  recommendations: docData.recommendations || 'No Recommendations',
+                  industryMentor: docData.industryMentor || 'No Mentor Listed',
+                  program: docData.program || 'No Program Listed',
+                  recommended: docData.recommendToStudents === 'yes' ? true : false,
+                  totalScore: docData.overallPerformance || 0, // Use overallPerformance as totalScore
+                  maxPossibleScore: 10, // Assuming a max score of 10 based on your schema
+                  surveyType: docData.evaluationPeriod === 'MIDTERMS' ? 'midterm' : 'final',
+                  schoolYear: schoolYear || "Unknown Year",
+                  semester: semester || "Unknown"
+                };
+              } catch (err) {
+                console.error("Error mapping document:", err);
+                return null;
+              }
+            })
+            .filter(Boolean); // Remove any null entries from failed mapping
 
-    return () => unsubscribe();
-  }, []);
+          console.log('Filtered data count:', data.length);
+          
+          if (data.length > 0) {
+            // Found data in this collection!
+            setEvaluationsData(data);
+            setCompanies([...new Set(data.map(item => item.companyName).filter(Boolean))]);
+            setLoading(false);
+          } else {
+            // Try the next collection
+            currentIndex++;
+            
+            if (unsubscribe) {
+              unsubscribe();
+            }
+            
+            unsubscribe = tryNextCollection();
+          }
+        },
+        (error) => {
+          console.error(`Error fetching from ${collectionName}:`, error);
+          
+          // Try the next collection even if there's an error
+          currentIndex++;
+          
+          if (unsubscribe) {
+            unsubscribe();
+          }
+          
+          if (currentIndex >= possibleCollections.length) {
+            setError(`Failed to fetch data: ${error.message}`);
+            setLoading(false);
+          } else {
+            unsubscribe = tryNextCollection();
+          }
+        }
+      );
+    };
+    
+    // Start trying collections
+    unsubscribe = tryNextCollection();
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [selectedSurveyType]);
 
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
@@ -112,8 +251,6 @@ function OJTAdviser() {
   const getFilteredData = () => {
     const filtered = evaluationsData.filter(evaluation => {
       if (selectedCompany && evaluation.companyName !== selectedCompany) return false;
-      if (selectedYear && evaluation.schoolYear !== selectedYear) return false;
-      if (selectedSemester && evaluation.semester !== selectedSemester) return false;
       return true;
     });
 
@@ -123,8 +260,6 @@ function OJTAdviser() {
   const getTotalFilteredCount = () => {
     return evaluationsData.filter(evaluation => {
       if (selectedCompany && evaluation.companyName !== selectedCompany) return false;
-      if (selectedYear && evaluation.schoolYear !== selectedYear) return false;
-      if (selectedSemester && evaluation.semester !== selectedSemester) return false;
       return true;
     }).length;
   };
@@ -212,7 +347,7 @@ function OJTAdviser() {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#800000' }}>
-          OJT Partner Evaluations
+          OJT Partner Evaluations ({selectedSurveyType === 'midterm' ? 'Midterm' : 'Final'})
         </Typography>
         <Button
           startIcon={<FilterList />}
@@ -227,7 +362,20 @@ function OJTAdviser() {
       <Collapse in={showFilters}>
         <Card sx={{ mb: 3, p: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Evaluation Type</InputLabel>
+                <Select
+                  value={selectedSurveyType}
+                  onChange={(e) => setSelectedSurveyType(e.target.value)}
+                  label="Evaluation Type"
+                >
+                  <MenuItem value="midterm">Midterm</MenuItem>
+                  <MenuItem value="final">Final</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
               <FormControl fullWidth>
                 <InputLabel>Company</InputLabel>
                 <Select
@@ -238,36 +386,6 @@ function OJTAdviser() {
                   <MenuItem value="">All</MenuItem>
                   {companies.map((company) => (
                     <MenuItem key={company} value={company}>{company}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>School Year</InputLabel>
-                <Select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  label="School Year"
-                >
-                  <MenuItem value="">All</MenuItem>
-                  {years.map((year) => (
-                    <MenuItem key={year} value={year}>{year}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Semester</InputLabel>
-                <Select
-                  value={selectedSemester}
-                  onChange={(e) => setSelectedSemester(e.target.value)}
-                  label="Semester"
-                >
-                  <MenuItem value="">All</MenuItem>
-                  {semesters.map((sem) => (
-                    <MenuItem key={sem} value={sem}>{sem}</MenuItem>
                   ))}
                 </Select>
               </FormControl>

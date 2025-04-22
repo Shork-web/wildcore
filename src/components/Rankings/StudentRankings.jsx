@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
   Typography, 
   Box, 
@@ -28,7 +28,7 @@ import {
 import { styled } from '@mui/system';
 import { School, EmojiEvents, Star, FilterAlt } from '@mui/icons-material';
 import { db } from '../../firebase-config';
-import { collection, query, where, onSnapshot, getDocs, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
 import CollegeRanking from './CollegeRanking';
 import { keyframes } from '@mui/system';
@@ -191,118 +191,94 @@ const calculateEvaluationScore = (evaluation) => {
   return Math.min(score, 10); // Cap at 10
 };
 
-// Fetch and calculate student scores
-const fetchStudentScores = async (studentsList) => {
-  try {
-    // Fetch student surveys from both collections
-    const finalSurveysRef = collection(db, 'studentSurveys_final');
-    const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
-    
-    const finalSnapshot = await getDocs(finalSurveysRef);
-    const midtermSnapshot = await getDocs(midtermSurveysRef);
-    
-    const finalSurveys = finalSnapshot.docs.map(doc => ({
-      ...doc.data(),
-      surveyType: 'final',
-      id: doc.id
-    }));
-    
-    const midtermSurveys = midtermSnapshot.docs.map(doc => ({
-      ...doc.data(),
-      surveyType: 'midterm',
-      id: doc.id
-    }));
-    
-    // Combine all surveys
-    const allSurveys = [...finalSurveys, ...midtermSurveys];
-    console.log(`Rankings: Retrieved ${finalSurveys.length} final and ${midtermSurveys.length} midterm surveys`);
-    
-    const surveyScores = {};
-    
-    allSurveys.forEach(survey => {
-      if (survey.studentId) {
-        let score = 0;
-        
-        // Use the totalScore if available (normalized to a 10-point scale)
-        if (survey.totalScore !== undefined && survey.maxPossibleScore) {
-          score = (survey.totalScore / survey.maxPossibleScore) * 10;
-        } 
-        // Otherwise try to calculate from workAttitude and workPerformance
-        else if (survey.workAttitude && survey.workPerformance) {
-          const attitudeScore = survey.workAttitude.totalScore || 0;
-          const attitudeMax = survey.workAttitude.maxPossibleScore || 40;
-          
-          const performanceScore = survey.workPerformance.totalScore || 0;
-          const performanceMax = survey.workPerformance.maxPossibleScore || 60;
-          
-          // Calculate combined score (normalized to 10)
-          const totalMax = attitudeMax + performanceMax;
-          const totalScore = attitudeScore + performanceScore;
-          
-          score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
-        }
-        
-        if (!surveyScores[survey.studentId]) {
-          surveyScores[survey.studentId] = {
-            final: [],
-            midterm: [],
-            all: []
-          };
-        }
-        
-        // Add to the appropriate survey type array
-        if (survey.surveyType === 'final') {
-          surveyScores[survey.studentId].final.push(score);
-        } else if (survey.surveyType === 'midterm') {
-          surveyScores[survey.studentId].midterm.push(score);
-        }
-        
-        // Add to the combined array
-        surveyScores[survey.studentId].all.push(score);
-      }
-    });
+// Helper function to safely set score values, ensuring they're valid numbers
+const safeScore = (value) => {
+  if (value === undefined || value === null) return null;
+  const num = parseFloat(value);
+  return isNaN(num) ? null : Math.round(num * 10) / 10;
+};
 
-    // Update students with scores, using the selected survey type
-    return studentsList.map(student => {
-      let finalScore;
-      
-      // If survey data exists, use the average of all survey scores
-      if (surveyScores[student.id]) {
-        finalScore = surveyScores[student.id].all.reduce((a, b) => a + b, 0) / 
-                     surveyScores[student.id].all.length;
-                     
-        // Store different survey type scores for filtering later
-        student.surveyScores = {
-          final: surveyScores[student.id].final.length > 0 ? 
-                surveyScores[student.id].final.reduce((a, b) => a + b, 0) / 
-                surveyScores[student.id].final.length : null,
-          midterm: surveyScores[student.id].midterm.length > 0 ? 
-                  surveyScores[student.id].midterm.reduce((a, b) => a + b, 0) / 
-                  surveyScores[student.id].midterm.length : null,
-          all: finalScore
-        };
-      } else {
-        // Fallback to evaluation score if no survey data exists
-        finalScore = calculateEvaluationScore(student.evaluation || '');
-        student.surveyScores = {
-          final: null,
-          midterm: null,
-          all: finalScore
-        };
-      }
+// Helper function to find student matches by more reliable identifiers rather than IDs
+const findStudentMatch = (survey, studentList) => {
+  // Try to match by name (most reliable)
+  if (survey.studentName || survey.name) {
+    const surveyName = (survey.studentName || survey.name || '').toLowerCase().trim();
+    if (surveyName) {
+      const nameMatch = studentList.find(s => 
+        s.name && s.name.toLowerCase().trim() === surveyName
+      );
+      if (nameMatch) return { student: nameMatch, matchType: "name" };
+    }
+  }
+  
+  // Try to match by section and other fields
+  if (survey.section) {
+    // First try section + program
+    if (survey.program) {
+      const sectionProgramMatch = studentList.find(s => 
+        s.section === survey.section && 
+        s.program === survey.program
+      );
+      if (sectionProgramMatch) return { student: sectionProgramMatch, matchType: "section-program" };
+    }
+    
+    // Try section + other identifiers
+    const sectionMatch = studentList.find(s => 
+      s.section === survey.section &&
+      ((survey.studentNumber && s.studentNumber === survey.studentNumber) ||
+       (survey.email && s.email === survey.email))
+    );
+    if (sectionMatch) return { student: sectionMatch, matchType: "section-other" };
+  }
+  
+  // Try studentNumber or email match alone
+  if (survey.studentNumber) {
+    const studentNumberMatch = studentList.find(s => s.studentNumber === survey.studentNumber);
+    if (studentNumberMatch) return { student: studentNumberMatch, matchType: "student-number" };
+  }
+  
+  if (survey.email) {
+    const emailMatch = studentList.find(s => s.email === survey.email);
+    if (emailMatch) return { student: emailMatch, matchType: "email" };
+  }
+  
+  // As a last resort, try partial name match (if survey and student have names)
+  if (survey.studentName || survey.name) {
+    const surveyName = (survey.studentName || survey.name || '').toLowerCase().trim();
+    if (surveyName && surveyName.length > 3) { // Only try for names longer than 3 chars
+      const partialNameMatch = studentList.find(s => 
+        s.name && s.name.toLowerCase().includes(surveyName)
+      );
+      if (partialNameMatch) return { student: partialNameMatch, matchType: "partial-name" };
+    }
+  }
+  
+  // No match found
+  return { student: null, matchType: "none" };
+};
+
+// Fetch and calculate student scores
+const fetchStudentScores = async (students) => {
+  try {
+    // Initially set students with just their baseline evaluation scores
+    const studentsWithScores = students.map(student => {
+      // Get baseline evaluation score for initial display
+      const evaluationScore = calculateEvaluationScore(student.evaluation || '');
       
       return {
         ...student,
-        evaluationScore: Math.round(finalScore * 10) / 10
+        surveyScores: {
+          final: null,
+          midterm: null,
+          all: evaluationScore
+        },
+        evaluationScore: Math.round(evaluationScore * 10) / 10
       };
     });
+    
+    return studentsWithScores;
   } catch (error) {
-    console.error("Error fetching scores:", error);
-    // Fallback to only using evaluation scores if survey fetch fails
-    return studentsList.map(student => ({
-      ...student,
-      evaluationScore: calculateEvaluationScore(student.evaluation || '')
-    }));
+    return students;
   }
 };
 
@@ -318,6 +294,7 @@ function StudentRankings() {
   const [selectedSemester, setSelectedSemester] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedSurveyType, setSelectedSurveyType] = useState('all'); // New survey type filter
+  const [selectedCompany, setSelectedCompany] = useState('All'); // New company filter
   const [tabValue, setTabValue] = useState(0);
   
   // Replace single page state with a map of program-specific keys to pages
@@ -328,6 +305,7 @@ function StudentRankings() {
   const availablePrograms = ['All', ...new Set(students.map(student => student.program))].sort();
   const availableSemesters = ['All', 'First', 'Second', 'Summer'];
   const availableYears = ['All', ...new Set(students.map(student => student.schoolYear))].sort().reverse();
+  const availableCompanies = ['All', ...new Set(students.map(student => student.partnerCompany))].filter(Boolean).sort();
 
   // Helper function to normalize semester values
   const normalizeSemester = (semester) => {
@@ -348,8 +326,10 @@ function StudentRankings() {
   };
 
   useEffect(() => {
-    let q;
     let userUnsubscribe;
+    let studentUnsubscribe;
+    let finalSurveyUnsubscribe;
+    let midtermSurveyUnsubscribe;
 
     // First get the user's current college and section
     if (currentUser?.uid) {
@@ -357,132 +337,350 @@ function StudentRankings() {
       userUnsubscribe = onSnapshot(userDocRef, (userDoc) => {
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          // Query students based on user's college only (no section filtering)
-          q = query(
-            collection(db, 'studentData'),
-            where('college', '==', userData.college)
-          );
+          setLoading(true);
           
-          // Set up the student data listener
-          const studentUnsubscribe = onSnapshot(q, 
-            async (querySnapshot) => {
-              const initialStudentsList = querySnapshot.docs.map(doc => ({
+          // Determine if we need to filter by section based on user role
+          let studentQuery;
+          
+          if (userData.role === 'instructor' || userData.role === 'coordinator') {
+            // Instructors and coordinators should only see their section
+            studentQuery = query(
+              collection(db, 'studentData'),
+              where('college', '==', userData.college),
+              where('section', '==', userData.section || 'default') // Add section filter
+            );
+          } else {
+            // Admins or other roles can see all students in their college
+            studentQuery = query(
+              collection(db, 'studentData'),
+              where('college', '==', userData.college)
+            );
+          }
+          
+          // Get basic student data first
+          studentUnsubscribe = onSnapshot(studentQuery, async (studentSnapshot) => {
+            // Process student data
+            const initialStudentsList = studentSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 // Normalize semester data
-                semester: normalizeSemester(doc.data().semester)
-              }));
-              
-              const studentsWithScores = await fetchStudentScores(initialStudentsList);
-              setStudents(studentsWithScores);
-              setLoading(false);
-            },
-            (error) => {
-              console.error("Error fetching students:", error);
-              setError(error.message);
-              setLoading(false);
-            }
-          );
-
-          // Clean up student listener when user data changes
-          return () => {
-            studentUnsubscribe();
-          };
+                semester: normalizeSemester(doc.data().semester),
+                // Initialize with basic values
+                evaluationScore: 0,
+                surveyScores: {
+                  final: null,
+                  midterm: null,
+                  all: 0,
+                  combined: 0 // Make sure 'combined' is explicitly initialized
+                },
+                hasFinalData: false,
+                hasMidtermData: false
+            }));
+            
+            // Update student state immediately with basic data
+            setStudents(initialStudentsList);
+            
+            // Set up listeners for survey data
+            // Clean up previous listeners if they exist
+            if (finalSurveyUnsubscribe) finalSurveyUnsubscribe();
+            if (midtermSurveyUnsubscribe) midtermSurveyUnsubscribe();
+            
+            // Create a listener for final survey collection
+            const finalSurveysRef = collection(db, 'studentSurveys_final');
+            finalSurveyUnsubscribe = onSnapshot(finalSurveysRef, (finalSnapshot) => {
+              // Create a listener for midterm survey collection
+              const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
+              midtermSurveyUnsubscribe = onSnapshot(midtermSurveysRef, (midtermSnapshot) => {
+                // Map to store all student data with scores from both surveys
+                const studentMap = new Map();
+                
+                // Process final surveys
+                finalSnapshot.docs.forEach(doc => {
+                  const survey = doc.data();
+                  
+                  // Find a match using our improved helper function that doesn't rely on IDs
+                  const { student: studentToUse, matchType } = findStudentMatch(survey, initialStudentsList);
+                  
+                  if (!studentToUse) {
+                    return;
+                  }
+                  
+                  // Calculate score for this survey
+                  let score = 0;
+                  if (survey.totalScore !== undefined && survey.maxPossibleScore) {
+                    score = (survey.totalScore / survey.maxPossibleScore) * 10;
+                  } else if (survey.workAttitude && survey.workPerformance) {
+                    const attitudeScore = survey.workAttitude.totalScore || 0;
+                    const attitudeMax = survey.workAttitude.maxPossibleScore || 40;
+                    
+                    const performanceScore = survey.workPerformance.totalScore || 0;
+                    const performanceMax = survey.workPerformance.maxPossibleScore || 60;
+                    
+                    const totalMax = attitudeMax + performanceMax;
+                    const totalScore = attitudeScore + performanceScore;
+                    
+                    score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
+                  }
+                  
+                  // Initialize or update student data in the map using student's actual ID
+                  const studentMapKey = studentToUse.id;
+                  
+                  if (!studentMap.has(studentMapKey)) {
+                    studentMap.set(studentMapKey, {
+                      student: studentToUse,
+                      finalSurveys: [],
+                      midtermSurveys: [],
+                      finalAvgScore: 0,
+                      midtermAvgScore: 0,
+                      combinedScore: 0
+                    });
+                  }
+                  
+                  const studentData = studentMap.get(studentMapKey);
+                  studentData.finalSurveys.push({
+                    score: score,
+                    survey: survey
+                  });
+                });
+                
+                // Process midterm surveys
+                midtermSnapshot.docs.forEach(doc => {
+                  const survey = doc.data();
+                  
+                  // Find a match using our improved helper function that doesn't rely on IDs
+                  const { student: studentToUse, matchType } = findStudentMatch(survey, initialStudentsList);
+                  
+                  if (!studentToUse) {
+                    return;
+                  }
+                  
+                  // Calculate score for this survey
+                  let score = 0;
+                  if (survey.totalScore !== undefined && survey.maxPossibleScore) {
+                    score = (survey.totalScore / survey.maxPossibleScore) * 10;
+                  } else if (survey.workAttitude && survey.workPerformance) {
+                    const attitudeScore = survey.workAttitude.totalScore || 0;
+                    const attitudeMax = survey.workAttitude.maxPossibleScore || 40;
+                    
+                    const performanceScore = survey.workPerformance.totalScore || 0;
+                    const performanceMax = survey.workPerformance.maxPossibleScore || 60;
+                    
+                    const totalMax = attitudeMax + performanceMax;
+                    const totalScore = attitudeScore + performanceScore;
+                    
+                    score = totalMax > 0 ? (totalScore / totalMax) * 10 : 0;
+                  }
+                  
+                  // Initialize or update student data in the map using student's actual ID
+                  const studentMapKey = studentToUse.id;
+                  
+                  if (!studentMap.has(studentMapKey)) {
+                    studentMap.set(studentMapKey, {
+                      student: studentToUse,
+                      finalSurveys: [],
+                      midtermSurveys: [],
+                      finalAvgScore: 0,
+                      midtermAvgScore: 0,
+                      combinedScore: 0
+                    });
+                  }
+                  
+                  const studentData = studentMap.get(studentMapKey);
+                  studentData.midtermSurveys.push({
+                    score: score,
+                    survey: survey
+                  });
+                });
+                
+                // Calculate average scores and apply 50-50 weighting (same as AdminRankings)
+                studentMap.forEach((data, studentId) => {
+                  // Calculate final average score
+                  if (data.finalSurveys.length > 0) {
+                    const totalFinalScore = data.finalSurveys.reduce((sum, item) => sum + item.score, 0);
+                    data.finalAvgScore = totalFinalScore / data.finalSurveys.length;
+                  }
+                  
+                  // Calculate midterm average score
+                  if (data.midtermSurveys.length > 0) {
+                    const totalMidtermScore = data.midtermSurveys.reduce((sum, item) => sum + item.score, 0);
+                    data.midtermAvgScore = totalMidtermScore / data.midtermSurveys.length;
+                  }
+                  
+                  // Apply 50-50 weighting if both types are available
+                  if (data.finalSurveys.length > 0 && data.midtermSurveys.length > 0) {
+                    // 50% weight to each type
+                    data.combinedScore = (data.finalAvgScore * 0.5) + (data.midtermAvgScore * 0.5);
+                  }
+                  // Otherwise use available data (100% weight to what we have)
+                  else if (data.finalSurveys.length > 0) {
+                    data.combinedScore = data.finalAvgScore;
+                  }
+                  else if (data.midtermSurveys.length > 0) {
+                    data.combinedScore = data.midtermAvgScore;
+                  }
+                  else {
+                    // If no survey data, use the evaluation score
+                    data.combinedScore = calculateEvaluationScore(data.student.evaluation || '');
+                  }
+                });
+                
+                // Update student data with calculated scores
+                const updatedStudents = initialStudentsList.map(student => {
+                  const studentData = studentMap.get(student.id);
+                  
+                  if (!studentData) {
+                    // If no survey data, calculate score from evaluation
+                    const evalScore = calculateEvaluationScore(student.evaluation || '');
+                    
+                    // Round to one decimal place
+                    const roundedScore = Math.round(evalScore * 10) / 10;
+                    
+                    return {
+                      ...student,
+                      evaluationScore: roundedScore,
+                      surveyScores: {
+                        final: null,
+                        midterm: null,
+                        all: roundedScore,
+                        combined: roundedScore
+                      },
+                      hasFinalData: false,
+                      hasMidtermData: false
+                    };
+                  }
+                  
+                  // Set final properties for this student
+                  const hasFinalData = studentData.finalSurveys.length > 0;
+                  const hasMidtermData = studentData.midtermSurveys.length > 0;
+                  
+                  // Safely set scores, ensuring they're valid numbers
+                  const finalScore = hasFinalData ? safeScore(studentData.finalAvgScore) : null;
+                  const midtermScore = hasMidtermData ? safeScore(studentData.midtermAvgScore) : null;
+                  const combinedScore = safeScore(studentData.combinedScore);
+                  
+                  return {
+                    ...student,
+                    evaluationScore: combinedScore,
+                    surveyScores: {
+                      final: finalScore,
+                      midterm: midtermScore,
+                      all: combinedScore,
+                      combined: combinedScore
+                    },
+                    hasFinalData: hasFinalData,
+                    hasMidtermData: hasMidtermData
+                  };
+                });
+                
+                setStudents(updatedStudents);
+                setLoading(false);
+              });
+            });
+          }, (error) => {
+            setError(error.message);
+            setLoading(false);
+          });
+        } else {
+          setError('User data not found');
+          setLoading(false);
         }
+      }, (error) => {
+        setError(error.message);
+        setLoading(false);
       });
     } else {
       setError('Unauthorized access');
       setLoading(false);
     }
 
-    // Clean up both listeners
+    // Clean up all listeners
     return () => {
       userUnsubscribe?.();
+      studentUnsubscribe?.();
+      finalSurveyUnsubscribe?.();
+      midtermSurveyUnsubscribe?.();
     };
   }, [currentUser]);
 
   // Reset page when filters change
   useEffect(() => {
     setPagesMap({});
-  }, [selectedProgram, selectedSemester, selectedYear, selectedSurveyType]);
+  }, [selectedProgram, selectedSemester, selectedYear, selectedSurveyType, selectedCompany]);
 
-  // Enhanced filtering with strict isolation between different data values
-  const filteredStudents = students.filter(student => {
-    // Strict equality check for program
-    const programMatch = selectedProgram === 'All' || student.program === selectedProgram;
+  // Calculate the ranking of students and sort them by score
+  const rankStudents = useMemo(() => {
+    if (!students.length) return [];
     
-    // Get normalized versions for comparison
-    const normalizedStudentSemester = normalizeSemester(student.semester);
-    const normalizedSelectedSemester = normalizeSemester(selectedSemester);
+    // Filter students based on the current filters
+    let filteredStudents = [...students].filter(student => {
+      // Program filter
+      const programMatch = selectedProgram === 'All' || student.program === selectedProgram;
     
-    // Multiple ways to match semesters
-    const semesterMatch = 
-      selectedSemester === 'All' || 
-      normalizedStudentSemester === normalizedSelectedSemester ||
-      (student.semester && student.semester === selectedSemester) ||
-      (student.semester && student.semester.toLowerCase().includes(selectedSemester.toLowerCase()));
+      // Semester filter
+      const normalizedStudentSemester = normalizeSemester(student.semester);
+      const normalizedSelectedSemester = normalizeSemester(selectedSemester);
+      const semesterMatch = 
+        selectedSemester === 'All' || 
+        normalizedStudentSemester === normalizedSelectedSemester ||
+        (student.semester && student.semester === selectedSemester) ||
+        (student.semester && student.semester.toLowerCase().includes(selectedSemester.toLowerCase()));
     
-    // Strict equality check for year
-    const yearMatch = selectedYear === 'All' || student.schoolYear === selectedYear;
+      // Year filter
+      const yearMatch = selectedYear === 'All' || student.schoolYear === selectedYear;
     
-    // Survey type filter - check if the student has survey data of the selected type
-    const surveyTypeMatch = selectedSurveyType === 'all' || 
-      (student.surveyScores && student.surveyScores[selectedSurveyType] !== null);
+      // Survey type filter - improved handling for null values
+      const surveyTypeMatch = selectedSurveyType === 'all' || 
+        (student.surveyScores && 
+         ((selectedSurveyType === 'final' && student.hasFinalData) || 
+          (selectedSurveyType === 'midterm' && student.hasMidtermData)));
     
-    if (selectedSemester !== 'All' && !semesterMatch && student.semester) {
-      console.log(`Non-matching semester: Student "${student.semester}" vs Selected "${selectedSemester}"`);
-    }
-    
-    return programMatch && yearMatch && semesterMatch && surveyTypeMatch;
-  });
+      // Company filter
+      const companyMatch = selectedCompany === 'All' || student.partnerCompany === selectedCompany;
+      
+      // Return if student matches all filters
+      return programMatch && yearMatch && semesterMatch && surveyTypeMatch && companyMatch;
+    });
 
-  // Debugging for program filtering
-  useEffect(() => {
-    if (selectedProgram !== 'All') {
-      // Check for exact matches
-      const exactMatches = students.filter(s => s.program === selectedProgram);
-      console.log(`Filtering for program: "${selectedProgram}" - Found ${exactMatches.length} exact matches`);
-      
-      // Display any potential mismatch issues
-      const allPrograms = [...new Set(students.map(s => s.program))];
-      const similarPrograms = allPrograms.filter(p => 
-        p && p !== selectedProgram && (
-          p.includes(selectedProgram) || selectedProgram.includes(p)
-        )
-      );
-      
-      if (similarPrograms.length > 0) {
-        console.log("Potential program name confusion:", similarPrograms);
+    // Sort students by the appropriate score based on the selected survey type
+    filteredStudents.sort((a, b) => {
+      // Get score A (handle null values appropriately)
+      let scoreA = 0;
+      if (selectedSurveyType !== 'all' && a.surveyScores?.[selectedSurveyType] !== null && a.surveyScores?.[selectedSurveyType] !== undefined) {
+        scoreA = a.surveyScores[selectedSurveyType];
+      } else {
+        scoreA = a.evaluationScore || 0;
       }
-    }
-  }, [selectedProgram, students]);
-
-  // Sort students by evaluation score - updated to use the selected survey type scores
-  const rankedStudents = [...filteredStudents]
-    .sort((a, b) => {
-      // Use the appropriate score based on the selected survey type
-      const scoreA = selectedSurveyType !== 'all' && a.surveyScores?.[selectedSurveyType] !== null
-        ? a.surveyScores[selectedSurveyType]
-        : a.evaluationScore;
       
-      const scoreB = selectedSurveyType !== 'all' && b.surveyScores?.[selectedSurveyType] !== null
-        ? b.surveyScores[selectedSurveyType]
-        : b.evaluationScore;
+      // Get score B (handle null values appropriately)
+      let scoreB = 0;
+      if (selectedSurveyType !== 'all' && b.surveyScores?.[selectedSurveyType] !== null && b.surveyScores?.[selectedSurveyType] !== undefined) {
+        scoreB = b.surveyScores[selectedSurveyType];
+      } else {
+        scoreB = b.evaluationScore || 0;
+      }
       
+      // Sort descending (highest score first)
       return scoreB - scoreA;
     });
+
+    // Add rank property
+    return filteredStudents.map((student, index) => ({
+      ...student,
+      rank: index + 1
+    }));
+  }, [students, selectedProgram, selectedSemester, selectedYear, selectedSurveyType, selectedCompany]);
 
   // Group students by program
   const studentsByProgram = {};
   if (selectedProgram === 'All') {
-    rankedStudents.forEach(student => {
+    rankStudents.forEach(student => {
       if (!studentsByProgram[student.program]) {
         studentsByProgram[student.program] = [];
       }
       studentsByProgram[student.program].push(student);
     });
   } else {
-    studentsByProgram[selectedProgram] = rankedStudents;
+    studentsByProgram[selectedProgram] = rankStudents;
   }
 
   // Update handlePageChange to use unique program identifiers
@@ -644,6 +842,25 @@ function StudentRankings() {
               </Select>
             </StyledFormControl>
           </Grid>
+          
+          {availableCompanies.length > 2 && (
+            <Grid item xs={12} md={3}>
+              <StyledFormControl fullWidth variant="outlined" size="small">
+                <InputLabel>Company</InputLabel>
+                <Select
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  label="Company"
+                >
+                  {availableCompanies.map((company) => (
+                    <MenuItem key={company} value={company}>
+                      {company}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </StyledFormControl>
+            </Grid>
+          )}
         </Grid>
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -745,32 +962,58 @@ function StudentRankings() {
                         </TableHead>
                         <TableBody>
                           {displayedStudents.map((student, index) => {
-                            const actualRank = (currentPage - 1) * studentsPerPage + index + 1;
+                            // Get appropriate score based on survey type
+                            let displayScore = null;
+                            let scoreColor = 'transparent';
                             
-                            // Get the appropriate score based on the selected survey type
-                            const displayScore = selectedSurveyType !== 'all' && student.surveyScores?.[selectedSurveyType] !== null
-                              ? student.surveyScores[selectedSurveyType]
-                              : student.evaluationScore;
-                              
+                            // Get score based on the selected survey type and available data
+                            if (selectedSurveyType === 'all') {
+                              displayScore = safeScore(student.surveyScores?.all || student.evaluationScore);
+                            } else if (selectedSurveyType === 'midterm' && student.hasMidtermData) {
+                              displayScore = safeScore(student.surveyScores?.midterm);
+                            } else if (selectedSurveyType === 'final' && student.hasFinalData) {
+                              displayScore = safeScore(student.surveyScores?.final);
+                            } else {
+                              // Fallback to evaluation score if no survey data available for the selected type
+                              displayScore = safeScore(student.evaluationScore);
+                            }
+                            
+                            // Ensure we always have a score value to display
+                            if (displayScore === null || displayScore === undefined) {
+                              displayScore = safeScore(student.evaluationScore || 0);
+                            }
+                            
+                            // Determine color based on score
+                            if (displayScore !== null) {
+                              if (displayScore >= 8) {
+                                scoreColor = 'gold';
+                              } else if (displayScore >= 6) {
+                                scoreColor = '#ADD8E6';
+                              }
+                            }
+                            
                             return (
-                              <StyledTableRow key={student.id} rank={actualRank}>
+                              <StyledTableRow key={student.id} rank={student.rank}>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                  <RankingBadge rank={actualRank}>
-                                    {actualRank}
+                                  <RankingBadge rank={student.rank}>
+                                    {student.rank}
                                   </RankingBadge>
                                 </TableCell>
                                 <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
                                 <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Box sx={{ 
+                                  <Box
+                                    sx={{
                                       display: 'inline-flex', 
                                       alignItems: 'center',
-                                      color: 'text.secondary'
-                                    }}>
-                                      {displayScore.toFixed(1)}
-                                      <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
-                                    </Box>
+                                      backgroundColor: scoreColor,
+                                      borderRadius: '4px',
+                                      padding: '4px 8px',
+                                    }}
+                                  >
+                                    <Typography>
+                                      {displayScore !== null ? displayScore.toFixed(1) : "0.0"}
+                                    </Typography>
                                   </Box>
                                 </TableCell>
                               </StyledTableRow>

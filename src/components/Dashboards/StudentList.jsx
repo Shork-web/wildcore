@@ -1,21 +1,127 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Stack, Chip, Divider } from '@mui/material';
+import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Chip, Divider } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import InputAdornment from '@mui/material/InputAdornment';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { db, auth } from '../../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
+
+// Utility function to convert program names to acronyms
+const getProgramAcronym = (program) => {
+  if (!program) return '';
+  
+  // Common degree prefixes
+  const prefixes = ['BS', 'Bachelor of Science in', 'Bachelor of Science', 'Bachelor of', 'Master of', 'MS', 'BA', 'Bachelor of Arts in', 'Bachelor of Arts'];
+  
+  // Program name mappings
+  const programMappings = {
+    'Information Technology': 'IT',
+    'Computer Science': 'CS',
+    'Information Systems': 'IS',
+    'Computer Engineering': 'CpE',
+    'Civil Engineering': 'CE',
+    'Electrical Engineering': 'EE',
+    'Mechanical Engineering': 'ME',
+    'Industrial Engineering': 'IE',
+    'Chemical Engineering': 'ChE',
+    'Business Administration': 'BA',
+    'Accountancy': 'BSA',
+    'Accounting': 'BSA',
+    'Management Accounting': 'MA',
+    'Electronics Engineering': 'ECE',
+    'Electronics and Communication Engineering': 'ECE',
+    'Tourism Management': 'TM',
+    'Hotel and Restaurant Management': 'HRM',
+    'Education': 'BEd',
+    'Psychology': 'Psych',
+    'Architecture': 'Arch',
+    'Nursing': 'BSN',
+    'Medical Technology': 'MT',
+    'Physical Therapy': 'PT',
+    'Pharmacy': 'Pharm',
+    'Public Health': 'PH',
+    'Criminal Justice': 'CJ',
+    'Criminology': 'Crim',
+    'Environmental Science': 'EnviSci'
+  };
+
+  // Clean the program name
+  let cleanProgram = program.trim();
+  let hasPrefix = false;
+  let prefixUsed = '';
+  
+  // Remove prefix if it exists
+  for (const prefix of prefixes) {
+    if (cleanProgram.startsWith(prefix)) {
+      cleanProgram = cleanProgram.replace(prefix, '').trim();
+      hasPrefix = true;
+      prefixUsed = prefix;
+      break;
+    }
+  }
+  
+  // Check if we have a direct mapping
+  for (const [fullName, acronym] of Object.entries(programMappings)) {
+    if (cleanProgram.includes(fullName)) {
+      // If we already detected a prefix like BS, BA, MS and the acronym doesn't already include it
+      if (hasPrefix) {
+        if (prefixUsed === 'BS' && !acronym.startsWith('BS')) {
+          return 'BS' + acronym;
+        } else if (prefixUsed === 'BA' && !acronym.startsWith('BA')) {
+          return 'BA' + acronym;
+        } else if (prefixUsed === 'MS' && !acronym.startsWith('MS')) {
+          return 'MS' + acronym;
+        }
+      }
+      return acronym;
+    }
+  }
+  
+  // If no mapping was found, create an acronym from the first letters of each word
+  if (cleanProgram.length > 15) {
+    const wordAcronym = cleanProgram
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('');
+      
+    if (hasPrefix) {
+      if (prefixUsed === 'BS') {
+        return 'BS' + wordAcronym;
+      } else if (prefixUsed === 'BA') {
+        return 'BA' + wordAcronym;
+      } else if (prefixUsed === 'MS') {
+        return 'MS' + wordAcronym;
+      }
+    }
+    return wordAcronym;
+  }
+  
+  // If the program name is short enough, just return it as is with appropriate prefix
+  if (hasPrefix) {
+    if (prefixUsed === 'BS') {
+      return 'BS' + cleanProgram;
+    } else if (prefixUsed === 'BA') {
+      return 'BA' + cleanProgram;
+    } else if (prefixUsed === 'MS') {
+      return 'MS' + cleanProgram;
+    }
+  }
+  return cleanProgram;
+};
 
 class StudentManager {
   constructor(currentUser) {
@@ -115,7 +221,22 @@ class StudentManager {
       await setDoc(studentRef, {
         studentName: studentData.name,
         studentId: studentId,
+        program: studentData.program || '',
+        semester: studentData.semester || '',
+        schoolYear: studentData.schoolYear || '',
+        partnerCompany: studentData.partnerCompany || '',
+        contactPerson: studentData.contactPerson || '',
+        location: studentData.location || '',
+        gender: studentData.gender || '',
+        startDate: studentData.startDate || '',
+        endDate: studentData.endDate || '',
+        midtermsKey: studentData.midtermsKey || '',
+        finalsKey: studentData.finalsKey || '',
+        email: studentData.email || '',
+        internshipEmail: studentData.internshipEmail || '',
+        college: studentData.college || '',
         addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         addedBy: auth.currentUser?.uid
       });
     } catch (error) {
@@ -165,6 +286,8 @@ class StudentManager {
         contactPerson: studentData.contactPerson || '',
         startDate: studentData.startDate || '',
         endDate: studentData.endDate || '',
+        midtermsKey: studentData.midtermsKey || '',
+        finalsKey: studentData.finalsKey || '',
         addedAt: new Date().toISOString(),
         addedBy: auth.currentUser?.uid
       });
@@ -218,303 +341,189 @@ class StudentManager {
     }
   }
 
-  async ensureDepartmentExists(departmentId, departmentName) {
-    try {
-      const departmentRef = doc(db, 'departments', departmentId);
-      const departmentDoc = await getDoc(departmentRef);
-      
-      if (!departmentDoc.exists()) {
-        // Create department document
-        await setDoc(departmentRef, {
-          departmentName: departmentName,
-          normalizedName: departmentId,
-          studentCount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: auth.currentUser?.uid,
-          updatedBy: auth.currentUser?.uid
-        });
-      }
-    } catch (error) {
-      console.error('Error ensuring department exists:', error);
-      // Don't throw error to prevent blocking main operation
-    }
-  }
-
-  async addToDepartmentCollection(studentData, studentId) {
-    try {
-      if (!studentData?.college) return;
-      
-      // Sanitize department/college name for use as document ID
-      const departmentId = studentData.college.trim()
-        .replace(/[^\w\s]/g, '')
-        .replace(/\s+/g, '_')
-        .toLowerCase();
-      
-      if (!departmentId) return;
-      
-      // Ensure department document exists
-      await this.ensureDepartmentExists(departmentId, studentData.college);
-      
-      // Add student to department's students subcollection
-      const departmentRef = doc(db, 'departments', departmentId);
-      const studentRef = doc(departmentRef, 'students', studentId);
-      
-      await setDoc(studentRef, {
-        studentName: studentData.name,
-        studentId: studentId,
-        program: studentData.program || '',
-        section: studentData.section || '',
-        semester: studentData.semester || '',
-        schoolYear: studentData.schoolYear || '',
-        addedAt: new Date().toISOString(),
-        addedBy: auth.currentUser?.uid
-      });
-    } catch (error) {
-      console.error('Error adding to department collection:', error);
-      // Don't throw error to prevent blocking main operation
-    }
-  }
-
-  async updateSectionsStudentsCollection(studentData, studentId, oldSection) {
-    try {
-      // If section exists in the updated data
-      if (studentData.section) {
-        // Create a unique record ID for the section-student relationship
-        const relationshipId = `${studentData.section.replace(/\s+/g, '_')}_${studentId}`;
-        
-        // Add or update the record in sections-students collection
-        await setDoc(doc(db, 'sections-students', relationshipId), {
-          sectionId: studentData.section,
-          studentId: studentId,
-          studentName: studentData.name,
-          college: studentData.college || '',
-          program: studentData.program || '',
-          updatedAt: new Date().toISOString()
-        });
-      }
-      
-      // If old section exists and is different from new section, remove that relationship
-      if (oldSection && oldSection !== studentData.section) {
-        const oldRelationshipId = `${oldSection.replace(/\s+/g, '_')}_${studentId}`;
-        await deleteDoc(doc(db, 'sections-students', oldRelationshipId));
-      }
-    } catch (error) {
-      console.error('Error updating sections-students collection:', error);
-      // Don't throw error to prevent blocking main operation
-    }
-  }
-
   async updateStudent(studentId, updatedData) {
     try {
-      // Critical fields that cannot be empty
-      const criticalFields = [
-        'name', 'program', 'partnerCompany', 'location',
-        'gender', 'semester'  // Removed middleInitial from critical fields
-      ];
-
-      criticalFields.forEach(field => {
-        if (!updatedData[field] || updatedData[field].trim() === '') {
-          throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} cannot be empty`);
-        }
-      });
-
-      // Other required fields
-      const requiredFields = [
-        'schoolYear',  // Only schoolYear remains as required
-        'concerns', 'solutions', 'recommendations', 'evaluation',
-        'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
-      ];
-
-      const missingFields = requiredFields.filter(field => !(field in updatedData));
-      if (missingFields.length > 0) {
-        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      const originalDoc = await getDoc(doc(db, 'studentData', studentId));
+      if (!originalDoc.exists()) {
+        throw new Error('Student not found');
       }
 
-      // Prepare the final update data
+      const originalData = originalDoc.data();
+      const oldSection = originalData.section || '';
+      const oldCompanyName = originalData.partnerCompany || '';
+
+      // Prepare final updated data
       const finalUpdatedData = {
+        ...originalData,
         ...updatedData,
-        startDate: updatedData.startDate || '',  // Make startDate optional
-        endDate: updatedData.endDate || '',      // Make endDate optional
-        concerns: updatedData.concerns || '',
-        solutions: updatedData.solutions || '',
-        recommendations: updatedData.recommendations || '',
-        evaluation: updatedData.evaluation || '',
-        middleInitial: updatedData.middleInitial || '',  // Make middleInitial optional
-        college: updatedData.college || this._currentUser?.profile?.college || '',
         updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.uid
+        updatedBy: auth.currentUser.uid
       };
 
-      // Check if the company or section changed
-      const studentRef = doc(db, 'studentData', studentId);
-      const oldStudentDoc = await getDoc(studentRef);
-      const oldCompanyName = oldStudentDoc.exists() ? oldStudentDoc.data().partnerCompany : null;
-      const oldSection = oldStudentDoc.exists() ? oldStudentDoc.data().section : null;
-      const oldCollege = oldStudentDoc.exists() ? oldStudentDoc.data().college : null;
-      
-      // Update main student document
-      await updateDoc(studentRef, finalUpdatedData);
-      
-      // Update related survey data to maintain consistency across collections
-      try {
-        // Find all surveys for this student
-        const surveysQuery = query(
-          collection(db, 'studentSurveys'),
-          where('studentId', '==', studentId)
-        );
-        const surveysSnapshot = await getDocs(surveysQuery);
-        
-        console.log(`Found ${surveysSnapshot.docs.length} related surveys to update for student ${studentId}`);
-        
-        // Only update key fields that should match in both collections
-        const keyFieldsToUpdate = {
-          studentName: finalUpdatedData.name,
-          program: finalUpdatedData.program,
-          semester: finalUpdatedData.semester,
-          section: finalUpdatedData.section || '',
-          college: finalUpdatedData.college,
-          schoolYear: finalUpdatedData.schoolYear,
-          updatedAt: finalUpdatedData.updatedAt
-        };
-        
-        // Update each survey
-        const surveyUpdatePromises = surveysSnapshot.docs.map(surveyDoc => 
-          updateDoc(doc(db, 'studentSurveys', surveyDoc.id), keyFieldsToUpdate)
-        );
-        
-        await Promise.all(surveyUpdatePromises);
-      } catch (surveyUpdateError) {
-        console.error("Error updating related student surveys:", surveyUpdateError);
-        // Continue with main operation even if survey updates fail
+      // 1. Update the main student document
+      await updateDoc(doc(db, 'studentData', studentId), finalUpdatedData);
+
+      // 2. Update data in sections collection
+      if (oldSection !== finalUpdatedData.section || oldCompanyName !== finalUpdatedData.partnerCompany) {
+        // If section changed, update the section records
+        if (oldSection !== finalUpdatedData.section) {
+          // Remove from old section if it exists
+          if (oldSection) {
+            await this.removeFromSectionCollection(studentId);
+          }
+          
+          // Add to new section if specified
+          if (finalUpdatedData.section) {
+            await this.addToSectionCollection(finalUpdatedData, studentId);
+          }
+        } else {
+          // Section didn't change, but other data might have, so update in the current section
+          if (finalUpdatedData.section) {
+            try {
+              const sectionRef = doc(db, 'sections', finalUpdatedData.section);
+              const studentRef = doc(sectionRef, 'students', studentId);
+              
+              await updateDoc(studentRef, {
+                studentName: finalUpdatedData.name,
+                program: finalUpdatedData.program || '',
+                semester: finalUpdatedData.semester || '',
+                schoolYear: finalUpdatedData.schoolYear || '',
+                partnerCompany: finalUpdatedData.partnerCompany || '',
+                contactPerson: finalUpdatedData.contactPerson || '',
+                location: finalUpdatedData.location || '',
+                gender: finalUpdatedData.gender || '',
+                startDate: finalUpdatedData.startDate || '',
+                endDate: finalUpdatedData.endDate || '',
+                concerns: finalUpdatedData.concerns || '',
+                solutions: finalUpdatedData.solutions || '',
+                recommendations: finalUpdatedData.recommendations || '',
+                evaluation: finalUpdatedData.evaluation || '',
+                middleInitial: finalUpdatedData.middleInitial || '',
+                section: finalUpdatedData.section || '',
+                email: finalUpdatedData.email || '',
+                internshipEmail: finalUpdatedData.internshipEmail || '',
+                college: finalUpdatedData.college || '',
+                midtermsKey: finalUpdatedData.midtermsKey || '',
+                finalsKey: finalUpdatedData.finalsKey || '',
+                updatedAt: new Date().toISOString()
+              });
+            } catch (error) {
+              console.error('Error updating section collection:', error);
+            }
+          }
+        }
       }
-      
-      // Handle parallel collections
-      
-      // 1. Update section collection if needed
-      if (this._currentUser?.profile?.section) {
-        await this.addToSectionCollection(finalUpdatedData, studentId);
+
+      // 3. Update company collection
+      if (oldCompanyName !== finalUpdatedData.partnerCompany) {
+        // Remove from old company if it exists
+        if (oldCompanyName) {
+          await this.removeFromCompanyCollection(studentId, oldCompanyName);
+        }
+        
+        // Add to new company if specified
+        if (finalUpdatedData.partnerCompany) {
+          await this.addToCompanyCollection(finalUpdatedData, studentId);
+        }
+      } else {
+        // Company didn't change, but other data might have, so update in the current company
+        if (finalUpdatedData.partnerCompany) {
+          try {
+            const companyId = finalUpdatedData.partnerCompany.trim()
+              .replace(/[^\w\s]/g, '')
+              .replace(/\s+/g, '_')
+              .toLowerCase();
+            
+            if (companyId) {
+              const companyRef = doc(db, 'companies', companyId);
+              const studentRef = doc(companyRef, 'students', studentId);
+              
+              await updateDoc(studentRef, {
+                studentName: finalUpdatedData.name,
+                program: finalUpdatedData.program || '',
+                semester: finalUpdatedData.semester || '',
+                schoolYear: finalUpdatedData.schoolYear || '',
+                partnerCompany: finalUpdatedData.partnerCompany || '',
+                contactPerson: finalUpdatedData.contactPerson || '',
+                location: finalUpdatedData.location || '',
+                gender: finalUpdatedData.gender || '',
+                startDate: finalUpdatedData.startDate || '',
+                endDate: finalUpdatedData.endDate || '',
+                concerns: finalUpdatedData.concerns || '',
+                solutions: finalUpdatedData.solutions || '',
+                recommendations: finalUpdatedData.recommendations || '',
+                evaluation: finalUpdatedData.evaluation || '',
+                middleInitial: finalUpdatedData.middleInitial || '',
+                section: finalUpdatedData.section || '',
+                email: finalUpdatedData.email || '',
+                internshipEmail: finalUpdatedData.internshipEmail || '',
+                college: finalUpdatedData.college || '',
+                midtermsKey: finalUpdatedData.midtermsKey || '',
+                finalsKey: finalUpdatedData.finalsKey || '',
+                updatedAt: new Date().toISOString()
+              });
+            }
+          } catch (error) {
+            console.error('Error updating company collection:', error);
+          }
+        }
       }
+
+      // Update local data
+      this._students = this._students.map(student => 
+        student.id === studentId ? { ...student, ...finalUpdatedData } : student
+      );
       
-      // 2. Update company collection
-      if (oldCompanyName && oldCompanyName !== finalUpdatedData.partnerCompany) {
-        // If company changed, remove from old company and add to new
-        await this.removeFromCompanyCollection(studentId, oldCompanyName);
-      }
+      // Notify subscribers of the change
+      this._notifySubscribers();
       
-      // Add to (new) company collection
-      await this.addToCompanyCollection(finalUpdatedData, studentId);
-      
-      // 3. Update department collection
-      if (oldCollege && oldCollege !== finalUpdatedData.college) {
-        // If college changed, remove from old department and add to new
-        await this.removeFromDepartmentCollection(studentId, oldCollege);
-      }
-      
-      // Add to (new) department collection
-      await this.addToDepartmentCollection(finalUpdatedData, studentId);
-      
-      // 4. Update sections-students collection
-      await this.updateSectionsStudentsCollection(finalUpdatedData, studentId, oldSection);
-      
-      return true;
+      return finalUpdatedData;
     } catch (error) {
       console.error('Error updating student:', error);
       throw error;
     }
   }
 
-  async removeFromDepartmentCollection(studentId, college) {
-    try {
-      if (!college) return;
-      
-      // Sanitize department/college name for use as document ID
-      const departmentId = college.trim()
-        .replace(/[^\w\s]/g, '')
-        .replace(/\s+/g, '_')
-        .toLowerCase();
-      
-      if (!departmentId) return;
-      
-      // Check if department document exists
-      const departmentRef = doc(db, 'departments', departmentId);
-      const studentsCollectionRef = collection(departmentRef, 'students');
-      const studentRef = doc(studentsCollectionRef, studentId);
-      
-      await deleteDoc(studentRef);
-      console.log(`Removed student ${studentId} from department ${departmentId}`);
-    } catch (error) {
-      console.error('Error removing from department collection:', error);
-      // Don't throw error to prevent blocking main operation
-    }
-  }
-
   async deleteStudent(studentId) {
     try {
-      // Get student data before deletion for company reference
+      // Get student data before deleting
       const studentDoc = await getDoc(doc(db, 'studentData', studentId));
+      if (!studentDoc.exists()) {
+        throw new Error('Student not found');
+      }
+      
       const studentData = studentDoc.data();
       
-      // Remove from section collection first
-      await this.removeFromSectionCollection(studentId);
-      
-      // Remove from company collection
-      if (studentData?.partnerCompany) {
-        await this.removeFromCompanyCollection(studentId, studentData.partnerCompany);
-      }
-      
-      // Remove from department collection
-      if (studentData?.college) {
-        await this.removeFromDepartmentCollection(studentId, studentData.college);
-      }
-      
-      // Delete related records from studentSurveys collection
-      // This is important to avoid duplicate/orphaned data that affects rankings
-      try {
-        // Query for surveys related to this student
-        const surveysQuery = query(
-          collection(db, 'studentSurveys'),
-          where('studentId', '==', studentId)
-        );
-        const surveysSnapshot = await getDocs(surveysQuery);
-        
-        console.log(`Found ${surveysSnapshot.docs.length} related surveys to delete for student ${studentId}`);
-        
-        // Delete each survey document
-        const surveyDeletionPromises = surveysSnapshot.docs.map(surveyDoc => 
-          deleteDoc(doc(db, 'studentSurveys', surveyDoc.id))
-        );
-        
-        await Promise.all(surveyDeletionPromises);
-      } catch (surveysError) {
-        console.error("Error deleting related student surveys:", surveysError);
-        // Continue with main deletion even if survey deletion fails
-      }
-      
-      // Delete student from sections-students collection (many-to-many relationship)
-      try {
-        if (studentData?.section) {
-          const sectionsStudentsQuery = query(
-            collection(db, 'sections-students'),
-            where('studentId', '==', studentId)
-          );
-          const sectionsStudentsSnapshot = await getDocs(sectionsStudentsQuery);
-          
-          console.log(`Found ${sectionsStudentsSnapshot.docs.length} section-student relationships to delete`);
-          
-          const sectionStudentDeletionPromises = sectionsStudentsSnapshot.docs.map(doc => 
-            deleteDoc(doc.ref)
-          );
-          
-          await Promise.all(sectionStudentDeletionPromises);
-        }
-      } catch (sectionStudentsError) {
-        console.error("Error deleting from sections-students collection:", sectionStudentsError);
-        // Continue with main deletion even if this step fails
-      }
-      
-      // Then delete from main collection
+      // Begin deletion process
+      // 1. Delete from main studentData collection
       await deleteDoc(doc(db, 'studentData', studentId));
+      
+      // 2. Remove from section collection
+      try {
+        if (studentData.section) {
+          await this.removeFromSectionCollection(studentId);
+        }
+      } catch (sectionError) {
+        console.error("Error removing from section collection:", sectionError);
+        // Don't throw to continue with other deletions
+      }
+      
+      // 3. Remove from company collection
+      try {
+        if (studentData.partnerCompany) {
+          await this.removeFromCompanyCollection(studentId, studentData.partnerCompany);
+        }
+      } catch (companyError) {
+        console.error("Error removing from company collection:", companyError);
+        // Don't throw to continue with other deletions
+      }
+      
+      // Update local data
+      this._students = this._students.filter(student => student.id !== studentId);
+      
+      // Notify subscribers of the change
+      this._notifySubscribers();
+      
       return true;
     } catch (error) {
       console.error('Error deleting student:', error);
@@ -611,6 +620,42 @@ function StudentList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [companies, setCompanies] = useState([]);
+  const [visibleKeys, setVisibleKeys] = useState({});
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  // Toggle visibility of access keys
+  const toggleKeyVisibility = (studentId, keyType) => {
+    setVisibleKeys(prev => ({
+      ...prev,
+      [`${studentId}_${keyType}`]: !prev[`${studentId}_${keyType}`]
+    }));
+  };
+
+  // Copy access key to clipboard
+  const copyKeyToClipboard = (event, studentId, keyType, keyValue) => {
+    event.stopPropagation(); // Prevent toggling visibility when clicking copy button
+    
+    if (!keyValue) return; // Don't copy if key is not set
+    
+    navigator.clipboard.writeText(keyValue).then(() => {
+      setCopiedKey(`${studentId}_${keyType}`);
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedKey(null);
+      }, 2000);
+      
+      // Show a snackbar message
+      setSnackbarMessage(`${keyType === 'midterms' ? 'Midterms' : 'Finals'} key copied to clipboard`);
+      setSnackbarSeverity('success');
+      setOpenSnackbar(true);
+    }).catch(err => {
+      console.error('Failed to copy key: ', err);
+      setSnackbarMessage('Failed to copy key');
+      setSnackbarSeverity('error');
+      setOpenSnackbar(true);
+    });
+  };
 
   // Debug log for currentUser
   useEffect(() => {
@@ -702,7 +747,13 @@ function StudentList() {
       solutions: student.solutions || '',
       recommendations: student.recommendations || '',
       evaluation: student.evaluation || '',
-      college: student.college || currentUser?.profile?.college || '',
+      // For admin users, preserve the student's original values
+      college: userRole === 'admin' ? (student.college || '') : (currentUser?.profile?.college || ''),
+      section: userRole === 'admin' ? (student.section || '') : (currentUser?.profile?.section || ''),
+      midtermsKey: student.midtermsKey || '',
+      finalsKey: student.finalsKey || '',
+      email: student.email || '',
+      internshipEmail: student.internshipEmail || '',
       createdAt: student.createdAt,
       createdBy: student.createdBy,
       updatedAt: new Date().toISOString(),
@@ -728,7 +779,13 @@ function StudentList() {
 
       const completeUpdateData = {
         ...updatedData,
-        college: currentUser?.profile?.college || editingStudent.college,
+        // For admin, preserve the student's original section rather than setting admin's section
+        section: userRole === 'admin' ? (editingStudent.section || '') : (currentUser?.profile?.section || ''),
+        college: userRole === 'admin' ? (editingStudent.college || '') : (currentUser?.profile?.college || ''),
+        concerns: updatedData.concerns || '',
+        solutions: updatedData.solutions || '',
+        recommendations: updatedData.recommendations || '',
+        evaluation: updatedData.evaluation || '',
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser.uid,
         createdAt: editingStudent.createdAt,
@@ -1035,7 +1092,9 @@ function StudentList() {
                   label="Program"
                 >
                   {studentManager.programs.map(program => (
-                    <MenuItem key={program} value={program}>{program}</MenuItem>
+                    <MenuItem key={program} value={program}>
+                      {program !== 'All' ? `${getProgramAcronym(program)} - ${program}` : program}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1177,7 +1236,23 @@ function StudentList() {
           <TableHead>
             <TableRow>
               <TableCell sx={{ 
-                width: '14%',
+                width: '10%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                position: 'sticky',
+                left: 0,
+                zIndex: 3,
+                boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
+              }}>Midterms Key</TableCell>
+              <TableCell sx={{ 
+                width: '10%',
+                fontWeight: 'bold',
+                color: '#800000',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              }}>Finals Key</TableCell>
+              <TableCell sx={{ 
+                width: '12%',
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1229,178 +1304,352 @@ function StudentList() {
                 fontWeight: 'bold',
                 color: '#800000',
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                textAlign: 'center'
+                textAlign: 'center',
+                position: 'sticky',
+                right: 0,
+                zIndex: 3,
+                boxShadow: '-2px 0 5px rgba(0,0,0,0.05)',
               }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {paginatedStudents.map((student) => (
-              <TableRow 
-                key={student.id}
-                sx={{ 
-                  '&:hover': { 
-                    backgroundColor: 'rgba(128, 0, 0, 0.04)',
-                  },
-                  height: '60px',
-                }}
-              >
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.name} placement="top">
-                    <span className="content">{student.name}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.program} placement="top">
-                    <span className="content">{student.program}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.gender} placement="top">
-                    <span className="content">{student.gender}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.partnerCompany} placement="top">
-                    <span className="content">{student.partnerCompany}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.contactPerson || 'N/A'} placement="top">
-                    <span className="content">{student.contactPerson || 'N/A'}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    maxWidth: '100%'
-                  }
-                }}>
-                  <Tooltip title={student.location} placement="top">
-                    <span className="content">{student.location}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    fontSize: '0.875rem'
-                  }
-                }}>
-                  <Tooltip 
-                    title={student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'} 
-                    placement="top"
-                  >
-                    <span className="content">
-                      {student.startDate ? new Date(student.startDate).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell sx={{ 
-                  padding: '16px',
-                  '& .content': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'block',
-                    fontSize: '0.875rem'
-                  }
-                }}>
-                  <Tooltip 
-                    title={student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'} 
-                    placement="top"
-                  >
-                    <span className="content">
-                      {student.endDate ? new Date(student.endDate).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell 
-                  align="center"
+            {paginatedStudents.length > 0 ? (
+              paginatedStudents.map((student) => (
+                <TableRow 
+                  key={student.id}
                   sx={{ 
-                    padding: '16px',
+                    '&:hover': { 
+                      backgroundColor: 'rgba(128, 0, 0, 0.04)',
+                    },
+                    height: '60px',
+                    transition: 'background-color 0.2s ease',
                   }}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                    <Tooltip title="Edit">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleEdit(student)}
-                        sx={{ 
-                          color: '#800000',
-                          '&:hover': { backgroundColor: 'rgba(128, 0, 0, 0.1)' }
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    },
+                    position: 'sticky',
+                    left: 0,
+                    backgroundColor: 'inherit',
+                    zIndex: 2,
+                    boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
+                  }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                    onClick={() => toggleKeyVisibility(student.id, 'midterms')}
+                    >
+                      {visibleKeys[`${student.id}_midterms`] ? (
+                        <>
+                          <span className="content">{student.midtermsKey || 'Not set'}</span>
+                          <VisibilityIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                          {student.midtermsKey && (
+                            <Tooltip title="Copy key">
+                              <IconButton 
+                                size="small" 
+                                sx={{ 
+                                  ml: 0.5, 
+                                  color: copiedKey === `${student.id}_midterms` ? 'success.main' : '#800000',
+                                }}
+                                onClick={(e) => copyKeyToClipboard(e, student.id, 'midterms', student.midtermsKey)}
+                              >
+                                <ContentCopyIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="content">••••••</span>
+                          <VisibilityOffIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                        </>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    }
+                  }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                    onClick={() => toggleKeyVisibility(student.id, 'finals')}
+                    >
+                      {visibleKeys[`${student.id}_finals`] ? (
+                        <>
+                          <span className="content">{student.finalsKey || 'Not set'}</span>
+                          <VisibilityIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                          {student.finalsKey && (
+                            <Tooltip title="Copy key">
+                              <IconButton 
+                                size="small" 
+                                sx={{ 
+                                  ml: 0.5, 
+                                  color: copiedKey === `${student.id}_finals` ? 'success.main' : '#800000',
+                                }}
+                                onClick={(e) => copyKeyToClipboard(e, student.id, 'finals', student.finalsKey)}
+                              >
+                                <ContentCopyIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="content">••••••</span>
+                          <VisibilityOffIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                        </>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%',
+                      fontWeight: 'medium',
+                    }
+                  }}>
+                    <Tooltip title={student.name} placement="top" arrow>
+                      <span className="content">{student.name}</span>
                     </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleDeleteClick(student)}
-                        sx={{ 
-                          color: '#800000',
-                          '&:hover': { backgroundColor: 'rgba(128, 0, 0, 0.1)' }
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    }
+                  }}>
+                    <Tooltip title={student.program} placement="top" arrow>
+                      <span className="content">{getProgramAcronym(student.program)}</span>
                     </Tooltip>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    }
+                  }}>
+                    <Chip
+                      label={student.gender === 'Male' ? 'M' : 'F'}
+                      size="small"
+                      sx={{
+                        backgroundColor: student.gender === 'Male' ? 'rgba(25, 118, 210, 0.1)' : 'rgba(233, 30, 99, 0.1)',
+                        color: student.gender === 'Male' ? '#1976d2' : '#e91e63',
+                        fontWeight: 'bold',
+                        borderRadius: '4px',
+                        width: '24px',
+                        minWidth: 'unset',
+                        '& .MuiChip-label': {
+                          padding: '0 4px'
+                        }
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    }
+                  }}>
+                    <Tooltip title={student.partnerCompany} placement="top" arrow>
+                      <span className="content">{student.partnerCompany}</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    }
+                  }}>
+                    <Tooltip title={student.contactPerson || 'N/A'} placement="top" arrow>
+                      <span className="content">{student.contactPerson || 'N/A'}</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%'
+                    }
+                  }}>
+                    <Tooltip title={student.location} placement="top" arrow>
+                      <span className="content">{student.location}</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      fontSize: '0.875rem'
+                    }
+                  }}>
+                    {student.startDate ? (
+                      <Chip
+                        label={new Date(student.startDate).toLocaleDateString()}
+                        size="small"
+                        sx={{
+                          backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                          color: '#388e3c',
+                          fontWeight: 'medium',
+                          fontSize: '0.75rem',
+                        }}
+                      />
+                    ) : (
+                      <Chip
+                        label="Not set"
+                        size="small"
+                        sx={{
+                          backgroundColor: 'rgba(158, 158, 158, 0.1)',
+                          color: '#757575',
+                          fontWeight: 'medium',
+                          fontSize: '0.75rem',
+                        }}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell sx={{ 
+                    padding: '16px',
+                    '& .content': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      fontSize: '0.875rem'
+                    }
+                  }}>
+                    {student.endDate ? (
+                      <Chip
+                        label={new Date(student.endDate).toLocaleDateString()}
+                        size="small"
+                        sx={{
+                          backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                          color: '#d32f2f',
+                          fontWeight: 'medium',
+                          fontSize: '0.75rem',
+                        }}
+                      />
+                    ) : (
+                      <Chip
+                        label="Not set"
+                        size="small"
+                        sx={{
+                          backgroundColor: 'rgba(158, 158, 158, 0.1)',
+                          color: '#757575',
+                          fontWeight: 'medium',
+                          fontSize: '0.75rem',
+                        }}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell 
+                    align="center"
+                    sx={{ 
+                      padding: '16px',
+                      position: 'sticky',
+                      right: 0,
+                      backgroundColor: 'inherit',
+                      zIndex: 2,
+                      boxShadow: '-2px 0 5px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                      <Tooltip title="Edit student" arrow>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleEdit(student)}
+                          sx={{ 
+                            color: '#FFD700',
+                            backgroundColor: 'rgba(128, 0, 0, 0.8)',
+                            '&:hover': { 
+                              backgroundColor: '#800000',
+                              transform: 'scale(1.1)',
+                            },
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete student" arrow>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleDeleteClick(student)}
+                          sx={{ 
+                            color: 'white',
+                            backgroundColor: 'rgba(211, 47, 47, 0.8)',
+                            '&:hover': { 
+                              backgroundColor: '#b71c1c',
+                              transform: 'scale(1.1)',
+                            },
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <PeopleAltIcon sx={{ fontSize: 48, color: 'rgba(128, 0, 0, 0.3)' }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No students found
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Try adjusting your filters or search criteria
+                    </Typography>
                   </Box>
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -1408,39 +1657,71 @@ function StudentList() {
       <Box sx={{ 
         mt: 3, 
         display: 'flex', 
-        justifyContent: 'center',
+        justifyContent: 'space-between', 
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: 2
       }}>
-        <Stack spacing={2} alignItems="center" direction="row">
-          <Typography variant="body2" color="text.secondary">
-            {`${filteredStudents.length} total entries`}
-          </Typography>
-          <Pagination
-            count={Math.ceil(filteredStudents.length / rowsPerPage)}
-            page={page}
-            onChange={handlePageChange}
-            color="primary"
-            sx={{
-              '& .MuiPaginationItem-root': {
-                color: '#800000',
-                '&.Mui-selected': {
-                  backgroundColor: '#800000',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: '#600000',
-                  },
-                },
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+          Showing {paginatedStudents.length} of {filteredStudents.length} total entries
+        </Typography>
+        
+        <Pagination
+          count={Math.ceil(filteredStudents.length / rowsPerPage)}
+          page={page}
+          onChange={handlePageChange}
+          color="primary"
+          size="large"
+          showFirstButton
+          showLastButton
+          sx={{
+            '& .MuiPaginationItem-root': {
+              color: '#800000',
+              '&.Mui-selected': {
+                backgroundColor: '#800000',
+                color: 'white',
+                fontWeight: 'bold',
                 '&:hover': {
-                  backgroundColor: 'rgba(128, 0, 0, 0.1)',
+                  backgroundColor: '#600000',
                 },
               },
+              '&:hover': {
+                backgroundColor: 'rgba(128, 0, 0, 0.1)',
+              },
+            },
+          }}
+        />
+        
+        <FormControl 
+          variant="outlined" 
+          size="small" 
+          sx={{ 
+            minWidth: 120,
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 2,
+              '&:hover fieldset': {
+                borderColor: '#800000',
+              },
+              '&.Mui-focused fieldset': {
+                borderColor: '#800000',
+              },
+            }
+          }}
+        >
+          <InputLabel id="rows-per-page-label">Rows</InputLabel>
+          <Select
+            labelId="rows-per-page-label"
+            value={rowsPerPage}
+            label="Rows"
+            onChange={(e) => {
+              setPage(1);
             }}
-          />
-          <Typography variant="body2" color="text.secondary">
-            {`Page ${page} of ${Math.ceil(filteredStudents.length / rowsPerPage)}`}
-          </Typography>
-        </Stack>
+          >
+            <MenuItem value={25}>25</MenuItem>
+            <MenuItem value={50}>50</MenuItem>
+            <MenuItem value={100}>100</MenuItem>
+          </Select>
+        </FormControl>
       </Box>
 
       <Dialog

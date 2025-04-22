@@ -15,9 +15,9 @@ import {
   Alert,
   Autocomplete,
   Paper,
-  useTheme,
-  useMediaQuery,
   CircularProgress,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../../firebase-config';
@@ -30,10 +30,11 @@ import {
   Business, 
   LocationOn, 
   DateRange, 
-  Feedback, 
   Add,
   Edit,
-  ContactMail 
+  ContactMail,
+  VpnKey,
+  Refresh,
 } from '@mui/icons-material';
 
 const maroon = '#800000';
@@ -69,17 +70,27 @@ const LoadingOverlay = styled(Box)(({ theme }) => ({
 }));
 
 const FormHeader = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(2.5, 3),
+  padding: theme.spacing(3),
   background: `linear-gradient(135deg, ${maroon} 0%, #B22222 100%)`,
   color: 'white',
   borderBottom: '1px solid rgba(255, 255, 255, 0.18)',
-  marginBottom: theme.spacing(2),
   borderRadius: '16px 16px 0 0',
+  position: 'relative',
+  overflow: 'hidden',
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '4px',
+    background: 'rgba(255, 255, 255, 0.3)',
+  }
 }));
 
 const SectionWrapper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2.5, 2.5, 2.5, 3.5),
-  marginBottom: theme.spacing(2),
+  padding: theme.spacing(3, 3.5),
+  marginBottom: theme.spacing(3),
   borderRadius: '12px',
   boxShadow: '0 4px 20px 0 rgba(0, 0, 0, 0.05)',
   border: '1px solid rgba(0, 0, 0, 0.05)',
@@ -103,22 +114,34 @@ const SectionWrapper = styled(Paper)(({ theme }) => ({
 }));
 
 const SectionTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '1rem',
+  fontSize: '1.1rem',
   fontWeight: 600,
   color: maroon,
-  marginBottom: theme.spacing(1.5),
+  marginBottom: theme.spacing(2.5),
   display: 'flex',
   alignItems: 'center',
+  position: 'relative',
+  paddingBottom: theme.spacing(1),
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: '40px',
+    height: '3px',
+    background: `linear-gradient(to right, ${maroon}, #FF8C00)`,
+    borderRadius: '4px',
+  },
   '& svg': {
     marginRight: theme.spacing(1),
-    fontSize: '1.2rem',
+    fontSize: '1.3rem',
   }
 }));
 
 const StyledTextField = styled(TextField)(({ theme }) => ({
-  marginBottom: theme.spacing(2),
+  marginBottom: theme.spacing(2.5),
   '& .MuiOutlinedInput-root': {
-    borderRadius: '8px',
+    borderRadius: '10px',
     transition: 'all 0.3s ease',
     '&:hover': {
       boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
@@ -128,12 +151,12 @@ const StyledTextField = styled(TextField)(({ theme }) => ({
     }
   },
   '& .MuiInputBase-input': {
-    padding: '12px 14px',
+    padding: '14px 16px',
   },
   '& .MuiInputLabel-root': {
-    transform: 'translate(14px, 14px) scale(1)',
+    transform: 'translate(16px, 16px) scale(1)',
     '&.MuiInputLabel-shrink': {
-      transform: 'translate(14px, -6px) scale(0.75)',
+      transform: 'translate(16px, -6px) scale(0.75)',
     },
   },
   '& .MuiInputLabel-root.Mui-focused': {
@@ -146,9 +169,9 @@ const StyledTextField = styled(TextField)(({ theme }) => ({
 }));
 
 const StyledFormControl = styled(FormControl)(({ theme }) => ({
-  marginBottom: theme.spacing(2),
+  marginBottom: theme.spacing(2.5),
   '& .MuiOutlinedInput-root': {
-    borderRadius: '8px',
+    borderRadius: '10px',
     transition: 'all 0.3s ease',
     '&:hover': {
       boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
@@ -158,12 +181,12 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
     }
   },
   '& .MuiInputBase-input': {
-    padding: '12px 14px',
+    padding: '14px 16px',
   },
   '& .MuiInputLabel-root': {
-    transform: 'translate(14px, 14px) scale(1)',
+    transform: 'translate(16px, 16px) scale(1)',
     '&.MuiInputLabel-shrink': {
-      transform: 'translate(14px, -6px) scale(0.75)',
+      transform: 'translate(16px, -6px) scale(0.75)',
     },
   },
   '& .MuiInputLabel-root.Mui-focused': {
@@ -173,45 +196,14 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
     borderColor: 'rgba(128, 0, 0, 0.5)',
     borderWidth: '1px',
   },
-}));
-
-const MultilineTextField = styled(TextField)(({ theme }) => ({
-  marginBottom: theme.spacing(2),
-  '& .MuiOutlinedInput-root': {
-    borderRadius: '8px',
-    transition: 'all 0.3s ease',
-    '&:hover': {
-      boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
-    },
-    '&.Mui-focused': {
-      boxShadow: '0 4px 10px rgba(0, 0, 0, 0.07)',
-    }
-  },
-  '& .MuiInputLabel-root': {
-    transform: 'translate(14px, 14px) scale(1)',
-    '&.MuiInputLabel-shrink': {
-      transform: 'translate(14px, -6px) scale(0.75)',
-    },
-  },
-  '& .MuiInputLabel-root.Mui-focused': {
-    color: maroon,
-  },
-  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-    borderColor: 'rgba(128, 0, 0, 0.5)',
-    borderWidth: '1px',
-  },
-  '& .MuiInputBase-inputMultiline': {
-    padding: theme.spacing(2),
-    lineHeight: 1.5,
-  }
 }));
 
 const StyledAutocomplete = styled(Autocomplete)(({ theme }) => ({
-  marginBottom: theme.spacing(2),
+  marginBottom: theme.spacing(2.5),
   '& .MuiOutlinedInput-root': {
-    borderRadius: '8px',
+    borderRadius: '10px',
     transition: 'all 0.3s ease',
-    padding: '3px 9px',
+    padding: '4px 10px',
     '&:hover': {
       boxShadow: '0 0 0 1px rgba(128, 0, 0, 0.2)',
     },
@@ -220,9 +212,9 @@ const StyledAutocomplete = styled(Autocomplete)(({ theme }) => ({
     }
   },
   '& .MuiInputLabel-root': {
-    transform: 'translate(14px, 14px) scale(1)',
+    transform: 'translate(16px, 16px) scale(1)',
     '&.MuiInputLabel-shrink': {
-      transform: 'translate(14px, -6px) scale(0.75)',
+      transform: 'translate(16px, -6px) scale(0.75)',
     },
   },
   '& .MuiInputLabel-root.Mui-focused': {
@@ -233,23 +225,29 @@ const StyledAutocomplete = styled(Autocomplete)(({ theme }) => ({
     borderWidth: '1px',
   },
   '& .MuiAutocomplete-input': {
-    padding: '4px 4px',
+    padding: '6px 6px',
   }
 }));
 
 const SubmitButton = styled(Button)(({ theme }) => ({
-  padding: theme.spacing(1.5),
+  padding: theme.spacing(1.7),
   borderRadius: '30px',
-  boxShadow: '0 4px 20px 0 rgba(128, 0, 0, 0.25)',
+  boxShadow: '0 6px 20px 0 rgba(128, 0, 0, 0.25)',
   transition: 'all 0.3s ease',
   fontWeight: 600,
-  fontSize: '1rem',
+  fontSize: '1.1rem',
+  letterSpacing: '0.5px',
   background: `linear-gradient(45deg, ${maroon} 0%, #B22222 100%)`,
+  marginTop: theme.spacing(3),
   '&:hover': {
-    boxShadow: '0 6px 25px 0 rgba(128, 0, 0, 0.35)',
+    boxShadow: '0 8px 25px 0 rgba(128, 0, 0, 0.35)',
     background: `linear-gradient(45deg, #600000 0%, #800000 100%)`,
     transform: 'translateY(-2px)',
   },
+  '&:active': {
+    transform: 'translateY(1px)',
+    boxShadow: '0 4px 15px 0 rgba(128, 0, 0, 0.35)',
+  }
 }));
 
 class Student {
@@ -266,12 +264,16 @@ class Student {
       location: data.location || '',
       startDate: data.startDate || '',
       endDate: data.endDate || '',
+      college: data.college || '',
+      section: data.section || '',
+      email: data.email || '',
+      internshipEmail: data.internshipEmail || '',
+      midtermsKey: data.midtermsKey || '',
+      finalsKey: data.finalsKey || '',
       concerns: data.concerns || '',
       solutions: data.solutions || '',
       recommendations: data.recommendations || '',
       evaluation: data.evaluation || '',
-      college: data.college || '',
-      section: data.section || '',
       createdAt: data.createdAt || null,
       createdBy: data.createdBy || null,
       updatedAt: data.updatedAt || null,
@@ -290,13 +292,17 @@ class Student {
   get location() { return this._data.location; }
   get startDate() { return this._data.startDate; }
   get endDate() { return this._data.endDate; }
+  get college() { return this._data.college; }
+  get middleInitial() { return this._data.middleInitial; }
+  get section() { return this._data.section; }
+  get email() { return this._data.email; }
+  get internshipEmail() { return this._data.internshipEmail; }
+  get midtermsKey() { return this._data.midtermsKey; }
+  get finalsKey() { return this._data.finalsKey; }
   get concerns() { return this._data.concerns; }
   get solutions() { return this._data.solutions; }
   get recommendations() { return this._data.recommendations; }
   get evaluation() { return this._data.evaluation; }
-  get college() { return this._data.college; }
-  get middleInitial() { return this._data.middleInitial; }
-  get section() { return this._data.section; }
 
   // Setters
   set name(value) { this._data.name = value; }
@@ -309,17 +315,51 @@ class Student {
   set location(value) { this._data.location = value; }
   set startDate(value) { this._data.startDate = value; }
   set endDate(value) { this._data.endDate = value; }
+  set college(value) { this._data.college = value; }
+  set middleInitial(value) { this._data.middleInitial = value; }
+  set section(value) { this._data.section = value; }
+  set email(value) { this._data.email = value; }
+  set internshipEmail(value) { this._data.internshipEmail = value; }
+  set midtermsKey(value) { this._data.midtermsKey = value; }
+  set finalsKey(value) { this._data.finalsKey = value; }
   set concerns(value) { this._data.concerns = value; }
   set solutions(value) { this._data.solutions = value; }
   set recommendations(value) { this._data.recommendations = value; }
   set evaluation(value) { this._data.evaluation = value; }
-  set college(value) { this._data.college = value; }
-  set middleInitial(value) { this._data.middleInitial = value; }
-  set section(value) { this._data.section = value; }
 
   // Methods
   toJSON() {
     return { ...this._data };
+  }
+  
+  getAllData() {
+    return {
+      name: this._data.name || '',
+      middleInitial: this._data.middleInitial || '',
+      gender: this._data.gender || '',
+      program: this._data.program || '',
+      semester: this._data.semester || '',
+      schoolYear: this._data.schoolYear || '',
+      partnerCompany: this._data.partnerCompany || '',
+      contactPerson: this._data.contactPerson || '',
+      location: this._data.location || '',
+      startDate: this._data.startDate || '',
+      endDate: this._data.endDate || '',
+      college: this._data.college || '',
+      section: this._data.section || '',
+      email: this._data.email || '',
+      internshipEmail: this._data.internshipEmail || '',
+      midtermsKey: this._data.midtermsKey || '',
+      finalsKey: this._data.finalsKey || '',
+      concerns: this._data.concerns || '',
+      solutions: this._data.solutions || '',
+      recommendations: this._data.recommendations || '',
+      evaluation: this._data.evaluation || '',
+      createdAt: this._data.createdAt,
+      createdBy: this._data.createdBy,
+      updatedAt: this._data.updatedAt,
+      updatedBy: this._data.updatedBy
+    };
   }
 
   validate() {
@@ -362,7 +402,7 @@ class Student {
     }
 
     if (this._data.contactPerson && this._data.contactPerson.trim()) {
-      const contactPersonRegex = /^[a-zA-ZÀ-ÿ\s.\-'(),]+$/;
+      const contactPersonRegex = /^[a-zA-Z0-9À-ÿ\s.\-&'(),/+@#$%*!?]+$/;
       if (!contactPersonRegex.test(this._data.contactPerson)) {
         throw new Error('Contact person name contains invalid characters');
       }
@@ -383,6 +423,22 @@ class Student {
       }
     }
 
+    // Validate email format if provided
+    if (this._data.email && this._data.email.trim()) {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(this._data.email)) {
+        throw new Error('Email address is not valid');
+      }
+    }
+
+    // Validate internship email format if provided
+    if (this._data.internshipEmail && this._data.internshipEmail.trim()) {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(this._data.internshipEmail)) {
+        throw new Error('Internship email address is not valid');
+      }
+    }
+
     return true;
   }
 
@@ -394,27 +450,29 @@ class Student {
         case 'location':
           this._data[field] = value;
           break;
-        case 'concerns':
-        case 'solutions':
-        case 'recommendations':
-        case 'evaluation':
-          this._data[field] = value;
-          break;
         default:
           this._data[field] = value;
       }
     }
   }
-
-  getAllData() {
-    return { ...this._data };
-  }
 }
+
+// Function to generate random access key
+const generateAccessKey = () => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const length = 6;
+  let result = '';
+  
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length);
+    result += characters.charAt(randomIndex);
+  }
+  
+  return result;
+};
 
 function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditing }) {
   const { currentUser, userRole } = useContext(AuthContext);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState(() => {
     if (isEditing && initialData) {
       return new Student({
@@ -429,12 +487,16 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         location: initialData.location || '',
         startDate: initialData.startDate || '',
         endDate: initialData.endDate || '',
+        college: initialData.college || '',
+        section: initialData.section || '',
+        email: initialData.email || '',
+        internshipEmail: initialData.internshipEmail || '',
+        midtermsKey: initialData.midtermsKey || '',
+        finalsKey: initialData.finalsKey || '',
         concerns: initialData.concerns || '',
         solutions: initialData.solutions || '',
         recommendations: initialData.recommendations || '',
         evaluation: initialData.evaluation || '',
-        college: initialData.college || '',
-        section: initialData.section || '',
         createdAt: initialData.createdAt,
         createdBy: initialData.createdBy
       });
@@ -518,6 +580,31 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     }
   }, [userCollege, isEditing]);
 
+  // Generate access keys when component mounts, but only for new students
+  useEffect(() => {
+    if (!isEditing) {
+      const midtermsKey = generateAccessKey();
+      const finalsKey = generateAccessKey();
+      
+      setFormData(prevData => {
+        const newStudent = new Student(prevData.toJSON());
+        newStudent.update('midtermsKey', midtermsKey);
+        newStudent.update('finalsKey', finalsKey);
+        return newStudent;
+      });
+    }
+  }, [isEditing]);
+
+  // Function to regenerate keys
+  const handleRegenerateKey = (keyType) => {
+    const newKey = generateAccessKey();
+    setFormData(prevData => {
+      const newStudent = new Student(prevData.toJSON());
+      newStudent.update(keyType, newKey);
+      return newStudent;
+    });
+  };
+
   // Update the handleChange function to properly handle name changes
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -590,10 +677,6 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         section: userData.section || '',
         startDate: formData.startDate || '',
         endDate: formData.endDate || '',
-        concerns: formData.concerns || '',
-        solutions: formData.solutions || '',
-        recommendations: formData.recommendations || '',
-        evaluation: formData.evaluation || '',
         createdAt: isEditing ? formData.createdAt : new Date().toISOString(),
         createdBy: isEditing ? formData.createdBy : auth.currentUser.uid,
         updatedAt: new Date().toISOString(),
@@ -619,6 +702,8 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                 college: userData.college,
                 instructorId: auth.currentUser.uid,
                 instructorName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
+                semester: studentData.semester || '',
+                schoolYear: studentData.schoolYear || '',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 createdBy: auth.currentUser.uid,
@@ -631,7 +716,28 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
             await setDoc(studentRef, {
               studentName: studentData.name,
               studentId: docRef.id,
+              program: studentData.program || '',
+              semester: studentData.semester || '',
+              schoolYear: studentData.schoolYear || '',
+              partnerCompany: studentData.partnerCompany || '',
+              contactPerson: studentData.contactPerson || '',
+              location: studentData.location || '',
+              gender: studentData.gender || '',
+              startDate: studentData.startDate || '',
+              endDate: studentData.endDate || '',
+              concerns: studentData.concerns || '',
+              solutions: studentData.solutions || '',
+              recommendations: studentData.recommendations || '',
+              evaluation: studentData.evaluation || '',
+              middleInitial: studentData.middleInitial || '',
+              section: studentData.section || '',
+              email: studentData.email || '',
+              internshipEmail: studentData.internshipEmail || '',
+              college: studentData.college || '',
+              midtermsKey: studentData.midtermsKey || '',
+              finalsKey: studentData.finalsKey || '',
               addedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
               addedBy: auth.currentUser.uid
             });
           } catch (sectionError) {
@@ -660,6 +766,8 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                   companyName: studentData.partnerCompany,
                   normalizedName: companyId,
                   studentCount: 0,
+                  semester: studentData.semester || '',
+                  schoolYear: studentData.schoolYear || '',
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                   createdBy: auth.currentUser.uid,
@@ -673,11 +781,27 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                 studentName: studentData.name,
                 studentId: docRef.id,
                 program: studentData.program || '',
-                section: studentData.section || '',
-                college: studentData.college || '',
+                semester: studentData.semester || '',
+                schoolYear: studentData.schoolYear || '',
+                partnerCompany: studentData.partnerCompany || '',
+                contactPerson: studentData.contactPerson || '',
+                location: studentData.location || '',
+                gender: studentData.gender || '',
                 startDate: studentData.startDate || '',
                 endDate: studentData.endDate || '',
+                concerns: studentData.concerns || '',
+                solutions: studentData.solutions || '',
+                recommendations: studentData.recommendations || '',
+                evaluation: studentData.evaluation || '',
+                middleInitial: studentData.middleInitial || '',
+                section: studentData.section || '',
+                email: studentData.email || '',
+                internshipEmail: studentData.internshipEmail || '',
+                college: studentData.college || '',
+                midtermsKey: studentData.midtermsKey || '',
+                finalsKey: studentData.finalsKey || '',
                 addedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
                 addedBy: auth.currentUser.uid
               });
             }
@@ -698,12 +822,12 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         if (addStudent) {
           await addStudent({ ...studentData, id: docRef.id });
         }
-      }
 
-      if (!disableSnackbar) {
-        setSnackbarMessage(isEditing ? 'Student updated successfully' : 'Student added successfully');
-        setSnackbarSeverity('success');
-        setOpenSnackbar(true);
+        if (!disableSnackbar) {
+          setSnackbarMessage(isEditing ? 'Student updated successfully' : 'Student added successfully');
+          setSnackbarSeverity('success');
+          setOpenSnackbar(true);
+        }
       }
     } catch (error) {
       console.error('Error saving student data:', error);
@@ -736,7 +860,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         </LoadingOverlay>
       )}
       <FormHeader>
-        <Typography variant="h5" align="center" fontWeight="bold">
+        <Typography variant="h5" align="center" fontWeight="bold" sx={{ letterSpacing: '0.5px' }}>
           Student Internship Program Form
         </Typography>
       </FormHeader>
@@ -745,20 +869,21 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         flex: 1, 
         display: 'flex', 
         flexDirection: 'column', 
-        px: { xs: 1.5, sm: 2, md: 3 }, 
-        pt: 0, 
-        pb: 3 
+        px: { xs: 2, sm: 3, md: 4 }, 
+        pt: 3, 
+        pb: 4,
+        backgroundColor: '#fafafa'
       }}>
         <Box component="form" onSubmit={handleSubmit} sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Basic Information Row - Personal and Academic side by side */}
-          <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid item xs={12} md={6}>
               <SectionWrapper>
                 <SectionTitle>
                   <Person /> Personal Information
                 </SectionTitle>
                 
-                <Grid container spacing={2}>
+                <Grid container spacing={2.5}>
                   <Grid item xs={12} sm={7}>
                     <StyledTextField
                       required
@@ -769,7 +894,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                       onChange={handleChange}
                       variant="outlined"
                       InputProps={{
-                        sx: { borderRadius: '8px' }
+                        sx: { borderRadius: '10px' }
                       }}
                     />
                   </Grid>
@@ -785,7 +910,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                         MenuProps={{
                           PaperProps: {
                             style: {
-                              borderRadius: '8px',
+                              borderRadius: '10px',
                               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
                             },
                           },
@@ -797,7 +922,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     </StyledFormControl>
                   </Grid>
                   
-                  <Grid item xs={8} sm={9}>
+                  <Grid item xs={8} sm={8}>
                     <StyledTextField
                       required
                       fullWidth
@@ -809,7 +934,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     />
                   </Grid>
                   
-                  <Grid item xs={4} sm={3}>
+                  <Grid item xs={4} sm={4}>
                     <StyledTextField
                       fullWidth
                       label="M.I."
@@ -817,6 +942,21 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                       value={nameFields.middleInitial}
                       onChange={handleChange}
                       variant="outlined"
+                    />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <StyledTextField
+                      fullWidth
+                      label="Email Address"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      variant="outlined"
+                      type="email"
+                      InputProps={{
+                        startAdornment: <ContactMail sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
                     />
                   </Grid>
                 </Grid>
@@ -829,7 +969,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                   <School /> Academic Information
                 </SectionTitle>
                 
-                <Grid container spacing={2}>
+                <Grid container spacing={2.5}>
                   <Grid item xs={12}>
                     <StyledAutocomplete
                       value={formData.program}
@@ -850,7 +990,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     />
                   </Grid>
                   
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <StyledFormControl required fullWidth>
                       <InputLabel>Semester</InputLabel>
                       <Select
@@ -861,7 +1001,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                         MenuProps={{
                           PaperProps: {
                             style: {
-                              borderRadius: '8px',
+                              borderRadius: '10px',
                               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
                             },
                           },
@@ -874,7 +1014,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     </StyledFormControl>
                   </Grid>
                   
-                  <Grid item xs={6}>
+                  <Grid item xs={12} sm={6}>
                     <StyledFormControl required fullWidth>
                       <InputLabel>School Year</InputLabel>
                       <Select
@@ -885,7 +1025,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                         MenuProps={{
                           PaperProps: {
                             style: {
-                              borderRadius: '8px',
+                              borderRadius: '10px',
                               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
                             },
                           },
@@ -903,15 +1043,15 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
           </Grid>
           
           {/* Internship Information Row - Spans full width */}
-          <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid item xs={12}>
               <SectionWrapper>
                 <SectionTitle>
                   <Business /> Internship Information
                 </SectionTitle>
                 
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={4}>
+                <Grid container spacing={2.5}>
+                  <Grid item xs={12} md={4}>
                     <StyledTextField
                       required
                       fullWidth
@@ -926,7 +1066,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     />
                   </Grid>
                   
-                  <Grid item xs={12} sm={6} md={4}>
+                  <Grid item xs={12} md={4}>
                     <StyledTextField
                       fullWidth
                       label="Contact Person"
@@ -940,7 +1080,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                     />
                   </Grid>
                   
-                  <Grid item xs={12} sm={12} md={4}>
+                  <Grid item xs={12} md={4}>
                     <StyledTextField
                       required
                       fullWidth
@@ -951,6 +1091,21 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                       variant="outlined"
                       InputProps={{
                         startAdornment: <LocationOn sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <StyledTextField
+                      fullWidth
+                      label="Internship Email Address"
+                      name="internshipEmail"
+                      value={formData.internshipEmail}
+                      onChange={handleChange}
+                      variant="outlined"
+                      type="email"
+                      InputProps={{
+                        startAdornment: <ContactMail sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
                       }}
                     />
                   </Grid>
@@ -986,73 +1141,58 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                       variant="outlined"
                     />
                   </Grid>
-                </Grid>
-              </SectionWrapper>
-            </Grid>
-          </Grid>
 
-          {/* Feedback and Evaluation Row - Split into 2 columns on larger screens */}
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <SectionWrapper>
-                <SectionTitle>
-                  <Feedback /> Feedback and Evaluation
-                </SectionTitle>
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <MultilineTextField
+                  <Grid item xs={12} sm={6}>
+                    <StyledTextField
                       fullWidth
-                      label="Concerns"
-                      name="concerns"
-                      multiline
-                      rows={isMobile ? 3 : 4}
-                      value={formData.concerns}
+                      label="Midterms Access Key"
+                      name="midtermsKey"
+                      value={formData.midtermsKey}
                       onChange={handleChange}
                       variant="outlined"
-                      placeholder="Describe any concerns or issues"
+                      InputProps={{
+                        startAdornment: <VpnKey sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton 
+                              onClick={() => handleRegenerateKey('midtermsKey')}
+                              edge="end"
+                              size="small"
+                              sx={{ color: maroon }}
+                              title="Regenerate key"
+                            >
+                              <Refresh />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                   </Grid>
                   
-                  <Grid item xs={12} md={6}>
-                    <MultilineTextField
+                  <Grid item xs={12} sm={6}>
+                    <StyledTextField
                       fullWidth
-                      label="Solutions"
-                      name="solutions"
-                      multiline
-                      rows={isMobile ? 3 : 4}
-                      value={formData.solutions}
+                      label="Finals Access Key"
+                      name="finalsKey"
+                      value={formData.finalsKey}
                       onChange={handleChange}
                       variant="outlined"
-                      placeholder="Describe solutions to the concerns"
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12} md={6}>
-                    <MultilineTextField
-                      fullWidth
-                      label="Recommendations"
-                      name="recommendations"
-                      multiline
-                      rows={isMobile ? 3 : 4}
-                      value={formData.recommendations}
-                      onChange={handleChange}
-                      variant="outlined"
-                      placeholder="Provide recommendations for future internships"
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12} md={6}>
-                    <MultilineTextField
-                      fullWidth
-                      label="Evaluation"
-                      name="evaluation"
-                      multiline
-                      rows={isMobile ? 3 : 4}
-                      value={formData.evaluation}
-                      onChange={handleChange}
-                      variant="outlined"
-                      placeholder="Provide overall evaluation of the internship"
+                      InputProps={{
+                        startAdornment: <VpnKey sx={{ color: 'text.secondary', mr: 1, fontSize: '1.2rem' }} />,
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton 
+                              onClick={() => handleRegenerateKey('finalsKey')}
+                              edge="end"
+                              size="small"
+                              sx={{ color: maroon }}
+                              title="Regenerate key"
+                            >
+                              <Refresh />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                   </Grid>
                 </Grid>
@@ -1060,7 +1200,22 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
             </Grid>
           </Grid>
 
-          <Box sx={{ mt: 'auto', pt: 2, maxWidth: '100%', width: { xs: '100%', sm: '80%', md: '50%' }, mx: 'auto' }}>
+          <Box sx={{ 
+            mt: 'auto', 
+            maxWidth: { xs: '100%', sm: '300px', md: '320px' }, 
+            mx: 'auto',
+            position: 'relative',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              top: '50%',
+              left: '-20%',
+              right: '-20%',
+              height: '1px',
+              background: 'rgba(0,0,0,0.05)',
+              zIndex: -1
+            }
+          }}>
             <SubmitButton 
               type="submit" 
               variant="contained" 
@@ -1095,7 +1250,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                 color: snackbarSeverity === 'success' ? '#2E7D32' : '#C62828'
               },
               color: snackbarSeverity === 'success' ? '#1B5E20' : '#B71C1C',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
               borderRadius: 2,
             }}
           >

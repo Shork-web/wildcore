@@ -33,8 +33,8 @@ function FAQ() {
       defaultExpanded: true,
       items: [
         {
-          primary: "What is WILD C.O.R.E?",
-          secondary: `WILD C.O.R.E (Work-Integrated Learning and Development – Collaborative OJT Records and Evaluation ) is your central hub for managing student internships. 
+          primary: "What is WILD R.O.U.T.E?",
+          secondary: `WILD R.O.U.T.E (Work-Integrated Learning and Development – Records of OJT, Updates, Training & Evaluation) is your central hub for managing student internships. 
 
 Key Benefits:
 • Streamlined record management
@@ -271,7 +271,7 @@ Tips:
             WebkitTextFillColor: 'transparent',
           }}
         >
-          Instructor's Guide to WILD C.O.R.E
+          Instructor's Guide to WILD R.O.U.T.E
         </Typography>
 
         <Box sx={{ mt: 3 }}>
