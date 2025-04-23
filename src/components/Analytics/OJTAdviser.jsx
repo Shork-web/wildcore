@@ -21,12 +21,17 @@ import {
   Button,
   CircularProgress,
   Stack,
-  Pagination
+  Pagination,
+  Divider,
+  Chip
 } from '@mui/material';
 import { 
   KeyboardArrowDown,
   KeyboardArrowUp,
-  FilterList
+  FilterList,
+  CheckCircle,
+  Cancel,
+  Apartment
 } from '@mui/icons-material';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase-config';
@@ -54,6 +59,7 @@ const rotateInner = keyframes`
 function OJTAdviser() {
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedSurveyType, setSelectedSurveyType] = useState('midterm');
+  const [selectedPriority, setSelectedPriority] = useState('');
   const [companies, setCompanies] = useState([]);
   const [evaluationsData, setEvaluationsData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -169,25 +175,99 @@ function OJTAdviser() {
                   }
                 }
                 
+                // Calculate a score based on the priority level or available metrics
+                let priorityScore = 0;
+                if (docData.priorityLevel) {
+                  switch(docData.priorityLevel) {
+                    case 'High Priority': priorityScore = 10; break;
+                    case 'Medium Priority': priorityScore = 7; break;
+                    case 'Low Priority': priorityScore = 4; break;
+                    case 'Not Recommended': priorityScore = 1; break;
+                    default: priorityScore = 0;
+                  }
+                }
+                
+                // Check if the document has the new checklist data structure
+                const hasNewDataStructure = docData.safetyProtocols !== undefined || 
+                                           docData.relevantTasks !== undefined ||
+                                           docData.priorityLevel !== undefined;
+                
                 return {
                   id: doc.id,
                   ...docData,
                   companyName: docData.companyName || 'Unknown Company',
+                  companyAddress: docData.companyAddress || 'No Address',
+                  departmentAssigned: docData.departmentAssigned || 'Not Specified',
+                  supervisorInCharge: docData.supervisorInCharge || docData.industryMentor || 'Not Specified',
+                  supervisorContact: docData.supervisorContact || 'No Contact Info',
+                  supervisorEmail: docData.supervisorEmail || 'No Email',
                   meetingDate: docData.meetingDate || 'No Date',
+                  
+                  // Handle both data structures
+                  priorityLevel: docData.priorityLevel || 'Not Specified',
+                  
+                  // Safety metrics
+                  safetyProtocols: docData.safetyProtocols || false,
+                  safetyOrientation: docData.safetyOrientation || false,
+                  emergencyPlans: docData.emergencyPlans || false,
+                  noSafetyConcerns: docData.noSafetyConcerns || false,
+                  safetyComments: docData.safetyComments || 'No comments',
+                  
+                  // Learning Opportunities
+                  relevantTasks: docData.relevantTasks || false,
+                  supervisionEvident: docData.supervisionEvident || false,
+                  industryExposure: docData.industryExposure || false,
+                  knowledgeApplication: docData.knowledgeApplication || false,
+                  
+                  // Work Environment
+                  professionalCulture: docData.professionalCulture || false,
+                  openCommunication: docData.openCommunication || false,
+                  encouragesInitiative: docData.encouragesInitiative || false,
+                  noHarassment: docData.noHarassment || false,
+                  
+                  // Compliance
+                  providedHours: docData.providedHours || false,
+                  submittedForms: docData.submittedForms || false,
+                  attendedOrientation: docData.attendedOrientation || false,
+                  openToCollaboration: docData.openToCollaboration || false,
+                  
+                  // Interview Responses
+                  workingDuration: docData.workingDuration || 'Not provided',
+                  typicalTasks: docData.typicalTasks || docData.tasksAssigned || 'No Tasks Listed',
+                  technicalSkills: docData.technicalSkills || 'Not evaluated',
+                  communication: docData.communication || 'Not evaluated',
+                  professionalism: docData.professionalism || 'Not evaluated',
+                  adaptability: docData.adaptability || 'Not evaluated',
+                  wellPrepared: docData.wellPrepared || 'Not specified',
+                  curriculumImprovements: docData.curriculumImprovements || 'No suggestions',
+                  futureEngagements: docData.futureEngagements || 'Not specified',
+                  hiringProspects: docData.hiringProspects || 'Not specified',
+                  programImprovements: docData.programImprovements || docData.recommendations || 'No recommendations',
+                  
+                  // Legacy fields for backward compatibility
                   students: docData.studentNames || docData.students || 'No Students Listed',
-                  overallPerformance: docData.overallPerformance || 0,
-                  tasks: docData.tasksAssigned || 'No Tasks Listed',
-                  training: docData.trainingProvided || 'No Training Listed',
-                  technicalSkills: docData.technicalSkills || 'No Skills Listed',
-                  recommendations: docData.recommendations || 'No Recommendations',
-                  industryMentor: docData.industryMentor || 'No Mentor Listed',
+                  overallPerformance: hasNewDataStructure ? priorityScore : (docData.overallPerformance || 0),
+                  tasks: docData.typicalTasks || docData.tasksAssigned || 'No Tasks Listed',
+                  training: docData.safetyOrientation ? 'Safety orientation provided' : (docData.trainingProvided || 'No Training Information'),
+                  recommendations: docData.programImprovements || docData.recommendations || 'No Recommendations',
+                  industryMentor: docData.supervisorInCharge || docData.industryMentor || 'No Mentor Listed',
                   program: docData.program || 'No Program Listed',
-                  recommended: docData.recommendToStudents === 'yes' ? true : false,
-                  totalScore: docData.overallPerformance || 0, // Use overallPerformance as totalScore
-                  maxPossibleScore: 10, // Assuming a max score of 10 based on your schema
+                  
+                  // Status and performance indicators
+                  recommended: docData.priorityLevel ? 
+                               docData.priorityLevel !== 'Not Recommended' : 
+                               (docData.recommendToStudents === 'yes' ? true : false),
+                  
+                  totalScore: hasNewDataStructure ? priorityScore : (docData.overallPerformance || 0),
+                  maxPossibleScore: 10, // Keep consistent max score of 10
+                  
+                  // Metadata
                   surveyType: docData.evaluationPeriod === 'MIDTERMS' ? 'midterm' : 'final',
                   schoolYear: schoolYear || "Unknown Year",
-                  semester: semester || "Unknown"
+                  semester: semester || "Unknown",
+                  
+                  // Add a flag to indicate which data structure this is
+                  isNewFormat: hasNewDataStructure
                 };
               } catch (err) {
                 console.error("Error mapping document:", err);
@@ -251,6 +331,7 @@ function OJTAdviser() {
   const getFilteredData = () => {
     const filtered = evaluationsData.filter(evaluation => {
       if (selectedCompany && evaluation.companyName !== selectedCompany) return false;
+      if (selectedPriority && evaluation.priorityLevel !== selectedPriority) return false;
       return true;
     });
 
@@ -260,11 +341,14 @@ function OJTAdviser() {
   const getTotalFilteredCount = () => {
     return evaluationsData.filter(evaluation => {
       if (selectedCompany && evaluation.companyName !== selectedCompany) return false;
+      if (selectedPriority && evaluation.priorityLevel !== selectedPriority) return false;
       return true;
     }).length;
   };
 
   const handleRowClick = (evaluationId) => {
+    // If clicking the same row that's already expanded, close it
+    // Otherwise, close any expanded row and open the clicked one
     setExpandedEvaluation(expandedEvaluation === evaluationId ? null : evaluationId);
   };
 
@@ -362,7 +446,7 @@ function OJTAdviser() {
       <Collapse in={showFilters}>
         <Card sx={{ mb: 3, p: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Evaluation Type</InputLabel>
                 <Select
@@ -375,7 +459,7 @@ function OJTAdviser() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Company</InputLabel>
                 <Select
@@ -387,6 +471,22 @@ function OJTAdviser() {
                   {companies.map((company) => (
                     <MenuItem key={company} value={company}>{company}</MenuItem>
                   ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Priority Level</InputLabel>
+                <Select
+                  value={selectedPriority}
+                  onChange={(e) => setSelectedPriority(e.target.value)}
+                  label="Priority Level"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="High Priority">High Priority</MenuItem>
+                  <MenuItem value="Medium Priority">Medium Priority</MenuItem>
+                  <MenuItem value="Low Priority">Low Priority</MenuItem>
+                  <MenuItem value="Not Recommended">Not Recommended</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -429,7 +529,8 @@ function OJTAdviser() {
               <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Company</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Meeting Date</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Program</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Score</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Priority/Score</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: '#800000' }}>Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -445,48 +546,223 @@ function OJTAdviser() {
                         <KeyboardArrowUp /> : <KeyboardArrowDown />}
                     </IconButton>
                   </TableCell>
-                  <TableCell>{evaluation.companyName}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Apartment sx={{ mr: 1, color: '#800000', fontSize: 20 }} />
+                      {evaluation.companyName}
+                    </Box>
+                  </TableCell>
                   <TableCell>{evaluation.meetingDate}</TableCell>
                   <TableCell>{evaluation.program}</TableCell>
-                  <TableCell>{evaluation.totalScore}/{evaluation.maxPossibleScore}</TableCell>
+                  <TableCell>
+                    {evaluation.isNewFormat ? (
+                      <Chip 
+                        label={evaluation.priorityLevel} 
+                        size="small"
+                        color={
+                          evaluation.priorityLevel === 'High Priority' ? 'success' :
+                          evaluation.priorityLevel === 'Medium Priority' ? 'primary' :
+                          evaluation.priorityLevel === 'Low Priority' ? 'warning' :
+                          'error'
+                        }
+                        sx={{ fontWeight: 'bold' }}
+                      />
+                    ) : (
+                      `${evaluation.totalScore}/${evaluation.maxPossibleScore}`
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {evaluation.recommended ? (
+                      <Chip 
+                        icon={<CheckCircle />} 
+                        label="Recommended" 
+                        size="small" 
+                        color="success"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Chip 
+                        icon={<Cancel />} 
+                        label="Not Recommended" 
+                        size="small" 
+                        color="error"
+                        variant="outlined"
+                      />
+                    )}
+                  </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
                     <Collapse in={expandedEvaluation === evaluation.id} timeout="auto" unmountOnExit>
                       <Box sx={{ margin: 2 }}>
                         <Grid container spacing={2}>
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">Students</Typography>
-                            <Typography>{evaluation.students}</Typography>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Company Information</Typography>
+                            <Typography><strong>Name:</strong> {evaluation.companyName}</Typography>
+                            <Typography><strong>Address:</strong> {evaluation.companyAddress}</Typography>
+                            <Typography><strong>Department:</strong> {evaluation.departmentAssigned}</Typography>
+                            <Typography><strong>Meeting Date:</strong> {evaluation.meetingDate}</Typography>
                           </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">Tasks Assigned</Typography>
-                            <Typography>{evaluation.tasks}</Typography>
+                          
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Supervisor Details</Typography>
+                            <Typography><strong>Supervisor:</strong> {evaluation.supervisorInCharge}</Typography>
+                            <Typography><strong>Contact:</strong> {evaluation.supervisorContact}</Typography>
+                            <Typography><strong>Email:</strong> {evaluation.supervisorEmail}</Typography>
+                            <Typography><strong>Program:</strong> {evaluation.program}</Typography>
                           </Grid>
+                          
                           <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">Training Provided</Typography>
-                            <Typography>{evaluation.training}</Typography>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">Technical Skills</Typography>
-                            <Typography>{evaluation.technicalSkills}</Typography>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">Recommendations</Typography>
-                            <Typography>{evaluation.recommendations}</Typography>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">Industry Mentor</Typography>
-                            <Typography>{evaluation.industryMentor}</Typography>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle1" color="primary">
-                              Recommendation Status
-                            </Typography>
+                            <Divider sx={{ my: 2 }} />
+                            <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Partnership Assessment</Typography>
+                            <Typography><strong>Priority Level:</strong> {evaluation.priorityLevel}</Typography>
                             <Typography color={evaluation.recommended ? 'success.main' : 'error.main'}>
-                              {evaluation.recommended ? 'Recommended' : 'Not Recommended'}
+                              <strong>Recommendation Status:</strong> {evaluation.recommended ? 'Recommended' : 'Not Recommended'}
                             </Typography>
                           </Grid>
+                          
+                          {evaluation.isNewFormat && (
+                            <>
+                              <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Safety Assessment</Typography>
+                                <Typography>
+                                  <strong>Safety Protocols:</strong> {evaluation.safetyProtocols ? '✓' : '✗'}<br />
+                                  <strong>Safety Orientation:</strong> {evaluation.safetyOrientation ? '✓' : '✗'}<br />
+                                  <strong>Emergency Plans:</strong> {evaluation.emergencyPlans ? '✓' : '✗'}<br />
+                                  <strong>No Safety Concerns:</strong> {evaluation.noSafetyConcerns ? '✓' : '✗'}<br />
+                                  <strong>Comments:</strong> {evaluation.safetyComments}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Learning Opportunities</Typography>
+                                <Typography>
+                                  <strong>Relevant Tasks:</strong> {evaluation.relevantTasks ? '✓' : '✗'}<br />
+                                  <strong>Evident Supervision:</strong> {evaluation.supervisionEvident ? '✓' : '✗'}<br />
+                                  <strong>Industry Exposure:</strong> {evaluation.industryExposure ? '✓' : '✗'}<br />
+                                  <strong>Knowledge Application:</strong> {evaluation.knowledgeApplication ? '✓' : '✗'}
+                                </Typography>
+                              </Grid>
+                              
+                              <Grid item xs={12}>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Work Environment</Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} md={6}>
+                                    <Typography>
+                                      <strong>Professional Culture:</strong> {evaluation.professionalCulture ? '✓' : '✗'}<br />
+                                      <strong>Open Communication:</strong> {evaluation.openCommunication ? '✓' : '✗'}
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Typography>
+                                      <strong>Encourages Initiative:</strong> {evaluation.encouragesInitiative ? '✓' : '✗'}<br />
+                                      <strong>No Harassment:</strong> {evaluation.noHarassment ? '✓' : '✗'}
+                                    </Typography>
+                                  </Grid>
+                                </Grid>
+                              </Grid>
+                              
+                              <Grid item xs={12}>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>MOA Compliance</Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} md={6}>
+                                    <Typography>
+                                      <strong>Provided Required Hours:</strong> {evaluation.providedHours ? '✓' : '✗'}<br />
+                                      <strong>Submitted Forms:</strong> {evaluation.submittedForms ? '✓' : '✗'}
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Typography>
+                                      <strong>Attended Orientation:</strong> {evaluation.attendedOrientation ? '✓' : '✗'}<br />
+                                      <strong>Open to Collaboration:</strong> {evaluation.openToCollaboration ? '✓' : '✗'}
+                                    </Typography>
+                                  </Grid>
+                                </Grid>
+                              </Grid>
+                              
+                              <Grid item xs={12}>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="subtitle1" color="primary" sx={{ mb: 1 }}>Interview Responses</Typography>
+                                
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Working Duration:</strong> {evaluation.workingDuration}</Typography>
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Typical Tasks:</strong> {evaluation.typicalTasks}</Typography>
+                                  </Grid>
+                                  
+                                  <Grid item xs={12}>
+                                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Performance Evaluation</Typography>
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Typography><strong>Technical Skills:</strong> {evaluation.technicalSkills}</Typography>
+                                    <Typography><strong>Communication:</strong> {evaluation.communication}</Typography>
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Typography><strong>Professionalism:</strong> {evaluation.professionalism}</Typography>
+                                    <Typography><strong>Adaptability:</strong> {evaluation.adaptability}</Typography>
+                                  </Grid>
+                                  
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Student Preparation:</strong> {evaluation.wellPrepared}</Typography>
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Curriculum Improvements:</strong> {evaluation.curriculumImprovements}</Typography>
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Future Engagements:</strong> {evaluation.futureEngagements}</Typography>
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Hiring Prospects:</strong> {evaluation.hiringProspects}</Typography>
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <Typography><strong>Program Improvements:</strong> {evaluation.programImprovements}</Typography>
+                                  </Grid>
+                                </Grid>
+                              </Grid>
+                            </>
+                          )}
+                          
+                          {/* Legacy format display, show if not new format */}
+                          {!evaluation.isNewFormat && (
+                            <>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">Students</Typography>
+                                <Typography>{evaluation.students}</Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">Tasks Assigned</Typography>
+                                <Typography>{evaluation.tasks}</Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">Training Provided</Typography>
+                                <Typography>{evaluation.training}</Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">Technical Skills</Typography>
+                                <Typography>{evaluation.technicalSkills}</Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">Recommendations</Typography>
+                                <Typography>{evaluation.recommendations}</Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">Industry Mentor</Typography>
+                                <Typography>{evaluation.industryMentor}</Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="subtitle1" color="primary">
+                                  Recommendation Status
+                                </Typography>
+                                <Typography color={evaluation.recommended ? 'success.main' : 'error.main'}>
+                                  {evaluation.recommended ? 'Recommended' : 'Not Recommended'}
+                                </Typography>
+                              </Grid>
+                            </>
+                          )}
                         </Grid>
                       </Box>
                     </Collapse>
