@@ -10,6 +10,7 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { AppBar, Toolbar } from '@mui/material';
 import logo from './assets/wordlogo.png'; 
 import ConcernsSolutions from './components/Dashboards/ConcernsSolutions';
+import OJTAdviser from './components/Analytics/OJTAdviser';
 import { AuthContext, AuthProvider, StudentsContext } from './context/AuthContext';
 import ProtectedRoute from './components/UserHandling/ProtectedRoute';
 import Footer from './components/Layout/Footer';
@@ -18,6 +19,8 @@ import FAQ from './components/FAQ/FAQ';
 import { StudentAnalytics } from './components/Analytics/AnalyticsExport';
 import StudentRankings from './components/Rankings/StudentRankings';
 import AdminRankings from './components/Rankings/AdminRankings';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 
 // Define custom colors for Maroon and Gold
 const maroon = '#800000';
@@ -213,7 +216,7 @@ function MainContent() {
               path="/concerns"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <ConcernsSolutions students={students} />
+                  <ConcernsSolutionsWithTabs />
                 </ProtectedRoute>
               }
             />
@@ -372,6 +375,69 @@ function MainContent() {
 
       {shouldShowFooter() && <Footer />}
     </div>
+  );
+}
+
+// TabPanel component for tab content
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`feedback-tabpanel-${index}`}
+      aria-labelledby={`feedback-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ pt: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
+// ConcernsSolutions with Tabs component
+function ConcernsSolutionsWithTabs() {
+  const [tabValue, setTabValue] = useState(0);
+  const { students } = useContext(StudentsContext);
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  return (
+    <Box sx={{ width: '100%' }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs 
+          value={tabValue} 
+          onChange={handleTabChange} 
+          aria-label="feedback tabs"
+          sx={{
+            '& .MuiTab-root': {
+              fontWeight: 600,
+              '&.Mui-selected': {
+                color: '#800000',
+              },
+            },
+            '& .MuiTabs-indicator': {
+              backgroundColor: '#800000',
+            },
+          }}
+        >
+          <Tab label="Concerns & Solutions" />
+          <Tab label="OJT Partner Evaluations" />
+        </Tabs>
+      </Box>
+      <TabPanel value={tabValue} index={0}>
+        <ConcernsSolutions students={students} />
+      </TabPanel>
+      <TabPanel value={tabValue} index={1}>
+        <OJTAdviser />
+      </TabPanel>
+    </Box>
   );
 }
 

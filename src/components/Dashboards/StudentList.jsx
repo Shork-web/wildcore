@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Chip, Divider } from '@mui/material';
+import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Chip, Divider, List, ListItem, ListItemText, ListItemIcon, RadioGroup, Radio, FormControlLabel } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -19,6 +19,10 @@ import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
+import exportKeysManager from '../../utils/ExportKeysManager';
+import GetAppIcon from '@mui/icons-material/GetApp';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 // Utility function to convert program names to acronyms
 const getProgramAcronym = (program) => {
@@ -622,6 +626,9 @@ function StudentList() {
   const [companies, setCompanies] = useState([]);
   const [visibleKeys, setVisibleKeys] = useState({});
   const [copiedKey, setCopiedKey] = useState(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [keyExportDialogOpen, setKeyExportDialogOpen] = useState(false);
+  const [keyExportType, setKeyExportType] = useState('midterms');
 
   // Toggle visibility of access keys
   const toggleKeyVisibility = (studentId, keyType) => {
@@ -849,6 +856,48 @@ function StudentList() {
     setPage(1); // Reset to first page when searching
   };
 
+  const handleExportClick = () => {
+    setExportDialogOpen(true);
+  };
+
+  const handleCloseExportDialog = () => {
+    setExportDialogOpen(false);
+  };
+
+  const handleKeyExportClick = () => {
+    setExportDialogOpen(false);
+    setKeyExportDialogOpen(true);
+  };
+
+  const handleCloseKeyExportDialog = () => {
+    setKeyExportDialogOpen(false);
+  };
+
+  const handleExportKeys = () => {
+    exportKeysManager.exportKeysToExcel(
+      filteredStudents,
+      keyExportType,
+      keyExportType === 'midterms' ? 'midterms_keys.xlsx' : 'finals_keys.xlsx'
+    );
+    setKeyExportDialogOpen(false);
+  };
+
+  const handleKeyExportTypeChange = (event) => {
+    setKeyExportType(event.target.value);
+  };
+
+  const handleExportStudents = () => {
+    exportManager.exportStudentsToExcel(
+      filteredStudents, 
+      userRole, 
+      'student_interns.xlsx', 
+      'Cebu Institute of Technology - University', // HEI name
+      'N. Bacalso Avenue, Cebu City', // HEI address
+      '2023-2024' // Academic year
+    );
+    setExportDialogOpen(false);
+  };
+
   return (
     <Container 
       maxWidth={false}
@@ -1032,14 +1081,8 @@ function StudentList() {
             <Button 
               variant="contained" 
               color="primary" 
-              onClick={() => exportManager.exportStudentsToExcel(
-                filteredStudents, 
-                userRole, 
-                'student_interns.xlsx', 
-                'Cebu Institute of Technology - University', // HEI name
-                'N. Bacalso Avenue, Cebu City', // HEI address
-                '2023-2024' // Academic year
-              )}
+              onClick={handleExportClick}
+              startIcon={<GetAppIcon />}
               sx={{ 
                 background: 'linear-gradient(45deg, #800000, #FFD700)',
                 '&:hover': {
@@ -1049,7 +1092,7 @@ function StudentList() {
                 whiteSpace: 'nowrap'
               }}
             >
-              Export to Excel
+              Export
             </Button>
           </Box>
         </Box>
@@ -1841,6 +1884,161 @@ function StudentList() {
             }}
           >
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Export Options Dialog */}
+      <Dialog
+        open={exportDialogOpen}
+        onClose={handleCloseExportDialog}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            maxWidth: '400px'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#f8f9fa', 
+          borderBottom: '1px solid #eee',
+          color: '#800000',
+          fontWeight: 'bold'
+        }}>
+          Select Export Format
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2, p: 0 }}>
+          <List>
+            {userRole === 'admin' && (
+              <>
+                <ListItem 
+                  button 
+                  onClick={handleExportStudents}
+                  sx={{ 
+                    py: 2,
+                    '&:hover': { bgcolor: 'rgba(128, 0, 0, 0.04)' }
+                  }}
+                >
+                  <ListItemIcon>
+                    <AssignmentIcon sx={{ color: '#800000' }} />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Standard CHED Report" 
+                    secondary="Exports student information in CHED format"
+                  />
+                </ListItem>
+                <Divider />
+              </>
+            )}
+            <ListItem 
+              button 
+              onClick={handleKeyExportClick}
+              sx={{ 
+                py: 2,
+                '&:hover': { bgcolor: 'rgba(128, 0, 0, 0.04)' }
+              }}
+            >
+              <ListItemIcon>
+                <VpnKeyIcon sx={{ color: '#800000' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Student Keys Table" 
+                secondary="Exports the table with student keys"
+              />
+            </ListItem>
+          </List>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa', borderTop: '1px solid #eee' }}>
+          <Button 
+            onClick={handleCloseExportDialog}
+            sx={{ 
+              color: '#666',
+              '&:hover': { bgcolor: '#f0f0f0' }
+            }}
+          >
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Key Export Options Dialog */}
+      <Dialog
+        open={keyExportDialogOpen}
+        onClose={handleCloseKeyExportDialog}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            maxWidth: '400px'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#f8f9fa', 
+          borderBottom: '1px solid #eee',
+          color: '#800000',
+          fontWeight: 'bold'
+        }}>
+          Select Keys to Export
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2, p: 3 }}>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Choose which student keys you would like to export:
+          </Typography>
+          <RadioGroup
+            value={keyExportType}
+            onChange={handleKeyExportTypeChange}
+          >
+            <FormControlLabel 
+              value="midterms" 
+              control={
+                <Radio 
+                  sx={{
+                    color: '#800000',
+                    '&.Mui-checked': {
+                      color: '#800000',
+                    },
+                  }}
+                />
+              } 
+              label="Midterms Keys Only" 
+            />
+            <FormControlLabel 
+              value="finals" 
+              control={
+                <Radio 
+                  sx={{
+                    color: '#800000',
+                    '&.Mui-checked': {
+                      color: '#800000',
+                    },
+                  }}
+                />
+              } 
+              label="Finals Keys Only" 
+            />
+          </RadioGroup>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa', borderTop: '1px solid #eee' }}>
+          <Button 
+            onClick={handleCloseKeyExportDialog}
+            sx={{ 
+              color: '#666',
+              '&:hover': { bgcolor: '#f0f0f0' }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleExportKeys}
+            variant="contained"
+            sx={{ 
+              bgcolor: '#800000',
+              '&:hover': { bgcolor: '#600000' }
+            }}
+          >
+            Export
           </Button>
         </DialogActions>
       </Dialog>

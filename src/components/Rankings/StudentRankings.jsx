@@ -207,7 +207,7 @@ const findStudentMatch = (survey, studentList) => {
       const nameMatch = studentList.find(s => 
         s.name && s.name.toLowerCase().trim() === surveyName
       );
-      if (nameMatch) return { student: nameMatch, matchType: "name" };
+      if (nameMatch) return { student: nameMatch };
     }
   }
   
@@ -219,7 +219,7 @@ const findStudentMatch = (survey, studentList) => {
         s.section === survey.section && 
         s.program === survey.program
       );
-      if (sectionProgramMatch) return { student: sectionProgramMatch, matchType: "section-program" };
+      if (sectionProgramMatch) return { student: sectionProgramMatch };
     }
     
     // Try section + other identifiers
@@ -228,18 +228,18 @@ const findStudentMatch = (survey, studentList) => {
       ((survey.studentNumber && s.studentNumber === survey.studentNumber) ||
        (survey.email && s.email === survey.email))
     );
-    if (sectionMatch) return { student: sectionMatch, matchType: "section-other" };
+    if (sectionMatch) return { student: sectionMatch };
   }
   
   // Try studentNumber or email match alone
   if (survey.studentNumber) {
     const studentNumberMatch = studentList.find(s => s.studentNumber === survey.studentNumber);
-    if (studentNumberMatch) return { student: studentNumberMatch, matchType: "student-number" };
+    if (studentNumberMatch) return { student: studentNumberMatch };
   }
   
   if (survey.email) {
     const emailMatch = studentList.find(s => s.email === survey.email);
-    if (emailMatch) return { student: emailMatch, matchType: "email" };
+    if (emailMatch) return { student: emailMatch };
   }
   
   // As a last resort, try partial name match (if survey and student have names)
@@ -249,38 +249,37 @@ const findStudentMatch = (survey, studentList) => {
       const partialNameMatch = studentList.find(s => 
         s.name && s.name.toLowerCase().includes(surveyName)
       );
-      if (partialNameMatch) return { student: partialNameMatch, matchType: "partial-name" };
+      if (partialNameMatch) return { student: partialNameMatch };
     }
   }
   
   // No match found
-  return { student: null, matchType: "none" };
+  return { student: null };
 };
 
-// Fetch and calculate student scores
-const fetchStudentScores = async (students) => {
-  try {
-    // Initially set students with just their baseline evaluation scores
-    const studentsWithScores = students.map(student => {
-      // Get baseline evaluation score for initial display
-      const evaluationScore = calculateEvaluationScore(student.evaluation || '');
-      
-      return {
-        ...student,
-        surveyScores: {
-          final: null,
-          midterm: null,
-          all: evaluationScore
-        },
-        evaluationScore: Math.round(evaluationScore * 10) / 10
-      };
-    });
-    
-    return studentsWithScores;
-  } catch (error) {
-    return students;
+// New styled component for the score display
+const ScoreDisplay = styled(Box)(({ theme, score }) => {
+  // Determine text color based on score
+  let textColor = '#757575';
+  
+  if (score >= 7.5) {
+    textColor = '#1976d2'; // Blue text for high scores
+  } else if (score >= 6.0) {
+    textColor = '#2196f3'; // Blue text
+  } else if (score >= 5.5) {
+    textColor = '#757575'; // Gray text
   }
-};
+  
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    padding: '4px 8px',
+    color: textColor,
+    fontWeight: 500,
+  };
+});
 
 function StudentRankings() {
   const theme = useTheme();
@@ -399,7 +398,7 @@ function StudentRankings() {
                   const survey = doc.data();
                   
                   // Find a match using our improved helper function that doesn't rely on IDs
-                  const { student: studentToUse, matchType } = findStudentMatch(survey, initialStudentsList);
+                  const { student: studentToUse } = findStudentMatch(survey, initialStudentsList);
                   
                   if (!studentToUse) {
                     return;
@@ -448,7 +447,7 @@ function StudentRankings() {
                   const survey = doc.data();
                   
                   // Find a match using our improved helper function that doesn't rely on IDs
-                  const { student: studentToUse, matchType } = findStudentMatch(survey, initialStudentsList);
+                  const { student: studentToUse } = findStudentMatch(survey, initialStudentsList);
                   
                   if (!studentToUse) {
                     return;
@@ -964,7 +963,6 @@ function StudentRankings() {
                           {displayedStudents.map((student, index) => {
                             // Get appropriate score based on survey type
                             let displayScore = null;
-                            let scoreColor = 'transparent';
                             
                             // Get score based on the selected survey type and available data
                             if (selectedSurveyType === 'all') {
@@ -983,15 +981,6 @@ function StudentRankings() {
                               displayScore = safeScore(student.evaluationScore || 0);
                             }
                             
-                            // Determine color based on score
-                            if (displayScore !== null) {
-                              if (displayScore >= 8) {
-                                scoreColor = 'gold';
-                              } else if (displayScore >= 6) {
-                                scoreColor = '#ADD8E6';
-                              }
-                            }
-                            
                             return (
                               <StyledTableRow key={student.id} rank={student.rank}>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
@@ -1002,19 +991,12 @@ function StudentRankings() {
                                 <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
                                 <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                                  <Box
-                                    sx={{
-                                      display: 'inline-flex', 
-                                      alignItems: 'center',
-                                      backgroundColor: scoreColor,
-                                      borderRadius: '4px',
-                                      padding: '4px 8px',
-                                    }}
-                                  >
-                                    <Typography>
+                                  <ScoreDisplay score={displayScore}>
+                                    <Typography sx={{ fontSize: '0.875rem', mr: 0.5, color: 'inherit' }}>
                                       {displayScore !== null ? displayScore.toFixed(1) : "0.0"}
                                     </Typography>
-                                  </Box>
+                                    <Star sx={{ fontSize: '0.875rem', color: 'inherit' }} />
+                                  </ScoreDisplay>
                                 </TableCell>
                               </StyledTableRow>
                             );

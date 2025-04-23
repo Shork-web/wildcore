@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../firebase-config';
 import { 
   Grid, Box, Typography, Card, CardContent, FormControl, InputLabel, 
-  Select, MenuItem, Paper, CircularProgress, Chip, Button, Tooltip
+  Select, MenuItem, Paper, CircularProgress, Chip, Button, Tooltip, Divider
 } from '@mui/material';
 import { AuthContext } from '../../context/AuthContext';
 import { keyframes } from '@mui/system';
@@ -1001,6 +1001,27 @@ function StudentAnalytics() {
     return '#fff3e0'; // Light orange
   };
 
+  // Get average rating for a specific metric type
+  const getAverageRating = (metricType) => {
+    const metrics = metricsData[metricType];
+    if (!metrics || metrics.length === 0) return 0;
+    return metrics.reduce((sum, item) => sum + item.rating, 0) / metrics.length;
+  };
+  
+  // Get top metrics for a given data type
+  const getTopMetrics = (metricType) => {
+    const metrics = metricsData[metricType];
+    if (!metrics || metrics.length === 0) return [];
+    return [...metrics].sort((a, b) => b.rating - a.rating).slice(0, metrics.length > 2 ? 2 : metrics.length);
+  };
+  
+  // Get bottom metrics for a given data type
+  const getBottomMetrics = (metricType) => {
+    const metrics = metricsData[metricType];
+    if (!metrics || metrics.length === 0) return [];
+    return [...metrics].sort((a, b) => a.rating - b.rating).slice(0, metrics.length > 2 ? 2 : metrics.length);
+  };
+
   const metricsData = processMetricsData();
   console.log("Processed metrics data:", {
     workAttitudeItems: metricsData.workAttitude.length,
@@ -1079,15 +1100,162 @@ function StudentAnalytics() {
       
       <FilterSection />
       
+      {/* Student Performance Dashboard Summary */}
+      <Card elevation={3} sx={{ mb: 3 }}>
+        <CardContent>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: {xs: 'column', md: 'row'}, 
+            justifyContent: 'space-between',
+            alignItems: {xs: 'flex-start', md: 'center'},
+            mb: 2
+          }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#800000', mb: 0.5 }}>
+                Student Performance Dashboard
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {selectedProgram !== 'all' ? selectedProgram : 'All Programs'} • {selectedYear !== 'all' ? selectedYear : 'All Years'} • {selectedSemester !== 'all' ? `${selectedSemester} Semester` : 'All Semesters'}
+              </Typography>
+            </Box>
+            
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 2, 
+              mt: {xs: 2, md: 0},
+              background: 'rgba(128, 0, 0, 0.03)',
+              p: 1.5,
+              borderRadius: 2,
+              border: '1px solid rgba(128, 0, 0, 0.1)'
+            }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  Work Attitude
+                </Typography>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  color: getRatingColor(getAverageRating('workAttitude'))
+                }}>
+                  {getAverageRating('workAttitude').toFixed(1)}
+                </Typography>
+              </Box>
+              <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(128, 0, 0, 0.1)' }} />
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  Performance
+                </Typography>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  color: getRatingColor(getAverageRating('workPerformance'))
+                }}>
+                  {getAverageRating('workPerformance').toFixed(1)}
+                </Typography>
+              </Box>
+              <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(128, 0, 0, 0.1)' }} />
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  Overall
+                </Typography>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  color: getRatingColor((getAverageRating('workAttitude') + getAverageRating('workPerformance')) / 2)
+                }}>
+                  {((getAverageRating('workAttitude') + getAverageRating('workPerformance')) / 2).toFixed(1)}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Box sx={{ 
+            bgcolor: 'rgba(128, 0, 0, 0.04)', 
+            p: 2, 
+            borderRadius: 2,
+            border: '1px dashed rgba(128, 0, 0, 0.15)'
+          }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="body2" sx={{ fontWeight: 'medium', color: '#800000', mb: 1 }}>
+                  Key Strengths:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {[...getTopMetrics('workAttitude'), ...getTopMetrics('workPerformance')].map((metric, index) => (
+                    <Chip 
+                      key={index}
+                      label={`${metric.aspect} (${metric.rating.toFixed(1)})`}
+                      size="small"
+                      sx={{ 
+                        bgcolor: getRatingBgColor(metric.rating),
+                        color: getRatingColor(metric.rating),
+                        fontWeight: 'medium'
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="body2" sx={{ fontWeight: 'medium', color: '#800000', mb: 1 }}>
+                  Areas for Improvement:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {[...getBottomMetrics('workAttitude'), ...getBottomMetrics('workPerformance')].map((metric, index) => (
+                    <Chip 
+                      key={index}
+                      label={`${metric.aspect} (${metric.rating.toFixed(1)})`}
+                      size="small"
+                      sx={{ 
+                        bgcolor: getRatingBgColor(metric.rating),
+                        color: getRatingColor(metric.rating),
+                        fontWeight: 'medium'
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+        </CardContent>
+      </Card>
+
       {/* Work Attitude Assessment */}
       <Card elevation={3} sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-            Work Attitude Assessment
-          </Typography>
-          <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mb: 2 }}>
-            Evaluation of student behavior, cooperation, and professional conduct
-          </Typography>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: {xs: 'column', sm: 'row'}, 
+            justifyContent: 'space-between',
+            alignItems: {xs: 'flex-start', sm: 'center'},
+            mb: 2
+          }}>
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 0 }}>
+                Work Attitude Assessment
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Evaluation of student behavior, cooperation, and professional conduct
+              </Typography>
+            </Box>
+            <Box sx={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              mt: {xs: 1, sm: 0},
+              bgcolor: getRatingBgColor(getAverageRating('workAttitude')),
+              px: 2,
+              py: 0.5,
+              borderRadius: 2
+            }}>
+              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                Average:
+              </Typography>
+              <Typography variant="h6" sx={{ 
+                fontWeight: 'bold', 
+                color: getRatingColor(getAverageRating('workAttitude'))
+              }}>
+                {getAverageRating('workAttitude').toFixed(1)}
+              </Typography>
+            </Box>
+          </Box>
+          <Divider sx={{ mb: 3 }} />
           
           <Grid container spacing={3}>
             {metricsData.workAttitude.map((metric) => (
@@ -1100,9 +1268,28 @@ function StudentAnalytics() {
                     transition: 'transform 0.2s',
                     '&:hover': {
                       transform: 'translateY(-5px)',
-                    }
+                    },
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
                 >
+                  {metric.rating >= 4.5 && (
+                    <Box 
+                      sx={{ 
+                        position: 'absolute', 
+                        top: 0, 
+                        right: 0, 
+                        bgcolor: '#2e7d32', 
+                        color: 'white',
+                        px: 1,
+                        borderBottomLeftRadius: 4,
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      TOP RATED
+                    </Box>
+                  )}
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
                       <Box sx={{ flex: 1 }}>
@@ -1170,12 +1357,43 @@ function StudentAnalytics() {
       {/* Work Performance Metrics */}
       <Card elevation={3} sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000' }}>
-            Work Performance Metrics
-          </Typography>
-          <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mb: 2 }}>
-            Detailed evaluation of student skills, efficiency, and job-specific performance
-          </Typography>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: {xs: 'column', sm: 'row'}, 
+            justifyContent: 'space-between',
+            alignItems: {xs: 'flex-start', sm: 'center'},
+            mb: 2
+          }}>
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: '#800000', mb: 0 }}>
+                Work Performance Metrics
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Detailed evaluation of student skills, efficiency, and job-specific performance
+              </Typography>
+            </Box>
+            <Box sx={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              mt: {xs: 1, sm: 0},
+              bgcolor: getRatingBgColor(getAverageRating('workPerformance')),
+              px: 2,
+              py: 0.5,
+              borderRadius: 2
+            }}>
+              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                Average:
+              </Typography>
+              <Typography variant="h6" sx={{ 
+                fontWeight: 'bold', 
+                color: getRatingColor(getAverageRating('workPerformance'))
+              }}>
+                {getAverageRating('workPerformance').toFixed(1)}
+              </Typography>
+            </Box>
+          </Box>
+          <Divider sx={{ mb: 3 }} />
 
           <Grid container spacing={3}>
             {metricsData.workPerformance.map((metric) => (
@@ -1188,45 +1406,82 @@ function StudentAnalytics() {
                     transition: 'transform 0.2s',
                     '&:hover': {
                       transform: 'translateY(-5px)',
-                    }
+                    },
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
                 >
+                  {metric.rating >= 4.5 && (
+                    <Box 
+                      sx={{ 
+                        position: 'absolute', 
+                        top: 0, 
+                        right: 0, 
+                        bgcolor: '#2e7d32', 
+                        color: 'white',
+                        px: 1,
+                        borderBottomLeftRadius: 4,
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      TOP RATED
+                    </Box>
+                  )}
                   <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold', flex: 1 }}>
-                        {metric.aspect}
-                      </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="h6" sx={{ color: '#800000', fontWeight: 'bold' }}>
+                          {metric.aspect}
+                        </Typography>
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            color: 'text.secondary',
+                            bgcolor: getRatingBgColor(metric.rating),
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            display: 'inline-block',
+                            mt: 1
+                          }}
+                        >
+                          {metric.category}
+                        </Typography>
+                      </Box>
                       <Typography 
                         variant="h4" 
                         sx={{ 
                           color: getRatingColor(metric.rating),
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
+                          ml: 2
                         }}
                       >
                         {metric.rating.toFixed(1)}
                       </Typography>
                     </Box>
-                    
+
                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                       {metric.description}
                     </Typography>
-                    
+
                     <Box sx={{ 
-                      mt: 2, 
-                      p: 1, 
+                      mt: 'auto',
+                      p: 1,
                       borderRadius: 1,
-                      bgcolor: getRatingBgColor(metric.rating)
+                      bgcolor: getRatingBgColor(metric.rating),
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
                     }}>
                       <Typography variant="caption" sx={{ 
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        color: getRatingColor(metric.rating)
+                        color: getRatingColor(metric.rating),
+                        fontWeight: 'bold'
                       }}>
-                        <span>Category: {metric.category}</span>
-                        <span>
-                          {getRatingText(metric.rating)}
-                        </span>
+                        {getRatingText(metric.rating)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        out of 5.0
                       </Typography>
                     </Box>
                   </CardContent>
