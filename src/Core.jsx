@@ -159,7 +159,7 @@ function MainContent() {
                 Students
               </Button>
               <Button color="inherit" component={Link} to="/concerns">
-                Concerns & Solutions
+                Evaluation
               </Button>
               <Button color="inherit" component={Link} to="/analytics">
                 Analytics

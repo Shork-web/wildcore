@@ -15,8 +15,7 @@ import {
   useTheme,
   useMediaQuery,
   AppBar,
-  Toolbar,
-  keyframes
+  Toolbar
 } from '@mui/material';
 import { Email } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
@@ -26,16 +25,6 @@ import '../../css/login.css';
 import citlogo from '../../assets/citlogo.png';
 import wordlogo from '../../assets/wordlogo.png';
 import bgImage from '../../assets/bg.jpg';
-
-// Define the rotation animation
-const rotate = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-`;
 
 const auth = getAuth(app);
 
@@ -244,7 +233,6 @@ export default function ForgotPassword() {
           left: isMobile ? '-60px' : '-80px',
           opacity: 0.8,
           zIndex: 0,
-          animation: `${rotate} 20s linear infinite`,
           transform: isMobile ? 'scale(0.7)' : 'scale(1)',
           transition: 'transform 0.3s ease-in-out',
           pointerEvents: 'none',

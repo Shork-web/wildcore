@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { AppBar, Toolbar, Container, Box, useTheme, useMediaQuery,keyframes } from '@mui/material';
+import { AppBar, Toolbar, Container, Box, useTheme, useMediaQuery } from '@mui/material';
 import Login from './login.component';
 import SignUp from './signup.component';
 import ForgotPassword from './forgotpw.component';
@@ -59,16 +59,6 @@ const styles = {
   }
 };
 
-// Animation
-const rotate = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-`;
-
 function BackgroundLogo({ isMobile }) {
   const location = useLocation();
   const validRoutes = ['/sign-in', '/sign-up', '/forgot-password', '/'];
@@ -84,7 +74,6 @@ function BackgroundLogo({ isMobile }) {
         left: { xs: '-60px', sm: '-70px', md: '-80px' },
         opacity: 0.5,
         zIndex: 0,
-        animation: `${rotate} 20s linear infinite`,
         transition: 'all 0.3s ease-in-out',
         pointerEvents: 'none',
         width: { xs: '200px', sm: '300px', md: '400px' },

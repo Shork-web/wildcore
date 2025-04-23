@@ -130,7 +130,7 @@ function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardManager] = useState(() => new DashboardManager());
   const [error, setError] = useState(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [, setRefreshTrigger] = useState(0);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -316,13 +316,12 @@ function AdminDashboard() {
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
+            textAlign: 'center',
+            width: '100%',
+            display: 'block'
           }}
         >
-          Students Overview {refreshTrigger > 0 && 
-            <Typography component="span" variant="caption" sx={{ fontSize: '0.5em', verticalAlign: 'top', opacity: 0.8 }}>
-              (Last update: {dashboardManager.lastUpdate?.toLocaleTimeString() || 'Never'})
-            </Typography>
-          }
+          Students Overview
         </Typography>
 
         <Grid container spacing={2}>
