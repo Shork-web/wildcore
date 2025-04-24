@@ -23,7 +23,9 @@ import {
   Stack,
   Pagination,
   Divider,
-  Chip
+  Chip,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import { 
   KeyboardArrowDown,
@@ -31,7 +33,8 @@ import {
   FilterList,
   CheckCircle,
   Cancel,
-  Apartment
+  Apartment,
+  Search
 } from '@mui/icons-material';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase-config';
@@ -60,6 +63,7 @@ function OJTAdviser() {
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedSurveyType, setSelectedSurveyType] = useState('midterm');
   const [selectedPriority, setSelectedPriority] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [companies, setCompanies] = useState([]);
   const [evaluationsData, setEvaluationsData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -328,10 +332,41 @@ function OJTAdviser() {
     setPage(newPage);
   };
 
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
+    // Reset to first page whenever search changes
+    setPage(1);
+  };
+
   const getFilteredData = () => {
     const filtered = evaluationsData.filter(evaluation => {
+      // Apply company filter
       if (selectedCompany && evaluation.companyName !== selectedCompany) return false;
+      
+      // Apply priority filter
       if (selectedPriority && evaluation.priorityLevel !== selectedPriority) return false;
+      
+      // Apply search filter - search across multiple fields
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase().trim();
+        const searchableFields = [
+          evaluation.companyName,
+          evaluation.companyAddress,
+          evaluation.departmentAssigned,
+          evaluation.supervisorInCharge,
+          evaluation.supervisorEmail,
+          evaluation.program,
+          evaluation.students,
+          evaluation.typicalTasks,
+          evaluation.programImprovements,
+          evaluation.priorityLevel
+        ];
+        
+        return searchableFields.some(field => 
+          field && typeof field === 'string' && field.toLowerCase().includes(query)
+        );
+      }
+      
       return true;
     });
 
@@ -340,8 +375,33 @@ function OJTAdviser() {
 
   const getTotalFilteredCount = () => {
     return evaluationsData.filter(evaluation => {
+      // Apply company filter
       if (selectedCompany && evaluation.companyName !== selectedCompany) return false;
+      
+      // Apply priority filter
       if (selectedPriority && evaluation.priorityLevel !== selectedPriority) return false;
+      
+      // Apply search filter - search across multiple fields
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase().trim();
+        const searchableFields = [
+          evaluation.companyName,
+          evaluation.companyAddress,
+          evaluation.departmentAssigned,
+          evaluation.supervisorInCharge,
+          evaluation.supervisorEmail,
+          evaluation.program,
+          evaluation.students,
+          evaluation.typicalTasks,
+          evaluation.programImprovements,
+          evaluation.priorityLevel
+        ];
+        
+        return searchableFields.some(field => 
+          field && typeof field === 'string' && field.toLowerCase().includes(query)
+        );
+      }
+      
       return true;
     }).length;
   };
@@ -350,6 +410,38 @@ function OJTAdviser() {
     // If clicking the same row that's already expanded, close it
     // Otherwise, close any expanded row and open the clicked one
     setExpandedEvaluation(expandedEvaluation === evaluationId ? null : evaluationId);
+  };
+
+  // Function to highlight search text in strings
+  const highlightSearchText = (text, searchTerm) => {
+    if (!searchTerm || !text) return text;
+    
+    const searchTermLower = searchTerm.toLowerCase().trim();
+    if (!searchTermLower) return text;
+    
+    try {
+      const textStr = String(text);
+      const index = textStr.toLowerCase().indexOf(searchTermLower);
+      
+      if (index === -1) return textStr;
+      
+      const before = textStr.substring(0, index);
+      const match = textStr.substring(index, index + searchTermLower.length);
+      const after = textStr.substring(index + searchTermLower.length);
+      
+      return (
+        <>
+          {before}
+          <span style={{ backgroundColor: 'rgba(255, 215, 0, 0.4)', fontWeight: 'bold' }}>
+            {match}
+          </span>
+          {after}
+        </>
+      );
+    } catch (err) {
+      console.error("Error highlighting text:", err);
+      return text;
+    }
   };
 
   if (loading) {
@@ -433,15 +525,111 @@ function OJTAdviser() {
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#800000' }}>
           OJT Partner Evaluations ({selectedSurveyType === 'midterm' ? 'Midterm' : 'Final'})
         </Typography>
-        <Button
-          startIcon={<FilterList />}
-          onClick={() => setShowFilters(!showFilters)}
-          variant={showFilters ? "contained" : "outlined"}
-          color="primary"
-        >
-          Filters
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Search evaluations..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            sx={{ 
+              minWidth: 250,
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: '#800000',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#800000',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#800000',
+                },
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search sx={{ color: '#800000' }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton 
+                    edge="end" 
+                    onClick={() => {
+                      setSearchQuery('');
+                      setPage(1);
+                    }}
+                    size="small"
+                    aria-label="clear search"
+                  >
+                    <Cancel fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          <Button
+            startIcon={<FilterList />}
+            onClick={() => setShowFilters(!showFilters)}
+            variant={showFilters ? "contained" : "outlined"}
+            color="primary"
+          >
+            Filters
+          </Button>
+        </Box>
       </Box>
+
+      {/* Search and filter indicators */}
+      {(searchQuery || selectedCompany || selectedPriority) && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+          {searchQuery && (
+            <Chip 
+              label={`Search: "${searchQuery}"`}
+              onDelete={() => {
+                setSearchQuery('');
+                setPage(1);
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {selectedCompany && (
+            <Chip 
+              label={`Company: ${selectedCompany}`}
+              onDelete={() => {
+                setSelectedCompany('');
+                setPage(1);
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {selectedPriority && (
+            <Chip 
+              label={`Priority: ${selectedPriority}`}
+              onDelete={() => {
+                setSelectedPriority('');
+                setPage(1);
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {(searchQuery || selectedCompany || selectedPriority) && (
+            <Chip 
+              label="Clear All Filters"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCompany('');
+                setSelectedPriority('');
+                setPage(1);
+              }}
+              variant="outlined"
+              size="small"
+            />
+          )}
+        </Box>
+      )}
 
       <Collapse in={showFilters}>
         <Card sx={{ mb: 3, p: 2 }}>
@@ -549,11 +737,15 @@ function OJTAdviser() {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Apartment sx={{ mr: 1, color: '#800000', fontSize: 20 }} />
-                      {evaluation.companyName}
+                      {searchQuery ? 
+                        highlightSearchText(evaluation.companyName, searchQuery) : 
+                        evaluation.companyName}
                     </Box>
                   </TableCell>
                   <TableCell>{evaluation.meetingDate}</TableCell>
-                  <TableCell>{evaluation.program}</TableCell>
+                  <TableCell>{searchQuery ? 
+                    highlightSearchText(evaluation.program, searchQuery) : 
+                    evaluation.program}</TableCell>
                   <TableCell>
                     {evaluation.isNewFormat ? (
                       <Chip 
@@ -783,7 +975,9 @@ function OJTAdviser() {
       }}>
         <Stack spacing={2} alignItems="center" direction="row">
           <Typography variant="body2" color="text.secondary">
-            {`${totalFilteredCount} total entries`}
+            {searchQuery ? 
+              `${totalFilteredCount} results for "${searchQuery}"` : 
+              `${totalFilteredCount} total entries`}
           </Typography>
           <Pagination
             count={Math.ceil(totalFilteredCount / rowsPerPage)}
@@ -807,7 +1001,7 @@ function OJTAdviser() {
             }}
           />
           <Typography variant="body2" color="text.secondary">
-            {`Page ${page} of ${Math.ceil(totalFilteredCount / rowsPerPage)}`}
+            {`Page ${page} of ${Math.max(1, Math.ceil(totalFilteredCount / rowsPerPage))}`}
           </Typography>
         </Stack>
       </Box>
@@ -818,7 +1012,9 @@ function OJTAdviser() {
           align="center" 
           sx={{ mt: 4, color: 'text.secondary' }}
         >
-          No evaluations found for the selected filters.
+          {searchQuery ? 
+            `No evaluations found matching "${searchQuery}". Try a different search term.` : 
+            'No evaluations found for the selected filters.'}
         </Typography>
       )}
     </Container>

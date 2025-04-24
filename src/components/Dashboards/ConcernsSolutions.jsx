@@ -18,7 +18,12 @@ import {
   Collapse,
   IconButton,
   Card,
-  Button
+  Button,
+  TextField,
+  InputAdornment,
+  Stack,
+  Pagination,
+  Chip
 } from '@mui/material';
 import { 
   Warning, 
@@ -28,7 +33,9 @@ import {
   KeyboardArrowDown,
   KeyboardArrowUp,
   FilterList,
-  Clear
+  Clear,
+  Search,
+  Cancel
 } from '@mui/icons-material';
 import { db } from '../../firebase-config';
 import { collection, query, onSnapshot } from 'firebase/firestore';
@@ -42,11 +49,13 @@ class ConcernsManager {
       semester: 'All',
       schoolYear: 'All'
     };
+    this._searchQuery = '';
   }
 
   // Getters
   get students() { return [...this._students]; }
   get filters() { return { ...this._filters }; }
+  get searchQuery() { return this._searchQuery; }
   
   // Get unique values for filters
   get programs() { return ['All', ...new Set(this._students.map(student => student.program))]; }
@@ -63,6 +72,10 @@ class ConcernsManager {
     this._students = [...data];
   }
 
+  set searchQuery(query) {
+    this._searchQuery = query;
+  }
+
   // Methods
   setFilter(type, value) {
     if (type in this._filters) {
@@ -74,6 +87,7 @@ class ConcernsManager {
     Object.keys(this._filters).forEach(key => {
       this._filters[key] = 'All';
     });
+    this._searchQuery = '';
   }
 
   getFilteredStudents() {
@@ -89,6 +103,22 @@ class ConcernsManager {
       if (this._filters.semester !== 'All' && student.semester !== this._filters.semester) return false;
       if (this._filters.schoolYear !== 'All' && student.schoolYear !== this._filters.schoolYear) return false;
       
+      // Apply search filter
+      if (this._searchQuery) {
+        const query = this._searchQuery.toLowerCase().trim();
+        const searchFields = [
+          student.name,
+          student.program,
+          student.concerns,
+          student.solutions,
+          student.recommendations,
+          student.evaluation
+        ];
+        return searchFields.some(field => 
+          field && typeof field === 'string' && field.toLowerCase().includes(query)
+        );
+      }
+      
       return true;
     });
   }
@@ -99,7 +129,11 @@ function ConcernsSolutions() {
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState(null);
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [, forceUpdate] = useState();
+  
+  const ITEMS_PER_PAGE = 50;
 
   useEffect(() => {
     const q = query(collection(db, 'studentData'));
@@ -123,16 +157,31 @@ function ConcernsSolutions() {
 
   const handleFilterChange = (type, value) => {
     concernsManager.setFilter(type, value);
+    setPage(1); // Reset to first page when filter changes
     forceUpdate({});
   };
 
   const resetFilters = () => {
     concernsManager.resetFilters();
+    setSearchQuery('');
+    setPage(1);
     forceUpdate({});
   };
 
   const handleRowClick = (studentId) => {
     setExpandedStudent(expandedStudent === studentId ? null : studentId);
+  };
+
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchQuery(value);
+    concernsManager.searchQuery = value;
+    setPage(1); // Reset to first page when search changes
+    forceUpdate({});
+  };
+
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
   };
 
   const StatusIcon = ({ type }) => {
@@ -145,6 +194,38 @@ function ConcernsSolutions() {
     return icons[type] || null;
   };
 
+  // Function to highlight search text in strings
+  const highlightSearchText = (text, searchTerm) => {
+    if (!searchTerm || !text) return text;
+    
+    const searchTermLower = searchTerm.toLowerCase().trim();
+    if (!searchTermLower) return text;
+    
+    try {
+      const textStr = String(text);
+      const index = textStr.toLowerCase().indexOf(searchTermLower);
+      
+      if (index === -1) return textStr;
+      
+      const before = textStr.substring(0, index);
+      const match = textStr.substring(index, index + searchTermLower.length);
+      const after = textStr.substring(index + searchTermLower.length);
+      
+      return (
+        <>
+          {before}
+          <span style={{ backgroundColor: 'rgba(255, 215, 0, 0.4)', fontWeight: 'bold' }}>
+            {match}
+          </span>
+          {after}
+        </>
+      );
+    } catch (err) {
+      console.error("Error highlighting text:", err);
+      return text;
+    }
+  };
+
   if (error) {
     return (
       <Box sx={{ p: 3, color: 'error.main' }}>
@@ -153,7 +234,12 @@ function ConcernsSolutions() {
     );
   }
 
-  const filteredStudents = concernsManager.getFilteredStudents();
+  const allFilteredStudents = concernsManager.getFilteredStudents();
+  
+  // Apply pagination
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const paginatedStudents = allFilteredStudents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(allFilteredStudents.length / ITEMS_PER_PAGE);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -170,7 +256,51 @@ function ConcernsSolutions() {
         >
           Concerns & Solutions
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            sx={{ 
+              minWidth: 250,
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: '#800000',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#800000',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#800000',
+                },
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search sx={{ color: '#800000' }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton 
+                    edge="end" 
+                    onClick={() => {
+                      setSearchQuery('');
+                      concernsManager.searchQuery = '';
+                      setPage(1);
+                      forceUpdate({});
+                    }}
+                    size="small"
+                    aria-label="clear search"
+                  >
+                    <Cancel fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
           <Button
             startIcon={<FilterList />}
             onClick={() => setShowFilters(!showFilters)}
@@ -215,13 +345,13 @@ function ConcernsSolutions() {
                 const academicYear = `${currentYear-1}-${currentYear}`;
                 
                 // Get HEI information from the first student or use defaults
-                const heiName = filteredStudents.length > 0 && filteredStudents[0].college 
-                  ? filteredStudents[0].college 
+                const heiName = allFilteredStudents.length > 0 && allFilteredStudents[0].college 
+                  ? allFilteredStudents[0].college 
                   : 'Cebu Institute of Technology - University';
                 const heiAddress = 'N. Bacalso Avenue, Cebu City';
                 
                 exportManager.exportConcernsToExcel(
-                  filteredStudents,
+                  allFilteredStudents,
                   'concerns_solutions.xlsx',
                   heiName,
                   heiAddress,
@@ -243,6 +373,63 @@ function ConcernsSolutions() {
           </Button>
         </Box>
       </Box>
+
+      {/* Search and filter indicators */}
+      {(searchQuery || concernsManager.activeFiltersCount > 0) && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+          {searchQuery && (
+            <Chip 
+              label={`Search: "${searchQuery}"`}
+              onDelete={() => {
+                setSearchQuery('');
+                concernsManager.searchQuery = '';
+                setPage(1);
+                forceUpdate({});
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {concernsManager.filters.program !== 'All' && (
+            <Chip 
+              label={`Program: ${concernsManager.filters.program}`}
+              onDelete={() => {
+                handleFilterChange('program', 'All');
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {concernsManager.filters.semester !== 'All' && (
+            <Chip 
+              label={`Semester: ${concernsManager.filters.semester}`}
+              onDelete={() => {
+                handleFilterChange('semester', 'All');
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {concernsManager.filters.schoolYear !== 'All' && (
+            <Chip 
+              label={`Year: ${concernsManager.filters.schoolYear}`}
+              onDelete={() => {
+                handleFilterChange('schoolYear', 'All');
+              }}
+              color="primary"
+              size="small"
+            />
+          )}
+          {(searchQuery || concernsManager.activeFiltersCount > 0) && (
+            <Chip 
+              label="Clear All"
+              onClick={resetFilters}
+              variant="outlined"
+              size="small"
+            />
+          )}
+        </Box>
+      )}
 
       <Collapse in={showFilters}>
         <Card 
@@ -340,7 +527,7 @@ function ConcernsSolutions() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredStudents.map((student) => (
+            {paginatedStudents.map((student) => (
               <React.Fragment key={student.id}>
                 <TableRow 
                   sx={{ 
@@ -354,8 +541,12 @@ function ConcernsSolutions() {
                       {expandedStudent === student.id ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
                     </IconButton>
                   </TableCell>
-                  <TableCell>{student.name}</TableCell>
-                  <TableCell>{student.program}</TableCell>
+                  <TableCell>
+                    {searchQuery ? highlightSearchText(student.name, searchQuery) : student.name}
+                  </TableCell>
+                  <TableCell>
+                    {searchQuery ? highlightSearchText(student.program, searchQuery) : student.program}
+                  </TableCell>
                   <TableCell>{student.schoolYear}</TableCell>
                   <TableCell>{student.semester}</TableCell>
                 </TableRow>
@@ -369,7 +560,9 @@ function ConcernsSolutions() {
                               <StatusIcon type="concerns" />
                               <Typography color="#f57c00" variant="subtitle1">Concerns</Typography>
                             </Box>
-                            <Typography variant="body2" sx={{ pl: 4 }}>{student.concerns}</Typography>
+                            <Typography variant="body2" sx={{ pl: 4 }}>
+                              {searchQuery ? highlightSearchText(student.concerns, searchQuery) : student.concerns}
+                            </Typography>
                           </Box>
                         )}
                         {student.solutions && (
@@ -378,7 +571,9 @@ function ConcernsSolutions() {
                               <StatusIcon type="solutions" />
                               <Typography color="#388e3c" variant="subtitle1">Solutions</Typography>
                             </Box>
-                            <Typography variant="body2" sx={{ pl: 4 }}>{student.solutions}</Typography>
+                            <Typography variant="body2" sx={{ pl: 4 }}>
+                              {searchQuery ? highlightSearchText(student.solutions, searchQuery) : student.solutions}
+                            </Typography>
                           </Box>
                         )}
                         {student.recommendations && (
@@ -387,7 +582,9 @@ function ConcernsSolutions() {
                               <StatusIcon type="recommendations" />
                               <Typography color="#1976d2" variant="subtitle1">Recommendations</Typography>
                             </Box>
-                            <Typography variant="body2" sx={{ pl: 4 }}>{student.recommendations}</Typography>
+                            <Typography variant="body2" sx={{ pl: 4 }}>
+                              {searchQuery ? highlightSearchText(student.recommendations, searchQuery) : student.recommendations}
+                            </Typography>
                           </Box>
                         )}
                         {student.evaluation && (
@@ -396,7 +593,9 @@ function ConcernsSolutions() {
                               <StatusIcon type="evaluation" />
                               <Typography color="#800000" variant="subtitle1">Evaluation</Typography>
                             </Box>
-                            <Typography variant="body2" sx={{ pl: 4 }}>{student.evaluation}</Typography>
+                            <Typography variant="body2" sx={{ pl: 4 }}>
+                              {searchQuery ? highlightSearchText(student.evaluation, searchQuery) : student.evaluation}
+                            </Typography>
                           </Box>
                         )}
                       </Box>
@@ -409,14 +608,59 @@ function ConcernsSolutions() {
         </Table>
       </TableContainer>
 
-      {filteredStudents.length === 0 && (
+      {allFilteredStudents.length === 0 ? (
         <Typography 
           variant="body1" 
           align="center" 
           sx={{ mt: 4, color: 'text.secondary' }}
         >
-          No concerns or solutions found for the selected filters.
+          {searchQuery ? 
+            `No concerns or solutions found matching "${searchQuery}".` : 
+            'No concerns or solutions found for the selected filters.'}
         </Typography>
+      ) : (
+        <Box sx={{ 
+          mt: 3, 
+          display: 'flex', 
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <Stack spacing={2} alignItems="center" direction="row">
+            <Typography variant="body2" color="text.secondary">
+              {searchQuery ? 
+                `${allFilteredStudents.length} results found` : 
+                `${allFilteredStudents.length} total entries`}
+            </Typography>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={handlePageChange}
+              color="primary"
+              size="medium"
+              showFirstButton 
+              showLastButton
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  color: '#800000',
+                  '&.Mui-selected': {
+                    backgroundColor: '#800000',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: '#600000',
+                    },
+                  },
+                  '&:hover': {
+                    backgroundColor: 'rgba(128, 0, 0, 0.1)',
+                  },
+                },
+              }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {`Page ${page} of ${Math.max(1, totalPages)}`}
+            </Typography>
+          </Stack>
+        </Box>
       )}
     </Container>
   );
