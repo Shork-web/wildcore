@@ -18,6 +18,13 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../../firebase-config';
@@ -35,6 +42,9 @@ import {
   ContactMail,
   VpnKey,
   Refresh,
+  FactCheck,
+  CheckCircle,
+  Cancel,
 } from '@mui/icons-material';
 
 const maroon = '#800000';
@@ -248,6 +258,82 @@ const SubmitButton = styled(Button)(({ theme }) => ({
     transform: 'translateY(1px)',
     boxShadow: '0 4px 15px 0 rgba(128, 0, 0, 0.35)',
   }
+}));
+
+// Dialog styles
+const ReviewDialog = styled(Dialog)(({ theme }) => ({
+  '& .MuiDialog-paper': {
+    borderRadius: '16px',
+    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+    overflow: 'hidden',
+    maxWidth: '600px',
+    width: '100%',
+  },
+}));
+
+const ReviewDialogTitle = styled(DialogTitle)(({ theme }) => ({
+  background: `linear-gradient(135deg, ${maroon} 0%, #B22222 100%)`,
+  color: 'white',
+  padding: theme.spacing(2, 3),
+  fontWeight: 600,
+  fontSize: '1.25rem',
+  display: 'flex',
+  alignItems: 'center',
+  '& svg': {
+    marginRight: theme.spacing(1.5),
+    fontSize: '1.5rem',
+  }
+}));
+
+const ReviewSection = styled(Box)(({ theme }) => ({
+  margin: theme.spacing(1.5, 0),
+  padding: theme.spacing(1.5),
+  backgroundColor: 'rgba(0, 0, 0, 0.02)',
+  borderRadius: '8px',
+  border: '1px solid rgba(0, 0, 0, 0.05)',
+}));
+
+const ReviewSectionTitle = styled(Typography)(({ theme }) => ({
+  fontSize: '0.95rem',
+  fontWeight: 600,
+  color: maroon,
+  marginBottom: theme.spacing(1),
+  display: 'flex',
+  alignItems: 'center',
+  '& svg': {
+    marginRight: theme.spacing(0.75),
+    fontSize: '1.1rem',
+  }
+}));
+
+const ReviewListItem = styled(ListItem)(({ theme }) => ({
+  padding: theme.spacing(0.5, 0),
+  '& .MuiListItemText-primary': {
+    fontSize: '0.875rem',
+    fontWeight: 500,
+    color: 'rgba(0, 0, 0, 0.7)',
+  },
+  '& .MuiListItemText-secondary': {
+    fontSize: '0.95rem',
+    fontWeight: 400,
+    color: 'rgba(0, 0, 0, 0.9)',
+  },
+}));
+
+const ActionButton = styled(Button)(({ theme, color }) => ({
+  borderRadius: 30,
+  padding: theme.spacing(1, 3),
+  boxShadow: color === 'primary' 
+    ? '0 4px 12px rgba(128, 0, 0, 0.2)' 
+    : '0 4px 12px rgba(0, 0, 0, 0.1)',
+  fontWeight: 600,
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    boxShadow: color === 'primary' 
+      ? '0 6px 16px rgba(128, 0, 0, 0.3)' 
+      : '0 6px 16px rgba(0, 0, 0, 0.15)',
+    transform: 'translateY(-2px)',
+  },
 }));
 
 class Student {
@@ -537,6 +623,9 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     };
   });
 
+  // Add new state for review dialog
+  const [openReviewDialog, setOpenReviewDialog] = useState(false);
+
   // Fetch user's college information from Firestore
   useEffect(() => {
     const fetchUserCollege = async () => {
@@ -653,9 +742,46 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     });
   };
 
+  // Function to format dates for display
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    
+    try {
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }).format(date);
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // Modified handleSubmit to show review dialog first
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    try {
+      // Validate the data before showing the review dialog
+      formData.validate();
+      
+      // Show review dialog instead of immediately submitting
+      setOpenReviewDialog(true);
+    } catch (error) {
+      console.error('Validation error:', error);
+      if (!disableSnackbar) {
+        setSnackbarMessage('Error: ' + error.message);
+        setSnackbarSeverity('error');
+        setOpenSnackbar(true);
+      }
+    }
+  };
+
+  // New function to handle actual submission after review confirmation
+  const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
+    setOpenReviewDialog(false);
 
     try {
       if (!auth.currentUser) {
@@ -669,8 +795,6 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
 
       const userData = userDoc.data();
       
-      formData.validate();
-
       const studentData = {
         ...formData.getAllData(),
         college: userData.college,
@@ -1232,6 +1356,157 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
           </Box>
         </Box>
       </CardContent>
+
+      {/* Add Review Dialog */}
+      <ReviewDialog
+        open={openReviewDialog}
+        onClose={() => setOpenReviewDialog(false)}
+        aria-labelledby="review-dialog-title"
+        maxWidth="md"
+      >
+        <ReviewDialogTitle id="review-dialog-title">
+          <FactCheck /> Review Student Information
+        </ReviewDialogTitle>
+        <DialogContent dividers>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500, mb: 2 }}>
+            Please review the following information before submitting:
+          </Typography>
+          
+          <ReviewSection>
+            <ReviewSectionTitle>
+              <Person /> Personal Information
+            </ReviewSectionTitle>
+            <List dense disablePadding>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Full Name" 
+                  secondary={formData.name || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Gender" 
+                  secondary={formData.gender || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Email Address" 
+                  secondary={formData.email || 'N/A'} 
+                />
+              </ReviewListItem>
+            </List>
+          </ReviewSection>
+          
+          <ReviewSection>
+            <ReviewSectionTitle>
+              <School /> Academic Information
+            </ReviewSectionTitle>
+            <List dense disablePadding>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Program" 
+                  secondary={formData.program || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Semester" 
+                  secondary={formData.semester || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="School Year" 
+                  secondary={formData.schoolYear || 'N/A'} 
+                />
+              </ReviewListItem>
+            </List>
+          </ReviewSection>
+          
+          <ReviewSection>
+            <ReviewSectionTitle>
+              <Business /> Internship Information
+            </ReviewSectionTitle>
+            <List dense disablePadding>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Partner Company" 
+                  secondary={formData.partnerCompany || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Contact Person" 
+                  secondary={formData.contactPerson || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Location" 
+                  secondary={formData.location || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Internship Email" 
+                  secondary={formData.internshipEmail || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Start Date" 
+                  secondary={formatDate(formData.startDate) || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="End Date" 
+                  secondary={formatDate(formData.endDate) || 'N/A'} 
+                />
+              </ReviewListItem>
+            </List>
+          </ReviewSection>
+          
+          <ReviewSection>
+            <ReviewSectionTitle>
+              <VpnKey /> Access Keys
+            </ReviewSectionTitle>
+            <List dense disablePadding>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Midterms Access Key" 
+                  secondary={formData.midtermsKey || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Finals Access Key" 
+                  secondary={formData.finalsKey || 'N/A'} 
+                />
+              </ReviewListItem>
+            </List>
+          </ReviewSection>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, justifyContent: 'center', gap: 2 }}>
+          <ActionButton 
+            variant="outlined" 
+            onClick={() => setOpenReviewDialog(false)} 
+            startIcon={<Cancel />}
+          >
+            Go Back & Edit
+          </ActionButton>
+          <ActionButton 
+            variant="contained" 
+            color="primary" 
+            onClick={handleConfirmSubmit} 
+            startIcon={<CheckCircle />}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
+          </ActionButton>
+        </DialogActions>
+      </ReviewDialog>
 
       {!disableSnackbar && (
         <Snackbar
