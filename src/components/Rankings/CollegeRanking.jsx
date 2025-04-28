@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Typography, 
   Box, 
@@ -20,7 +20,6 @@ import { styled } from '@mui/system';
 import { Business, EmojiEvents, School } from '@mui/icons-material';
 import { db } from '../../firebase-config';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { AuthContext } from '../../context/AuthContext';
 import { keyframes } from '@mui/system';
 
 // Define rotation animations
@@ -128,11 +127,13 @@ const ProgressBar = styled(LinearProgress)(({ theme, value, rank }) => ({
   }
 }));
 
-function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeFilter = 'all' }) {
+function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, surveyTypeFilter = 'all' }) {
+  // Always set collegeFilter to 'All' to show all colleges regardless of what was passed
+  collegeFilter = 'All';
+  
   const [loading, setLoading] = useState(true);
   const [collegeStats, setCollegeStats] = useState([]);
   const [error, setError] = useState(null);
-  const { currentUser } = useContext(AuthContext);
 
   // Helper function to normalize semester values - same as in StudentRankings
   const normalizeSemester = (semester) => {
@@ -180,29 +181,29 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeF
         // Set up real-time listeners for both collections
         console.log("Setting up real-time listeners for college rankings");
         
-        // Create a listener for final survey collection
+        // Create a listener for final survey collection without any filters
         const finalSurveysRef = collection(db, 'studentSurveys_final');
         finalSurveyUnsubscribe = onSnapshot(finalSurveysRef, (finalSnapshot) => {
           console.log(`Received update from final surveys: ${finalSnapshot.docs.length} documents`);
           
           // Process final surveys
-        const finalSurveys = finalSnapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id,
-          surveyType: 'final'
-        }));
+          const finalSurveys = finalSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            surveyType: 'final'
+          }));
         
-          // Create a listener for midterm survey collection
+          // Create a listener for midterm survey collection without any filters
           const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
           midtermSurveyUnsubscribe = onSnapshot(midtermSurveysRef, (midtermSnapshot) => {
             console.log(`Received update from midterm surveys: ${midtermSnapshot.docs.length} documents`);
             
             // Process midterm surveys
-        const midtermSurveys = midtermSnapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id,
-          surveyType: 'midterm'
-        }));
+            const midtermSurveys = midtermSnapshot.docs.map(doc => ({
+              ...doc.data(),
+              id: doc.id,
+              surveyType: 'midterm'
+            }));
         
             // Initialize a map to track unique students with their scores
             const studentMap = new Map();
@@ -369,7 +370,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeF
               };
             });
             
-            // Filter students based on selected filters
+            // Filter students based on selected filters BUT IGNORE COLLEGE FILTER
             let filteredStudents = Array.from(studentMap.values()).map(data => data.student);
             
             // Apply survey type filter if specified
@@ -379,13 +380,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeF
               );
             }
             
-            // Apply college filter if specified
-            if (collegeFilter && collegeFilter !== 'All') {
-              filteredStudents = filteredStudents.filter(student => 
-                student.college === collegeFilter || 
-                student.college?.toLowerCase() === collegeFilter.toLowerCase()
-              );
-            }
+            // Don't apply college filter - show all colleges
             
             // Apply semester filter if specified
             if (semesterFilter && semesterFilter !== 'All') {
@@ -632,8 +627,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeF
     return (
       <Box sx={{ mt: 2, textAlign: 'center' }}>
         <Typography variant="body1" color="text.secondary">
-          No college data available for the selected filters.
-          {collegeFilter !== 'All' && ` College: ${collegeFilter}`}
+          No college data available.
           {semesterFilter !== 'All' && ` Semester: ${semesterFilter}`}
           {yearFilter !== 'All' && ` Year: ${yearFilter}`}
         </Typography>
@@ -701,11 +695,9 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeF
                 <TableRow sx={{ backgroundColor: 'rgba(128, 0, 0, 0.03)' }}>
                   <TableCell sx={{ fontWeight: 'bold', width: '8%', py: 1 }}>Rank</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '25%', py: 1 }}>College</TableCell>
-                  {collegeFilter === 'All' && (
-                    <TableCell sx={{ fontWeight: 'bold', width: '20%', py: 1 }}>College</TableCell>
-                  )}
+                  <TableCell sx={{ fontWeight: 'bold', width: '20%', py: 1 }}>College</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '15%', py: 1, textAlign: 'center' }}>Students</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: collegeFilter === 'All' ? '32%' : '52%', py: 1 }}>Performance</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '32%', py: 1 }}>Performance</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -724,9 +716,7 @@ function CollegeRanking({ collegeFilter, semesterFilter, yearFilter, surveyTypeF
                         </Typography>
                       </Box>
                     </TableCell>
-                    {collegeFilter === 'All' && (
-                      <TableCell sx={{ py: 1 }}>{college.college}</TableCell>
-                    )}
+                    <TableCell sx={{ py: 1 }}>{college.college}</TableCell>
                     <TableCell sx={{ py: 1, textAlign: 'center' }}>
                       <Chip 
                         label={college.studentCount} 
