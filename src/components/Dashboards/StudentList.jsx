@@ -24,7 +24,7 @@ import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
 import exportKeysManager from '../../utils/ExportKeysManager';
-import { exportSurveyData } from '../../utils/ExportManager';
+import { exportFilteredSurveyData } from '../../utils/ExportManager';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -714,7 +714,9 @@ function StudentList() {
   const [copiedKey, setCopiedKey] = useState(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [keyExportDialogOpen, setKeyExportDialogOpen] = useState(false);
+  const [surveyExportDialogOpen, setSurveyExportDialogOpen] = useState(false);
   const [keyExportType, setKeyExportType] = useState('midterms');
+  const [surveyExportType, setSurveyExportType] = useState('all');
   const [activeTab, setActiveTab] = useState(0);
   const [evaluationData, setEvaluationData] = useState([]);
   const [filteredEvaluationData, setFilteredEvaluationData] = useState([]);
@@ -1344,7 +1346,21 @@ function StudentList() {
     setExportDialogOpen(false);
   };
 
+  const handleCloseSurveyExportDialog = () => {
+    setSurveyExportDialogOpen(false);
+  };
+
+  const handleSurveyExportTypeChange = (event) => {
+    setSurveyExportType(event.target.value);
+  };
+
   const handleExportSurveys = () => {
+    // Open the survey export type dialog instead of exporting directly
+    setSurveyExportDialogOpen(true);
+    setExportDialogOpen(false);
+  };
+
+  const handleExportSurveysConfirm = () => {
     try {
       // Get the current academic year
       const currentYear = new Date().getFullYear();
@@ -1354,14 +1370,15 @@ function StudentList() {
       const heiName = 'Cebu Institute of Technology - University';
       const heiAddress = 'N. Bacalso Avenue, Cebu City';
       
-      exportSurveyData(
+      exportFilteredSurveyData(
         evaluationData,
-        'survey_evaluations.xlsx',
+        surveyExportType,
+        `survey_evaluations_${surveyExportType}_${new Date().toISOString().slice(0, 10)}.xlsx`,
         heiName,
         heiAddress,
         academicYear
       );
-      setExportDialogOpen(false);
+      setSurveyExportDialogOpen(false);
     } catch (error) {
       console.error('Survey export error:', error);
       setSnackbarMessage('Failed to export survey data: ' + error.message);
@@ -3188,6 +3205,101 @@ function StudentList() {
           </Button>
           <Button 
             onClick={handleExportKeys}
+            variant="contained"
+            sx={{ 
+              bgcolor: '#800000',
+              '&:hover': { bgcolor: '#600000' }
+            }}
+          >
+            Export
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Survey Export Type Dialog */}
+      <Dialog
+        open={surveyExportDialogOpen}
+        onClose={handleCloseSurveyExportDialog}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            maxWidth: '400px'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#f8f9fa', 
+          borderBottom: '1px solid #eee',
+          color: '#800000',
+          fontWeight: 'bold'
+        }}>
+          Select Survey Export Type
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2, p: 3 }}>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Choose which survey data you would like to export:
+          </Typography>
+          <RadioGroup
+            value={surveyExportType}
+            onChange={handleSurveyExportTypeChange}
+          >
+            <FormControlLabel 
+              value="all" 
+              control={
+                <Radio 
+                  sx={{
+                    color: '#800000',
+                    '&.Mui-checked': {
+                      color: '#800000',
+                    },
+                  }}
+                />
+              } 
+              label="All Survey Data" 
+            />
+            <FormControlLabel 
+              value="midterm" 
+              control={
+                <Radio 
+                  sx={{
+                    color: '#800000',
+                    '&.Mui-checked': {
+                      color: '#800000',
+                    },
+                  }}
+                />
+              } 
+              label="Midterm Survey Data" 
+            />
+            <FormControlLabel 
+              value="final" 
+              control={
+                <Radio 
+                  sx={{
+                    color: '#800000',
+                    '&.Mui-checked': {
+                      color: '#800000',
+                    },
+                  }}
+                />
+              } 
+              label="Final Survey Data" 
+            />
+          </RadioGroup>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa', borderTop: '1px solid #eee' }}>
+          <Button 
+            onClick={handleCloseSurveyExportDialog}
+            sx={{ 
+              color: '#666',
+              '&:hover': { bgcolor: '#f0f0f0' }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleExportSurveysConfirm}
             variant="contained"
             sx={{ 
               bgcolor: '#800000',

@@ -26,7 +26,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { School, EmojiEvents, Star, Business, FilterAlt } from '@mui/icons-material';
+import { School, EmojiEvents, Business, FilterAlt } from '@mui/icons-material';
 import { db } from '../../firebase-config';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
@@ -910,7 +910,6 @@ function AdminRankings() {
                                 : selectedSurveyType === 'midterm' && student.surveyScores?.midterm
                                   ? student.surveyScores.midterm 
                                   : student.evaluationScore || 0).toFixed(1)}
-                              <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                             </Box>
                           </TableCell>
                         </StyledTableRow>
@@ -1048,7 +1047,6 @@ function AdminRankings() {
                                         : selectedSurveyType === 'midterm' && student.surveyScores?.midterm
                                           ? student.surveyScores.midterm 
                                           : student.evaluationScore || 0).toFixed(1)}
-                                      <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                                     </Box>
                                   </TableCell>
                                 </StyledTableRow>
@@ -1212,7 +1210,6 @@ function AdminRankings() {
                                       : selectedSurveyType === 'midterm' && student.surveyScores?.midterm
                                         ? student.surveyScores.midterm 
                                         : student.evaluationScore || 0).toFixed(1)}
-                                    <Star fontSize="small" sx={{ ml: 0.25, fontSize: '1rem' }} />
                                   </Box>
                                 </TableCell>
                               </StyledTableRow>
