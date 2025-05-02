@@ -7,6 +7,7 @@ import Navigation from './components/Navigation';
 import Login from './components/login.component';
 import SignUp from './components/UserHandling/signup.component';
 import ForgotPassword from './components/forgotpw.component';
+import ProfileManager from './components/UserHandling/ProfileManager';
 import StudentList from './components/Dashboards/StudentList';
 import StudentForm from './components/StudentForm';
 import ConcernsSolutions from './components/ConcernsSolutions';
@@ -109,6 +110,16 @@ function AppContent() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'instructor']}>
               <StudentList />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Profile Management Route */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'instructor']}>
+              <ProfileManager />
             </ProtectedRoute>
           }
         />

@@ -26,9 +26,9 @@ import {
   Tab
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { School, EmojiEvents, Star, FilterAlt } from '@mui/icons-material';
+import { School, EmojiEvents, FilterAlt } from '@mui/icons-material';
 import { db } from '../../firebase-config';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, or, and } from 'firebase/firestore';
 import { AuthContext } from '../../context/AuthContext';
 import CollegeRanking from './CollegeRanking';
 import { keyframes } from '@mui/system';
@@ -295,6 +295,9 @@ function StudentRankings() {
   const [selectedSurveyType, setSelectedSurveyType] = useState('all'); // New survey type filter
   const [selectedCompany, setSelectedCompany] = useState('All'); // New company filter
   const [tabValue, setTabValue] = useState(0);
+  // New state for section filtering
+  const [selectedSection, setSelectedSection] = useState('All');
+  const [availableSections, setAvailableSections] = useState(['All']);
   
   // Replace single page state with a map of program-specific keys to pages
   const [pagesMap, setPagesMap] = useState({});
@@ -342,12 +345,38 @@ function StudentRankings() {
           let studentQuery;
           
           if (userData.role === 'instructor' || userData.role === 'coordinator') {
-            // Instructors and coordinators should only see their section
-            studentQuery = query(
-              collection(db, 'studentData'),
-              where('college', '==', userData.college),
-              where('section', '==', userData.section || 'default') // Add section filter
-            );
+            // Check if instructor has multiple sections
+            const userSections = Array.isArray(userData.sections) ? userData.sections : [userData.section || 'default'];
+            
+            // Add all sections to available sections for filtering
+            setAvailableSections(['All', ...userSections]);
+            
+            // If they have multiple sections, create a query with OR conditions
+            if (userSections.length > 1) {
+              // Create an array of queries for each section
+              const sectionQueries = userSections.map(section => 
+                where('section', '==', section)
+              );
+              
+              // Use AND + OR query to get students from any of the instructor's sections
+              // This syntax is required by Firestore v9 for composite queries
+              studentQuery = query(
+                collection(db, 'studentData'),
+                and(
+                  where('college', '==', userData.college),
+                  or(...sectionQueries)
+                )
+              );
+            } else {
+              // If only one section, use simple where clauses
+              studentQuery = query(
+                collection(db, 'studentData'),
+                and(
+                  where('college', '==', userData.college),
+                  where('section', '==', userSections[0])
+                )
+              );
+            }
           } else {
             // Admins or other roles can see all students in their college
             studentQuery = query(
@@ -378,6 +407,10 @@ function StudentRankings() {
             
             // Update student state immediately with basic data
             setStudents(initialStudentsList);
+            
+            // Extract unique sections for filtering
+            const sections = [...new Set(initialStudentsList.map(student => student.section))].filter(Boolean);
+            setAvailableSections(prev => ['All', ...sections]);
             
             // Set up listeners for survey data
             // Clean up previous listeners if they exist
@@ -604,7 +637,7 @@ function StudentRankings() {
   // Reset page when filters change
   useEffect(() => {
     setPagesMap({});
-  }, [selectedProgram, selectedSemester, selectedYear, selectedSurveyType, selectedCompany]);
+  }, [selectedProgram, selectedSemester, selectedYear, selectedSurveyType, selectedCompany, selectedSection]);
 
   // Calculate the ranking of students and sort them by score
   const rankStudents = useMemo(() => {
@@ -635,9 +668,12 @@ function StudentRankings() {
     
       // Company filter
       const companyMatch = selectedCompany === 'All' || student.partnerCompany === selectedCompany;
+
+      // Section filter (new)
+      const sectionMatch = selectedSection === 'All' || student.section === selectedSection;
       
       // Return if student matches all filters
-      return programMatch && yearMatch && semesterMatch && surveyTypeMatch && companyMatch;
+      return programMatch && yearMatch && semesterMatch && surveyTypeMatch && companyMatch && sectionMatch;
     });
 
     // Sort students by the appropriate score based on the selected survey type
@@ -667,7 +703,7 @@ function StudentRankings() {
       ...student,
       rank: index + 1
     }));
-  }, [students, selectedProgram, selectedSemester, selectedYear, selectedSurveyType, selectedCompany]);
+  }, [students, selectedProgram, selectedSemester, selectedYear, selectedSurveyType, selectedCompany, selectedSection]);
 
   // Group students by program
   const studentsByProgram = {};
@@ -786,6 +822,24 @@ function StudentRankings() {
                 {availablePrograms.map((program) => (
                   <MenuItem key={program} value={program}>
                     {program}
+                  </MenuItem>
+                ))}
+              </Select>
+            </StyledFormControl>
+          </Grid>
+          
+          {/* New section filter */}
+          <Grid item xs={12} md={3}>
+            <StyledFormControl fullWidth variant="outlined" size="small">
+              <InputLabel>Section</InputLabel>
+              <Select
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value)}
+                label="Section"
+              >
+                {availableSections.map((section) => (
+                  <MenuItem key={section} value={section}>
+                    {section}
                   </MenuItem>
                 ))}
               </Select>
@@ -953,9 +1007,10 @@ function StudentRankings() {
                       <Table size="small">
                         <TableHead>
                           <TableRow sx={{ backgroundColor: 'rgba(128, 0, 0, 0.03)' }}>
-                            <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1 }}>Rank</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', width: '30%', py: 1 }}>Name</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', width: '50%', py: 1 }}>Company</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '8%', py: 1 }}>Rank</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '25%', py: 1 }}>Name</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '12%', py: 1 }}>Section</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: '45%', py: 1 }}>Company</TableCell>
                             <TableCell sx={{ fontWeight: 'bold', width: '10%', py: 1, textAlign: 'center' }}>Score</TableCell>
                           </TableRow>
                         </TableHead>
@@ -989,13 +1044,31 @@ function StudentRankings() {
                                   </RankingBadge>
                                 </TableCell>
                                 <TableCell sx={{ py: 1 }}>{student.name}</TableCell>
+                                <TableCell sx={{ py: 1 }}>
+                                  {student.section ? (
+                                    <Chip
+                                      label={student.section}
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(128, 0, 0, 0.08)',
+                                        color: '#800000',
+                                        fontWeight: 'medium',
+                                        fontSize: '0.75rem',
+                                        height: '20px'
+                                      }}
+                                    />
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Not assigned
+                                    </Typography>
+                                  )}
+                                </TableCell>
                                 <TableCell sx={{ py: 1 }}>{student.partnerCompany}</TableCell>
                                 <TableCell sx={{ py: 1, textAlign: 'center' }}>
                                   <ScoreDisplay score={displayScore}>
-                                    <Typography sx={{ fontSize: '0.875rem', mr: 0.5, color: 'inherit' }}>
+                                    <Typography sx={{ fontSize: '0.875rem', color: 'inherit' }}>
                                       {displayScore !== null ? displayScore.toFixed(1) : "0.0"}
                                     </Typography>
-                                    <Star sx={{ fontSize: '0.875rem', color: 'inherit' }} />
                                   </ScoreDisplay>
                                 </TableCell>
                               </StyledTableRow>

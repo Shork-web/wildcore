@@ -60,11 +60,38 @@ export default class Auth {
         profileData.adminKeyVerified = true;
       } else if (userData.role === 'instructor') {
         profileData.college = userData.college;
-        profileData.section = userData.section || ""; // Include section field with default empty string
+        // Store an array of sections instead of a single section
+        profileData.sections = Array.isArray(userData.sections) ? userData.sections : [];
+        // Keep section field for backward compatibility, use first section if available
+        profileData.section = Array.isArray(userData.sections) && userData.sections.length > 0 
+          ? userData.sections[0] 
+          : "";
       }
 
       // Save to users collection
       await setDoc(doc(this._db, 'users', uid), profileData);
+
+      // If instructor has sections, create section documents
+      if (userData.role === 'instructor' && Array.isArray(userData.sections) && userData.sections.length > 0) {
+        const instructorName = `${userData.firstName} ${userData.lastName}`.trim();
+        
+        // Create section documents for each section
+        for (const sectionName of userData.sections) {
+          if (sectionName && sectionName.trim() !== '') {
+            const sectionRef = doc(this._db, 'sections', sectionName);
+            await setDoc(sectionRef, {
+              sectionName: sectionName,
+              college: userData.college,
+              instructorId: uid,
+              instructorName: instructorName,
+              createdAt: userData.createdAt,
+              updatedAt: userData.createdAt,
+              createdBy: uid,
+              updatedBy: uid
+            });
+          }
+        }
+      }
 
       return { success: true };
     } catch (error) {
@@ -287,6 +314,96 @@ export default class Auth {
       return { success: true, message: 'Section updated successfully' };
     } catch (error) {
       console.error('Error updating section:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // New method to add multiple sections for an instructor
+  async updateUserSections(userId, newSections) {
+    try {
+      if (!Array.isArray(newSections)) {
+        throw new Error('Sections must be an array');
+      }
+
+      const userDoc = await getDoc(doc(this._db, 'users', userId));
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+      
+      const userData = userDoc.data();
+      
+      // Get current sections from user data
+      const currentSections = Array.isArray(userData.sections) ? userData.sections : 
+                             (userData.section ? [userData.section] : []);
+      
+      // Find sections to remove and sections to add
+      const sectionsToRemove = currentSections.filter(section => !newSections.includes(section));
+      const sectionsToAdd = newSections.filter(section => !currentSections.includes(section));
+      
+      // Update the user's sections in their profile
+      await updateDoc(doc(this._db, 'users', userId), {
+        sections: newSections,
+        // Keep section field for backward compatibility (use first section or empty string)
+        section: newSections.length > 0 ? newSections[0] : '',
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Handle removed sections
+      for (const sectionName of sectionsToRemove) {
+        if (sectionName && sectionName.trim() !== '') {
+          const sectionRef = doc(this._db, 'sections', sectionName);
+          const sectionDoc = await getDoc(sectionRef);
+          
+          if (sectionDoc.exists() && sectionDoc.data().instructorId === userId) {
+            // Mark the section as unassigned
+            await updateDoc(sectionRef, {
+              instructorId: '',
+              instructorName: 'Unassigned',
+              updatedAt: new Date().toISOString(),
+              updatedBy: userId
+            });
+          }
+        }
+      }
+      
+      // Handle added sections
+      for (const sectionName of sectionsToAdd) {
+        if (sectionName && sectionName.trim() !== '') {
+          const sectionRef = doc(this._db, 'sections', sectionName);
+          const sectionDoc = await getDoc(sectionRef);
+          
+          const instructorName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+          
+          if (!sectionDoc.exists()) {
+            // Create new section
+            await setDoc(sectionRef, {
+              sectionName: sectionName,
+              college: userData.college,
+              instructorId: userId,
+              instructorName: instructorName,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              createdBy: userId,
+              updatedBy: userId
+            });
+          } else {
+            // Update existing section with new instructor
+            await updateDoc(sectionRef, {
+              instructorId: userId,
+              instructorName: instructorName,
+              updatedAt: new Date().toISOString(),
+              updatedBy: userId
+            });
+          }
+        }
+      }
+      
+      return { 
+        success: true, 
+        message: `Updated sections successfully. Added: ${sectionsToAdd.length}, Removed: ${sectionsToRemove.length}` 
+      };
+    } catch (error) {
+      console.error('Error updating sections:', error);
       return { success: false, error: error.message };
     }
   }

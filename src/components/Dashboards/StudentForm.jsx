@@ -25,6 +25,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  FormHelperText,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { db, auth } from '../../firebase-config';
@@ -626,6 +627,52 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   // Add new state for review dialog
   const [openReviewDialog, setOpenReviewDialog] = useState(false);
 
+  // Add state for sections
+  const [availableSections, setAvailableSections] = useState([]);
+
+  // Modified user data fetching function
+  const fetchUserData = async () => {
+    try {
+      if (!auth.currentUser?.uid) return;
+      
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        
+        // Support for multiple sections
+        let sectionsArray = [];
+        if (data.sections && Array.isArray(data.sections)) {
+          sectionsArray = data.sections;
+        } else if (data.section) {
+          sectionsArray = [data.section];
+        }
+        
+        setAvailableSections(sectionsArray);
+        
+        // Use the Student class update method to properly update section and college
+        setFormData(prevData => {
+          const studentData = prevData.toJSON ? prevData.toJSON() : prevData;
+          const newStudent = new Student(studentData);
+          newStudent.update('college', data.college || '');
+          
+          // Only set default section for new students, not when editing
+          if (!isEditing && sectionsArray.length > 0) {
+            newStudent.update('section', sectionsArray[0]);
+          }
+          
+          return newStudent;
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+
+  // Add useEffect to call fetchUserData on component mount
+  useEffect(() => {
+    fetchUserData();
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch user's college information from Firestore
   useEffect(() => {
     const fetchUserCollege = async () => {
@@ -662,7 +709,9 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   useEffect(() => {
     if (userCollege && !isEditing) {
       setFormData(prevData => {
-        const newStudent = new Student(prevData.toJSON());
+        // Check if prevData is already a Student instance
+        const studentData = prevData.toJSON ? prevData.toJSON() : prevData;
+        const newStudent = new Student(studentData);
         newStudent.update('college', userCollege);
         return newStudent;
       });
@@ -676,7 +725,9 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
       const finalsKey = generateAccessKey();
       
       setFormData(prevData => {
-        const newStudent = new Student(prevData.toJSON());
+        // Check if prevData is already a Student instance
+        const studentData = prevData.toJSON ? prevData.toJSON() : prevData;
+        const newStudent = new Student(studentData);
         newStudent.update('midtermsKey', midtermsKey);
         newStudent.update('finalsKey', finalsKey);
         return newStudent;
@@ -688,7 +739,9 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
   const handleRegenerateKey = (keyType) => {
     const newKey = generateAccessKey();
     setFormData(prevData => {
-      const newStudent = new Student(prevData.toJSON());
+      // Check if prevData is already a Student instance
+      const studentData = prevData.toJSON ? prevData.toJSON() : prevData;
+      const newStudent = new Student(studentData);
       newStudent.update(keyType, newKey);
       return newStudent;
     });
@@ -758,7 +811,7 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
     }
   };
 
-  // Modified handleSubmit to show review dialog first
+  // Modified handleSubmit to properly include the selected section
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -795,10 +848,12 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
 
       const userData = userDoc.data();
       
+      // Get all student data from the form object directly
       const studentData = {
         ...formData.getAllData(),
         college: userData.college,
-        section: userData.section || '',
+        // Make sure we use the section from formData, not from userData
+        section: formData.section || '',
         startDate: formData.startDate || '',
         endDate: formData.endDate || '',
         createdAt: isEditing ? formData.createdAt : new Date().toISOString(),
@@ -807,22 +862,24 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
         updatedBy: auth.currentUser.uid
       };
 
+      console.log('Saving student with section:', studentData.section);
+
       if (isEditing && docId) {
         await addStudent(studentData);
       } else {
         const docRef = await addDoc(collection(db, 'studentData'), studentData);
         
-        // Add student to the Sections collection if instructor has a section
-        if (userData.section) {
+        // Add student to the Sections collection if a section is selected
+        if (studentData.section) {
           try {
             // First ensure the section document exists
-            const sectionRef = doc(db, 'sections', userData.section);
+            const sectionRef = doc(db, 'sections', studentData.section);
             const sectionDoc = await getDoc(sectionRef);
             
             if (!sectionDoc.exists()) {
               // Create the section document if it doesn't exist
               await setDoc(sectionRef, {
-                sectionName: userData.section,
+                sectionName: studentData.section,
                 college: userData.college,
                 instructorId: auth.currentUser.uid,
                 instructorName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
@@ -1161,6 +1218,54 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                       </Select>
                     </StyledFormControl>
                   </Grid>
+                  
+                  <Grid item xs={12}>
+                    <StyledFormControl required={userRole === 'instructor'} fullWidth>
+                      <InputLabel>Section</InputLabel>
+                      <Select
+                        name="section"
+                        value={formData.section || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFormData(prevData => {
+                            const studentData = prevData.toJSON ? prevData.toJSON() : prevData;
+                            const newStudent = new Student(studentData);
+                            newStudent.update('section', value);
+                            return newStudent;
+                          });
+                        }}
+                        label="Section"
+                        disabled={userRole === 'instructor' && availableSections.length === 0}
+                        MenuProps={{
+                          PaperProps: {
+                            style: {
+                              borderRadius: '10px',
+                              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                            },
+                          },
+                        }}
+                      >
+                        {userRole === 'admin' ? (
+                          <MenuItem value="">No Section</MenuItem>
+                        ) : (
+                          availableSections.length === 0 ? (
+                            <MenuItem value="">No Available Sections</MenuItem>
+                          ) : (
+                            availableSections.map((section) => (
+                              <MenuItem key={section} value={section}>
+                                {section}
+                              </MenuItem>
+                            ))
+                          )
+                        )}
+                      </Select>
+                      <FormHelperText>
+                        {userRole === 'instructor' && availableSections.length === 0 
+                          ? "You don't have any sections assigned. Contact admin or add sections in your profile." 
+                          : "Select the student's section"}
+                      </FormHelperText>
+                    </StyledFormControl>
+                  </Grid>
                 </Grid>
               </SectionWrapper>
             </Grid>
@@ -1419,6 +1524,12 @@ function StudentForm({ initialData, docId, addStudent, disableSnackbar, isEditin
                 <ListItemText 
                   primary="School Year" 
                   secondary={formData.schoolYear || 'N/A'} 
+                />
+              </ReviewListItem>
+              <ReviewListItem>
+                <ListItemText 
+                  primary="Section" 
+                  secondary={formData.section || 'Not Assigned'} 
                 />
               </ReviewListItem>
             </List>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Chip, Divider, List, ListItem, ListItemText, ListItemIcon, RadioGroup, Radio, FormControlLabel } from '@mui/material';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import { Container, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Tooltip, Box, Grid, FormControl, InputLabel, Select, MenuItem, Card, Collapse, Button, Dialog, DialogTitle,DialogContent, DialogActions, IconButton as MuiIconButton, Snackbar, Alert, Pagination, Chip, Divider, List, ListItem, ListItemText, ListItemIcon, RadioGroup, Radio, FormControlLabel, Tab, Tabs, CircularProgress } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -14,8 +14,12 @@ import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import { db, auth } from '../../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc, getDocs } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
@@ -23,6 +27,7 @@ import exportKeysManager from '../../utils/ExportKeysManager';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import ErrorIcon from '@mui/icons-material/Error';
 
 // Utility function to convert program names to acronyms
 const getProgramAcronym = (program) => {
@@ -187,27 +192,38 @@ class StudentManager {
     });
   }
 
-  async ensureSectionExists() {
+  async ensureSectionsExist() {
     try {
-      if (!this._currentUser?.profile?.section) return;
+      // Get user sections
+      const userSections = this._currentUser?.profile?.sections || [];
+      if (!userSections.length && this._currentUser?.profile?.section) {
+        userSections.push(this._currentUser.profile.section);
+      }
+      
+      if (!userSections.length) return;
 
-      const sectionRef = doc(db, 'sections', this._currentUser.profile.section);
-      const sectionDoc = await getDoc(sectionRef);
+      // Process each section
+      for (const sectionName of userSections) {
+        if (!sectionName || sectionName.trim() === '') continue;
+        
+        const sectionRef = doc(db, 'sections', sectionName);
+        const sectionDoc = await getDoc(sectionRef);
 
-      if (!sectionDoc.exists()) {
-        await setDoc(sectionRef, {
-          sectionName: this._currentUser.profile.section,
-          college: this._currentUser.profile.college,
-          instructorId: auth.currentUser?.uid,
-          instructorName: `${this._currentUser.profile.firstName} ${this._currentUser.profile.lastName}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: auth.currentUser?.uid,
-          updatedBy: auth.currentUser?.uid
-        });
+        if (!sectionDoc.exists()) {
+          await setDoc(sectionRef, {
+            sectionName: sectionName,
+            college: this._currentUser.profile.college,
+            instructorId: auth.currentUser?.uid,
+            instructorName: `${this._currentUser.profile.firstName} ${this._currentUser.profile.lastName}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: auth.currentUser?.uid,
+            updatedBy: auth.currentUser?.uid
+          });
+        }
       }
     } catch (error) {
-      console.error('Error ensuring section exists:', error);
+      console.error('Error ensuring sections exist:', error);
       // Don't throw error to prevent blocking main operation
     }
   }
@@ -217,7 +233,7 @@ class StudentManager {
       if (!this._currentUser?.profile?.section) return;
 
       // Ensure section document exists
-      await this.ensureSectionExists();
+      await this.ensureSectionsExist();
 
       const sectionRef = doc(db, 'sections', this._currentUser.profile.section);
       const studentRef = doc(sectionRef, 'students', studentId);
@@ -550,34 +566,56 @@ class StudentManager {
     let q;
     
     if (this._currentUser?.profile?.role === 'instructor') {
-      // If instructor has a section, filter by both college and section
-      if (this._currentUser.profile.section && this._currentUser.profile.section.trim() !== '') {
-        console.log(`Filtering students by section: ${this._currentUser.profile.section}`);
-        q = query(
-          collection(db, 'studentData'),
-          where('college', '==', this._currentUser.profile.college),
-          where('section', '==', this._currentUser.profile.section)
-        );
-      } else {
-        // If instructor has no section, just filter by college
-        console.log('Instructor has no section, filtering by college only');
+      // Get instructor's sections
+      const userSections = this._currentUser?.profile?.sections || [];
+      if (!userSections.length && this._currentUser?.profile?.section) {
+        userSections.push(this._currentUser.profile.section);
+      }
+
+      if (userSections.length > 0) {
+        // If instructor has multiple sections, use a complex query
+        console.log(`Filtering students by college and sections: ${userSections.join(', ')}`);
+        
+        // Firebase doesn't support OR conditions directly, so we need to fetch all students
+        // by college and then filter by section in code
         q = query(
           collection(db, 'studentData'),
           where('college', '==', this._currentUser.profile.college)
         );
+        
+        // We'll filter by section when we receive the data
+        this._activeSections = userSections;
+      } else {
+        // If instructor has no sections, just filter by college
+        console.log('Instructor has no sections, filtering by college only');
+        q = query(
+          collection(db, 'studentData'),
+          where('college', '==', this._currentUser.profile.college)
+        );
+        this._activeSections = [];
       }
     } else {
       // For admin, fetch all students
       console.log('Admin user, fetching all students');
       q = query(collection(db, 'studentData'));
+      this._activeSections = [];
     }
 
     return onSnapshot(q, 
       (querySnapshot) => {
-        const studentsList = querySnapshot.docs.map(doc => ({
+        let studentsList = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        
+        // Apply section filtering for instructors with sections
+        if (this._currentUser?.profile?.role === 'instructor' && this._activeSections.length > 0) {
+          studentsList = studentsList.filter(student => 
+            !student.section || // Include students with no section
+            this._activeSections.includes(student.section) // Include students in instructor's sections
+          );
+        }
+        
         console.log(`Fetched ${studentsList.length} students`);
         this._students = studentsList;
         this._notifySubscribers();
@@ -597,11 +635,39 @@ class StudentManager {
     // Update the current user reference
     this._currentUser = newCurrentUser;
     
-    // Re-initialize data fetching with new section
+    // Re-initialize data fetching with new section(s)
     const unsubscribe = this.initializeDataFetching();
     
     // Return unsubscribe function
     return unsubscribe;
+  }
+
+  // Update the section filter to display all available sections
+  getSectionOptions() {
+    const sections = new Set(['All']);
+    
+    // If instructor, add their assigned sections
+    if (this._currentUser?.profile?.role === 'instructor') {
+      const userSections = this._currentUser?.profile?.sections || [];
+      if (!userSections.length && this._currentUser?.profile?.section) {
+        userSections.push(this._currentUser.profile.section);
+      }
+      
+      userSections.forEach(section => {
+        if (section && section.trim() !== '') {
+          sections.add(section);
+        }
+      });
+    } else {
+      // For admin, add all sections from students
+      this._students.forEach(student => {
+        if (student.section && student.section.trim() !== '') {
+          sections.add(student.section);
+        }
+      });
+    }
+    
+    return Array.from(sections);
   }
 }
 
@@ -629,6 +695,10 @@ function StudentList() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [keyExportDialogOpen, setKeyExportDialogOpen] = useState(false);
   const [keyExportType, setKeyExportType] = useState('midterms');
+  const [activeTab, setActiveTab] = useState(0);
+  const [evaluationData, setEvaluationData] = useState([]);
+  const [loadingEvaluations, setLoadingEvaluations] = useState(false);
+  const [evaluationError, setEvaluationError] = useState(null);
 
   // Toggle visibility of access keys
   const toggleKeyVisibility = (studentId, keyType) => {
@@ -702,6 +772,226 @@ function StudentList() {
       studentManager.refreshDataOnSectionChange(currentUser);
     }
   }, [currentUser?.profile?.section, studentManager, currentUser]);
+
+  // Function to fetch evaluation data
+  const fetchEvaluationData = useCallback(async (studentIds) => {
+    setLoadingEvaluations(true);
+    try {
+      // Get current students, filtered by studentIds if provided
+      let currentStudents = studentManager.getFilteredStudents();
+      if (studentIds && studentIds.length > 0) {
+        currentStudents = currentStudents.filter(student => studentIds.includes(student.id));
+      }
+      
+      // Create array to hold evaluation statuses
+      const evaluations = [];
+      
+      // MENTOR EVALUATIONS - Uses studentSurveys collections
+      // Query midterm mentor evaluations
+      const mentorMidtermQuery = query(collection(db, 'studentSurveys_midterm'));
+      const mentorMidtermSnap = await getDocs(mentorMidtermQuery);
+      const mentorMidtermData = mentorMidtermSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('Mentor midterm evaluations total:', mentorMidtermData.length);
+      
+      // Query final mentor evaluations
+      const mentorFinalQuery = query(collection(db, 'studentSurveys_final'));
+      const mentorFinalSnap = await getDocs(mentorFinalQuery);
+      const mentorFinalData = mentorFinalSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('Mentor final evaluations total:', mentorFinalData.length);
+      
+      // STUDENT EVALUATIONS - Uses companyEvaluations collections
+      // Query midterm student evaluations
+      const studentMidtermQuery = query(collection(db, 'companyEvaluations_midterm'));
+      const studentMidtermSnap = await getDocs(studentMidtermQuery);
+      const studentMidtermData = studentMidtermSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('Student midterm evaluations total:', studentMidtermData.length);
+      
+      // Query final student evaluations
+      const studentFinalQuery = query(collection(db, 'companyEvaluations_final'));
+      const studentFinalSnap = await getDocs(studentFinalQuery);
+      const studentFinalData = studentFinalSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('Student final evaluations total:', studentFinalData.length);
+      
+      // Compile evaluation data for each student
+      for (const student of currentStudents) {
+        // Find midterm evaluation BY MENTOR (from studentSurveys_midterm)
+        const midtermEvalByMentor = mentorMidtermData.find(
+          evalItem => {
+            // Match by student name primarily, since studentId might be empty
+            const matchesStudent = (
+              (evalItem.studentName && student.name && 
+               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+              (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
+              (student.email && evalItem.studentEmail === student.email) || 
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
+            );
+            
+            // Log diagnostics for this specific student
+            if (matchesStudent) {
+              console.log('MENTOR MIDTERM: Found match for student:', student.name);
+              console.log('MENTOR MIDTERM: studentName:', evalItem.studentName, 'vs', student.name);
+              console.log('MENTOR MIDTERM: evaluationMode:', evalItem.evaluationMode);
+              console.log('MENTOR MIDTERM: status:', evalItem.status);
+            }
+            
+            return matchesStudent &&
+                   evalItem.evaluationMode === 'MIDTERM' &&
+                   evalItem.status === 'submitted' &&
+                   evalItem.surveyType === 'mentor';
+          }
+        );
+        
+        // Find final evaluation BY MENTOR (from studentSurveys_final)
+        const finalEvalByMentor = mentorFinalData.find(
+          evalItem => {
+            // Match by student name primarily, since studentId might be empty
+            const matchesStudent = (
+              (evalItem.studentName && student.name && 
+               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+              (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
+              (student.email && evalItem.studentEmail === student.email) || 
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
+            );
+            
+            // Log diagnostics for this specific student
+            if (matchesStudent) {
+              console.log('MENTOR FINAL: Found match for student:', student.name);
+              console.log('MENTOR FINAL: studentName:', evalItem.studentName, 'vs', student.name);
+              console.log('MENTOR FINAL: evaluationMode:', evalItem.evaluationMode);
+              console.log('MENTOR FINAL: status:', evalItem.status);
+            }
+            
+            return matchesStudent &&
+                   evalItem.evaluationMode === 'FINAL' &&
+                   evalItem.status === 'submitted' &&
+                   evalItem.surveyType === 'mentor';
+          }
+        );
+        
+        // Find midterm evaluation BY STUDENT (from companyEvaluations_midterm)
+        const midtermEvalByStudent = studentMidtermData.find(
+          evalItem => {
+            // Match by student name primarily, since studentId might be empty
+            const matchesStudent = (
+              (evalItem.studentName && student.name && 
+               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+              (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
+              (student.email && evalItem.studentEmail === student.email) || 
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
+            );
+            
+            // Log diagnostics for this specific student
+            if (matchesStudent) {
+              console.log('STUDENT MIDTERM: Found match for student:', student.name);
+              console.log('STUDENT MIDTERM: studentName:', evalItem.studentName, 'vs', student.name);
+              console.log('STUDENT MIDTERM: evaluationMode:', evalItem.evaluationMode);
+              console.log('STUDENT MIDTERM: status:', evalItem.status);
+            }
+            
+            return matchesStudent &&
+                   evalItem.evaluationMode === 'MIDTERM' &&
+                   evalItem.status === 'submitted' &&
+                   evalItem.surveyType === 'student';
+          }
+        );
+        
+        // Find final evaluation BY STUDENT (from companyEvaluations_final)
+        const finalEvalByStudent = studentFinalData.find(
+          evalItem => {
+            // Match by student name primarily, since studentId might be empty
+            const matchesStudent = (
+              (evalItem.studentName && student.name && 
+               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+              (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
+              (student.email && evalItem.studentEmail === student.email) || 
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
+            );
+            
+            // Log diagnostics for this specific student
+            if (matchesStudent) {
+              console.log('STUDENT FINAL: Found match for student:', student.name);
+              console.log('STUDENT FINAL: studentName:', evalItem.studentName, 'vs', student.name);
+              console.log('STUDENT FINAL: evaluationMode:', evalItem.evaluationMode);
+              console.log('STUDENT FINAL: status:', evalItem.status);
+            }
+            
+            return matchesStudent &&
+                   evalItem.evaluationMode === 'FINAL' &&
+                   evalItem.status === 'submitted' &&
+                   evalItem.surveyType === 'student';
+          }
+        );
+        
+        // Add compiled evaluation data
+        evaluations.push({
+          studentId: student.id,
+          studentName: student.name,
+          program: student.program,
+          section: student.section,
+          company: student.partnerCompany,
+          companyName: student.partnerCompany,
+          email: student.email,
+          internshipEmail: student.internshipEmail,
+          semester: student.semester,
+          schoolYear: student.schoolYear,
+          midtermEvaluationByMentor: midtermEvalByMentor ? true : false,
+          finalEvaluationByMentor: finalEvalByMentor ? true : false,
+          midtermEvaluationByStudent: midtermEvalByStudent ? true : false,
+          finalEvaluationByStudent: finalEvalByStudent ? true : false,
+          // Add timestamps for when evaluations were submitted
+          midtermEvalMentorDate: midtermEvalByMentor ? midtermEvalByMentor.submittedAt : null,
+          finalEvalMentorDate: finalEvalByMentor ? finalEvalByMentor.submittedAt : null,
+          midtermEvalStudentDate: midtermEvalByStudent ? midtermEvalByStudent.submittedAt : null,
+          finalEvalStudentDate: finalEvalByStudent ? finalEvalByStudent.submittedAt : null,
+          // Include the full evaluation data for reference
+          midtermKey: student.midtermsKey,
+          finalsKey: student.finalsKey,
+          midtermEvaluationData: midtermEvalByMentor,
+          finalEvaluationData: finalEvalByMentor,
+          midtermStudentEvalData: midtermEvalByStudent,
+          finalStudentEvalData: finalEvalByStudent
+        });
+      }
+      
+      setEvaluationData(evaluations);
+    } catch (error) {
+      console.error('Error fetching evaluation data:', error);
+      setEvaluationError(error.message);
+    } finally {
+      setLoadingEvaluations(false);
+    }
+  }, [studentManager]);
+  
+  // Effect to filter evaluation data when student filters change
+  useEffect(() => {
+    if (evaluationData.length > 0 && filteredStudents.length > 0 && activeTab === 1) {
+      console.log('Filtering evaluation data based on student filters');
+      // Get current filtered student IDs
+      const filteredStudentIds = filteredStudents.map(student => student.id);
+      
+      // Fetch evaluation data but filter it to only show data for filtered students
+      fetchEvaluationData(filteredStudentIds);
+    }
+  }, [filteredStudents, activeTab, evaluationData.length, fetchEvaluationData]);
+
+  // Fetch evaluation data when student list changes
+  useEffect(() => {
+    if (activeTab === 1 && studentManager) {
+      fetchEvaluationData();
+    }
+  }, [activeTab, studentManager, fetchEvaluationData]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -784,11 +1074,15 @@ function StudentList() {
         throw new Error('User must be authenticated to update records');
       }
 
+      // For instructors with multiple sections, handle section properly
+      const sectionToUse = userRole === 'admin' 
+        ? (updatedData.section || editingStudent.section || '') 
+        : (updatedData.section || (currentUser?.profile?.sections && currentUser.profile.sections[0]) || currentUser?.profile?.section || '');
+
       const completeUpdateData = {
         ...updatedData,
-        // For admin, preserve the student's original section rather than setting admin's section
-        section: userRole === 'admin' ? (editingStudent.section || '') : (currentUser?.profile?.section || ''),
-        college: userRole === 'admin' ? (editingStudent.college || '') : (currentUser?.profile?.college || ''),
+        section: sectionToUse,
+        college: userRole === 'admin' ? (updatedData.college || editingStudent.college || '') : (currentUser?.profile?.college || ''),
         concerns: updatedData.concerns || '',
         solutions: updatedData.solutions || '',
         recommendations: updatedData.recommendations || '',
@@ -796,15 +1090,27 @@ function StudentList() {
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser.uid,
         createdAt: editingStudent.createdAt,
-        createdBy: editingStudent.createdBy
+        createdBy: editingStudent.createdBy,
+        // Ensure these fields are properly carried over from the form
+        midtermsKey: updatedData.midtermsKey || '',
+        finalsKey: updatedData.finalsKey || '',
+        email: updatedData.email || '',
+        internshipEmail: updatedData.internshipEmail || '',
+        startDate: updatedData.startDate || '',
+        endDate: updatedData.endDate || ''
       };
 
+      console.log('Submitting updated student data:', completeUpdateData);
       await studentManager.updateStudent(editingStudent.id, completeUpdateData);
+      
       setIsDialogOpen(false);
       setEditingStudent(null);
       setSnackbarMessage('Student updated successfully');
       setSnackbarSeverity('success');
       setOpenSnackbar(true);
+      
+      // Refresh the filtered students list to show the changes
+      setFilteredStudents(studentManager.getFilteredStudents());
     } catch (error) {
       console.error('Error updating student:', error);
       setSnackbarMessage('Error updating student: ' + error.message);
@@ -898,6 +1204,16 @@ function StudentList() {
     setExportDialogOpen(false);
   };
 
+  // Function to handle tab change
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    
+    // If switching to evaluation tab and we don't have data, fetch it
+    if (newValue === 1 && evaluationData.length === 0) {
+      fetchEvaluationData();
+    }
+  };
+
   return (
     <Container 
       maxWidth={false}
@@ -932,6 +1248,7 @@ function StudentList() {
               elevation={0}
               sx={{ 
                 display: 'flex', 
+                flexWrap: 'wrap',
                 alignItems: 'center',
                 bgcolor: 'rgba(255, 245, 230, 0.7)',
                 border: '1px solid rgba(128, 0, 0, 0.1)',
@@ -940,6 +1257,7 @@ function StudentList() {
                 py: 1,
                 mt: { xs: 1, md: 0 },
                 width: { xs: '100%', md: 'auto' },
+                gap: 1
               }}
             >
               <Box sx={{ 
@@ -947,7 +1265,6 @@ function StudentList() {
                 alignItems: 'center', 
                 gap: 0.5,
                 color: '#800000',
-                mr: 2
               }}>
                 <PersonIcon fontSize="small" />
                 <Typography variant="body2" fontWeight="medium">
@@ -955,20 +1272,21 @@ function StudentList() {
                 </Typography>
               </Box>
               
-              <Divider orientation="vertical" flexItem sx={{ mr: 2 }} />
+              <Divider orientation="vertical" flexItem />
               
               <Box sx={{ 
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: 0.5,
                 color: '#800000',
-                mr: 2
               }}>
                 <PeopleAltIcon fontSize="small" />
                 <Typography variant="body2" fontWeight="medium">
                   {filteredStudents.length} Students
                 </Typography>
               </Box>
+              
+              <Divider orientation="vertical" flexItem />
               
               <Chip 
                 label={currentUser?.profile?.college || 'Department'} 
@@ -981,19 +1299,38 @@ function StudentList() {
                 }}
               />
               
-              {currentUser?.profile?.section && (
-                <Chip 
-                  label={`Section: ${currentUser.profile.section}`}
-                  size="small"
-                  sx={{ 
-                    ml: 1,
-                    bgcolor: 'rgba(128, 0, 0, 0.1)',
-                    color: '#800000',
-                    fontWeight: 'medium',
-                    '& .MuiChip-label': { px: 1 }
-                  }}
-                />
-              )}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {currentUser?.profile?.sections && Array.isArray(currentUser.profile.sections) ? (
+                  currentUser.profile.sections.map((section) => {
+                    // Count students in this section
+                    const sectionCount = students.filter(s => s.section === section).length;
+                    return (
+                      <Chip 
+                        key={section}
+                        label={`${section} (${sectionCount})`}
+                        size="small"
+                        sx={{ 
+                          bgcolor: 'rgba(128, 0, 0, 0.1)',
+                          color: '#800000',
+                          fontWeight: 'medium',
+                          '& .MuiChip-label': { px: 1 }
+                        }}
+                      />
+                    );
+                  })
+                ) : currentUser?.profile?.section ? (
+                  <Chip 
+                    label={`Section: ${currentUser.profile.section}`}
+                    size="small"
+                    sx={{ 
+                      bgcolor: 'rgba(128, 0, 0, 0.1)',
+                      color: '#800000',
+                      fontWeight: 'medium',
+                      '& .MuiChip-label': { px: 1 }
+                    }}
+                  />
+                ) : null}
+              </Box>
             </Card>
           )}
         </Box>
@@ -1126,7 +1463,7 @@ function StudentList() {
             )}
           </Box>
           <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={6} md={3} lg={3}>
+            <Grid item xs={12} sm={6} md={4} lg={2.4}>
               <FormControl fullWidth size="small">
                 <InputLabel>Program</InputLabel>
                 <Select
@@ -1142,7 +1479,7 @@ function StudentList() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={3} lg={3}>
+            <Grid item xs={12} sm={6} md={4} lg={2.4}>
               <FormControl fullWidth size="small">
                 <InputLabel>Semester</InputLabel>
                 <Select
@@ -1156,7 +1493,7 @@ function StudentList() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={3} lg={3}>
+            <Grid item xs={12} sm={6} md={4} lg={2.4}>
               <FormControl fullWidth size="small">
                 <InputLabel>School Year</InputLabel>
                 <Select
@@ -1170,7 +1507,21 @@ function StudentList() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={3} lg={3}>
+            <Grid item xs={12} sm={6} md={4} lg={2.4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Section</InputLabel>
+                <Select
+                  value={studentManager.filters.section}
+                  onChange={(e) => handleFilterChange('section', e.target.value)}
+                  label="Section"
+                >
+                  {studentManager.getSectionOptions().map(section => (
+                    <MenuItem key={section} value={section}>{section}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={4} lg={2.4}>
               <Autocomplete
                 value={studentManager.filters.company}
                 onChange={(event, newValue) => {
@@ -1234,472 +1585,1010 @@ function StudentList() {
         </Card>
       </Collapse>
 
-      <TableContainer 
-        component={Paper} 
-        sx={{ 
-          borderRadius: 2,
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          maxHeight: '75vh',
-          minHeight: '500px',
-          width: '100%',
-          overflowX: 'auto',
-          '& .MuiTable-root': {
-            tableLayout: 'fixed',
-            minWidth: 1000,
-          },
-          '&::-webkit-scrollbar': {
-            width: '10px',
-            height: '10px',
-          },
-          '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
-            borderRadius: '4px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: '#800000',
-            borderRadius: '4px',
-            '&:hover': {
-              background: '#600000',
+      {/* Tabs Navigation */}
+      <Box sx={{ 
+        mb: 3, 
+        borderBottom: 1, 
+        borderColor: 'divider',
+        width: '100%'
+      }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={handleTabChange}
+          sx={{
+            '& .MuiTab-root': {
+              fontWeight: 'medium',
+              fontSize: '0.95rem',
+              textTransform: 'none',
+              color: 'rgba(128, 0, 0, 0.7)',
+              '&.Mui-selected': {
+                color: '#800000',
+                fontWeight: 'bold',
+              },
+              px: 3,
+              py: 1.5
             },
-          },
-        }}
-      >
-        <Table 
-          stickyHeader 
+            '& .MuiTabs-indicator': {
+              backgroundColor: '#800000',
+              height: 3
+            }
+          }}
+        >
+          <Tab 
+            icon={<ListAltIcon sx={{ fontSize: '1.2rem', mr: 1 }} />} 
+            label="Student List" 
+            iconPosition="start" 
+          />
+          <Tab 
+            icon={<AssessmentIcon sx={{ fontSize: '1.2rem', mr: 1 }} />} 
+            label="Evaluation Status" 
+            iconPosition="start" 
+          />
+        </Tabs>
+      </Box>
+
+      {/* Student List Tab Content */}
+      {activeTab === 0 && (
+        <TableContainer 
+          component={Paper} 
           sx={{ 
-            minWidth: '100%',
-            '& .MuiTableCell-root': {
-              whiteSpace: 'nowrap',
-              px: 2,
+            borderRadius: 2,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            maxHeight: '75vh',
+            minHeight: '500px',
+            width: '100%',
+            overflowX: 'auto',
+            '& .MuiTable-root': {
+              tableLayout: 'fixed',
+              minWidth: 1200,
+            },
+            '&::-webkit-scrollbar': {
+              width: '10px',
+              height: '10px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#f1f1f1',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#800000',
+              borderRadius: '4px',
+              '&:hover': {
+                background: '#600000',
+              },
             },
           }}
         >
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ 
-                width: '10%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                position: 'sticky',
-                left: 0,
-                zIndex: 3,
-                boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
-              }}>Midterms Key</TableCell>
-              <TableCell sx={{ 
-                width: '10%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Finals Key</TableCell>
-              <TableCell sx={{ 
-                width: '12%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Name</TableCell>
-              <TableCell sx={{ 
-                width: '11%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Program</TableCell>
-              <TableCell sx={{ 
-                width: '5%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Gender</TableCell>
-              <TableCell sx={{ 
-                width: '13%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Company</TableCell>
-              <TableCell sx={{ 
-                width: '12%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Contact Person</TableCell>
-              <TableCell sx={{ 
-                width: '11%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Location</TableCell>
-              <TableCell sx={{ 
-                width: '8%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>Start Date</TableCell>
-              <TableCell sx={{ 
-                width: '8%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              }}>End Date</TableCell>
-              <TableCell sx={{ 
-                width: '8%',
-                fontWeight: 'bold',
-                color: '#800000',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                textAlign: 'center',
-                position: 'sticky',
-                right: 0,
-                zIndex: 3,
-                boxShadow: '-2px 0 5px rgba(0,0,0,0.05)',
-              }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedStudents.length > 0 ? (
-              paginatedStudents.map((student) => (
-                <TableRow 
-                  key={student.id}
-                  sx={{ 
-                    '&:hover': { 
-                      backgroundColor: 'rgba(128, 0, 0, 0.04)',
-                    },
-                    height: '60px',
-                    transition: 'background-color 0.2s ease',
-                  }}
-                >
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    },
-                    position: 'sticky',
-                    left: 0,
-                    backgroundColor: 'inherit',
-                    zIndex: 2,
-                    boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
-                  }}>
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                    }}
-                    onClick={() => toggleKeyVisibility(student.id, 'midterms')}
-                    >
-                      {visibleKeys[`${student.id}_midterms`] ? (
-                        <>
-                          <span className="content">{student.midtermsKey || 'Not set'}</span>
-                          <VisibilityIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
-                          {student.midtermsKey && (
-                            <Tooltip title="Copy key">
-                              <IconButton 
-                                size="small" 
-                                sx={{ 
-                                  ml: 0.5, 
-                                  color: copiedKey === `${student.id}_midterms` ? 'success.main' : '#800000',
-                                }}
-                                onClick={(e) => copyKeyToClipboard(e, student.id, 'midterms', student.midtermsKey)}
-                              >
-                                <ContentCopyIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span className="content">••••••</span>
-                          <VisibilityOffIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
-                        </>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    }
-                  }}>
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                    }}
-                    onClick={() => toggleKeyVisibility(student.id, 'finals')}
-                    >
-                      {visibleKeys[`${student.id}_finals`] ? (
-                        <>
-                          <span className="content">{student.finalsKey || 'Not set'}</span>
-                          <VisibilityIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
-                          {student.finalsKey && (
-                            <Tooltip title="Copy key">
-                              <IconButton 
-                                size="small" 
-                                sx={{ 
-                                  ml: 0.5, 
-                                  color: copiedKey === `${student.id}_finals` ? 'success.main' : '#800000',
-                                }}
-                                onClick={(e) => copyKeyToClipboard(e, student.id, 'finals', student.finalsKey)}
-                              >
-                                <ContentCopyIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span className="content">••••••</span>
-                          <VisibilityOffIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
-                        </>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%',
-                      fontWeight: 'medium',
-                    }
-                  }}>
-                    <Tooltip title={student.name} placement="top" arrow>
-                      <span className="content">{student.name}</span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    }
-                  }}>
-                    <Tooltip title={student.program} placement="top" arrow>
-                      <span className="content">{getProgramAcronym(student.program)}</span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    }
-                  }}>
-                    <Chip
-                      label={student.gender === 'Male' ? 'M' : 'F'}
-                      size="small"
-                      sx={{
-                        backgroundColor: student.gender === 'Male' ? 'rgba(25, 118, 210, 0.1)' : 'rgba(233, 30, 99, 0.1)',
-                        color: student.gender === 'Male' ? '#1976d2' : '#e91e63',
-                        fontWeight: 'bold',
-                        borderRadius: '4px',
-                        width: '24px',
-                        minWidth: 'unset',
-                        '& .MuiChip-label': {
-                          padding: '0 4px'
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    }
-                  }}>
-                    <Tooltip title={student.partnerCompany} placement="top" arrow>
-                      <span className="content">{student.partnerCompany}</span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    }
-                  }}>
-                    <Tooltip title={student.contactPerson || 'N/A'} placement="top" arrow>
-                      <span className="content">{student.contactPerson || 'N/A'}</span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%'
-                    }
-                  }}>
-                    <Tooltip title={student.location} placement="top" arrow>
-                      <span className="content">{student.location}</span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      fontSize: '0.875rem'
-                    }
-                  }}>
-                    {student.startDate ? (
-                      <Chip
-                        label={new Date(student.startDate).toLocaleDateString()}
-                        size="small"
-                        sx={{
-                          backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                          color: '#388e3c',
-                          fontWeight: 'medium',
-                          fontSize: '0.75rem',
-                        }}
-                      />
-                    ) : (
-                      <Chip
-                        label="Not set"
-                        size="small"
-                        sx={{
-                          backgroundColor: 'rgba(158, 158, 158, 0.1)',
-                          color: '#757575',
-                          fontWeight: 'medium',
-                          fontSize: '0.75rem',
-                        }}
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ 
-                    padding: '16px',
-                    '& .content': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      fontSize: '0.875rem'
-                    }
-                  }}>
-                    {student.endDate ? (
-                      <Chip
-                        label={new Date(student.endDate).toLocaleDateString()}
-                        size="small"
-                        sx={{
-                          backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                          color: '#d32f2f',
-                          fontWeight: 'medium',
-                          fontSize: '0.75rem',
-                        }}
-                      />
-                    ) : (
-                      <Chip
-                        label="Not set"
-                        size="small"
-                        sx={{
-                          backgroundColor: 'rgba(158, 158, 158, 0.1)',
-                          color: '#757575',
-                          fontWeight: 'medium',
-                          fontSize: '0.75rem',
-                        }}
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell 
-                    align="center"
+          <Table 
+            stickyHeader 
+            sx={{ 
+              minWidth: '100%',
+              '& .MuiTableCell-root': {
+                whiteSpace: 'nowrap',
+                px: 1.5,
+                py: 1.5,
+                borderBottom: '1px solid rgba(224, 224, 224, 0.5)',
+              },
+              '& .MuiTableCell-head': {
+                backgroundColor: 'rgba(248, 248, 248, 0.9) !important',
+                borderBottom: '2px solid rgba(128, 0, 0, 0.2)',
+              },
+              '& .MuiTableRow-root:hover': {
+                backgroundColor: 'rgba(128, 0, 0, 0.04)',
+              },
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ 
+                  width: '6%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 3,
+                  boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
+                  fontSize: '0.7rem',
+                }}>Mid Key</TableCell>
+                <TableCell sx={{ 
+                  width: '6%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.7rem',
+                }}>Final Key</TableCell>
+                <TableCell sx={{ 
+                  width: '13%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Name</TableCell>
+                <TableCell sx={{ 
+                  width: '7%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Program</TableCell>
+                <TableCell sx={{ 
+                  width: '5%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  textAlign: 'center',
+                  fontSize: '0.8rem',
+                }}>Gender</TableCell>
+                <TableCell sx={{ 
+                  width: '5%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Section</TableCell>
+                <TableCell sx={{ 
+                  width: '13%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Company</TableCell>
+                <TableCell sx={{ 
+                  width: '12%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Contact Person</TableCell>
+                <TableCell sx={{ 
+                  width: '10%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Location</TableCell>
+                <TableCell sx={{ 
+                  width: '7%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>Start Date</TableCell>
+                <TableCell sx={{ 
+                  width: '7%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.8rem',
+                }}>End Date</TableCell>
+                <TableCell sx={{ 
+                  width: '6%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  textAlign: 'center',
+                  position: 'sticky',
+                  right: 0,
+                  zIndex: 3,
+                  boxShadow: '-2px 0 5px rgba(0,0,0,0.05)',
+                  fontSize: '0.8rem',
+                }}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paginatedStudents.length > 0 ? (
+                paginatedStudents.map((student) => (
+                  <TableRow 
+                    key={student.id}
                     sx={{ 
-                      padding: '16px',
-                      position: 'sticky',
-                      right: 0,
-                      backgroundColor: 'inherit',
-                      zIndex: 2,
-                      boxShadow: '-2px 0 5px rgba(0,0,0,0.05)',
+                      '&:nth-of-type(odd)': {
+                        backgroundColor: 'rgba(248, 248, 248, 0.2)',
+                      },
+                      height: '56px',
+                      transition: 'background-color 0.2s ease',
                     }}
                   >
-                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                      <Tooltip title="Edit student" arrow>
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleEdit(student)}
-                          sx={{ 
-                            color: '#FFD700',
-                            backgroundColor: 'rgba(128, 0, 0, 0.8)',
-                            '&:hover': { 
-                              backgroundColor: '#800000',
-                              transform: 'scale(1.1)',
-                            },
-                            transition: 'all 0.2s ease',
-                          }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      },
+                      position: 'sticky',
+                      left: 0,
+                      backgroundColor: 'inherit',
+                      zIndex: 2,
+                      boxShadow: '2px 0 5px rgba(0,0,0,0.05)',
+                    }}>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                      onClick={() => toggleKeyVisibility(student.id, 'midterms')}
+                      >
+                        {visibleKeys[`${student.id}_midterms`] ? (
+                          <>
+                            <span className="content">{student.midtermsKey || 'Not set'}</span>
+                            <VisibilityIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                            {student.midtermsKey && (
+                              <Tooltip title="Copy key">
+                                <IconButton 
+                                  size="small" 
+                                  sx={{ 
+                                    ml: 0.5, 
+                                    color: copiedKey === `${student.id}_midterms` ? 'success.main' : '#800000',
+                                  }}
+                                  onClick={(e) => copyKeyToClipboard(e, student.id, 'midterms', student.midtermsKey)}
+                                >
+                                  <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="content">••••••</span>
+                            <VisibilityOffIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                      onClick={() => toggleKeyVisibility(student.id, 'finals')}
+                      >
+                        {visibleKeys[`${student.id}_finals`] ? (
+                          <>
+                            <span className="content">{student.finalsKey || 'Not set'}</span>
+                            <VisibilityIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                            {student.finalsKey && (
+                              <Tooltip title="Copy key">
+                                <IconButton 
+                                  size="small" 
+                                  sx={{ 
+                                    ml: 0.5, 
+                                    color: copiedKey === `${student.id}_finals` ? 'success.main' : '#800000',
+                                  }}
+                                  onClick={(e) => copyKeyToClipboard(e, student.id, 'finals', student.finalsKey)}
+                                >
+                                  <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="content">••••••</span>
+                            <VisibilityOffIcon fontSize="small" sx={{ ml: 1, color: '#800000' }} />
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%',
+                        fontWeight: 'medium',
+                      }
+                    }}>
+                      <Tooltip title={student.name} placement="top" arrow>
+                        <span className="content">{student.name}</span>
                       </Tooltip>
-                      <Tooltip title="Delete student" arrow>
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleDeleteClick(student)}
-                          sx={{ 
-                            color: 'white',
-                            backgroundColor: 'rgba(211, 47, 47, 0.8)',
-                            '&:hover': { 
-                              backgroundColor: '#b71c1c',
-                              transform: 'scale(1.1)',
-                            },
-                            transition: 'all 0.2s ease',
-                          }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Tooltip title={student.program} placement="top" arrow>
+                        <span className="content">{getProgramAcronym(student.program)}</span>
                       </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Chip
+                        label={student.gender === 'Male' ? 'M' : 'F'}
+                        size="small"
+                        sx={{
+                          backgroundColor: student.gender === 'Male' ? 'rgba(25, 118, 210, 0.1)' : 'rgba(233, 30, 99, 0.1)',
+                          color: student.gender === 'Male' ? '#1976d2' : '#e91e63',
+                          fontWeight: 'bold',
+                          fontSize: '0.65rem',
+                          borderRadius: '4px',
+                          width: '22px',
+                          height: '22px',
+                          minWidth: 'unset',
+                          '& .MuiChip-label': {
+                            padding: '0',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      {student.section ? (
+                        <Chip
+                          label={student.section}
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                            color: '#800000',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            maxWidth: '100%',
+                            '& .MuiChip-label': {
+                              padding: '0 4px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }
+                          }}
+                        />
+                      ) : (
+                        <Chip
+                          label="Not assigned"
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(158, 158, 158, 0.1)',
+                            color: '#757575',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            '& .MuiChip-label': {
+                              padding: '0 4px'
+                            }
+                          }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Tooltip title={student.partnerCompany} placement="top" arrow>
+                        <span className="content">{student.partnerCompany}</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Tooltip title={student.contactPerson || 'N/A'} placement="top" arrow>
+                        <span className="content">{student.contactPerson || 'N/A'}</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Tooltip title={student.location} placement="top" arrow>
+                        <span className="content">{student.location}</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        fontSize: '0.875rem'
+                      }
+                    }}>
+                      {student.startDate ? (
+                        <Chip
+                          label={new Date(student.startDate).toLocaleDateString()}
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                            color: '#388e3c',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            maxWidth: '100%',
+                            '& .MuiChip-label': {
+                              padding: '0 4px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }
+                          }}
+                        />
+                      ) : (
+                        <Chip
+                          label="Not set"
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(158, 158, 158, 0.1)',
+                            color: '#757575',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            '& .MuiChip-label': {
+                              padding: '0 4px'
+                            }
+                          }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        fontSize: '0.875rem'
+                      }
+                    }}>
+                      {student.endDate ? (
+                        <Chip
+                          label={new Date(student.endDate).toLocaleDateString()}
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                            color: '#d32f2f',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            maxWidth: '100%',
+                            '& .MuiChip-label': {
+                              padding: '0 4px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }
+                          }}
+                        />
+                      ) : (
+                        <Chip
+                          label="Not set"
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(158, 158, 158, 0.1)',
+                            color: '#757575',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            '& .MuiChip-label': {
+                              padding: '0 4px'
+                            }
+                          }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell 
+                      align="center"
+                      sx={{ 
+                        padding: '16px',
+                        position: 'sticky',
+                        right: 0,
+                        backgroundColor: 'inherit',
+                        zIndex: 2,
+                        boxShadow: '-2px 0 5px rgba(0,0,0,0.05)',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                        <Tooltip title="Edit student" arrow>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleEdit(student)}
+                            sx={{ 
+                              color: '#FFD700',
+                              backgroundColor: 'rgba(128, 0, 0, 0.8)',
+                              '&:hover': { 
+                                backgroundColor: '#800000',
+                                transform: 'scale(1.1)',
+                              },
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete student" arrow>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteClick(student)}
+                            sx={{ 
+                              color: 'white',
+                              backgroundColor: 'rgba(211, 47, 47, 0.8)',
+                              '&:hover': { 
+                                backgroundColor: '#b71c1c',
+                                transform: 'scale(1.1)',
+                              },
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <PeopleAltIcon sx={{ fontSize: 48, color: 'rgba(128, 0, 0, 0.3)' }} />
+                      <Typography variant="h6" color="text.secondary">
+                        No students found
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Try adjusting your filters or search criteria
+                      </Typography>
                     </Box>
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Evaluation Status Tab Content */}
+      {activeTab === 1 && (
+        <TableContainer 
+          component={Paper} 
+          sx={{ 
+            borderRadius: 2,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            maxHeight: '75vh',
+            minHeight: '500px',
+            width: '100%',
+            overflowX: 'auto',
+            '& .MuiTable-root': {
+              tableLayout: 'fixed',
+              minWidth: 1200,
+            },
+            '&::-webkit-scrollbar': {
+              width: '10px',
+              height: '10px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#f1f1f1',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#800000',
+              borderRadius: '4px',
+              '&:hover': {
+                background: '#600000',
+              },
+            },
+          }}
+        >
+          <Table 
+            stickyHeader 
+            sx={{ 
+              minWidth: '100%',
+              '& .MuiTableCell-root': {
+                whiteSpace: 'nowrap',
+                px: 1.5,
+                py: 1.5,
+                borderBottom: '1px solid rgba(224, 224, 224, 0.5)',
+              },
+              '& .MuiTableCell-head': {
+                backgroundColor: 'rgba(248, 248, 248, 0.9) !important',
+                borderBottom: '2px solid rgba(128, 0, 0, 0.2)',
+              },
+              '& .MuiTableRow-root:hover': {
+                backgroundColor: 'rgba(128, 0, 0, 0.04)',
+              },
+            }}
+          >
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                    <PeopleAltIcon sx={{ fontSize: 48, color: 'rgba(128, 0, 0, 0.3)' }} />
-                    <Typography variant="h6" color="text.secondary">
-                      No students found
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Try adjusting your filters or search criteria
-                    </Typography>
-                  </Box>
-                </TableCell>
+                <TableCell sx={{ 
+                  width: '17%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                }}>Student Name</TableCell>
+                <TableCell sx={{ 
+                  width: '10%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                }}>Program</TableCell>
+                <TableCell sx={{ 
+                  width: '8%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                }}>Section</TableCell>
+                <TableCell sx={{ 
+                  width: '15%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                }}>Company</TableCell>
+                <TableCell sx={{ 
+                  width: '12.5%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                }}>Midterm by Mentor</TableCell>
+                <TableCell sx={{ 
+                  width: '12.5%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                }}>Final by Mentor</TableCell>
+                <TableCell sx={{ 
+                  width: '12.5%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                }}>Midterm by Student</TableCell>
+                <TableCell sx={{ 
+                  width: '12.5%',
+                  fontWeight: 'bold',
+                  color: '#800000',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                }}>Final by Student</TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {loadingEvaluations ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 2
+                    }}>
+                      <Box sx={{ position: 'relative' }}>
+                        <CircularProgress size={60} sx={{ color: '#800000' }} />
+                      </Box>
+                      <Typography variant="h6" color="text.secondary">
+                        Loading evaluation data...
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ) : evaluationData.length > 0 ? (
+                evaluationData.map((student) => (
+                  <TableRow 
+                    key={student.studentId}
+                    sx={{ 
+                      '&:nth-of-type(odd)': {
+                        backgroundColor: 'rgba(248, 248, 248, 0.2)',
+                      },
+                      height: '56px',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                  >
+                    <TableCell>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        fontWeight: 'medium'
+                      }}>
+                        {student.studentName}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {getProgramAcronym(student.program)}
+                    </TableCell>
+                    <TableCell>
+                      {student.section ? (
+                        <Chip
+                          label={student.section}
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                            color: '#800000',
+                            fontWeight: 'medium',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            '& .MuiChip-label': {
+                              padding: '0 4px'
+                            }
+                          }}
+                        />
+                      ) : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      {student.company || 'N/A'}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {student.midtermEvaluationByMentor ? (
+                          <Tooltip title={student.midtermEvalMentorDate ? `Submitted: ${new Date(student.midtermEvalMentorDate).toLocaleString()}` : 'Completed'}>
+                            <Chip
+                              icon={<CheckCircleIcon fontSize="small" />}
+                              label="Completed"
+                              size="small"
+                              sx={{
+                                backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                                color: '#2e7d32',
+                                fontWeight: 'medium',
+                                fontSize: '0.7rem',
+                                height: '24px',
+                                '& .MuiChip-icon': {
+                                  color: '#2e7d32',
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Chip
+                            icon={<HourglassEmptyIcon fontSize="small" />}
+                            label="Pending"
+                            size="small"
+                            sx={{
+                              backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                              color: '#d32f2f',
+                              fontWeight: 'medium',
+                              fontSize: '0.7rem',
+                              height: '24px',
+                              '& .MuiChip-icon': {
+                                color: '#d32f2f',
+                              }
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {student.finalEvaluationByMentor ? (
+                          <Tooltip title={student.finalEvalMentorDate ? `Submitted: ${new Date(student.finalEvalMentorDate).toLocaleString()}` : 'Completed'}>
+                            <Chip
+                              icon={<CheckCircleIcon fontSize="small" />}
+                              label="Completed"
+                              size="small"
+                              sx={{
+                                backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                                color: '#2e7d32',
+                                fontWeight: 'medium',
+                                fontSize: '0.7rem',
+                                height: '24px',
+                                '& .MuiChip-icon': {
+                                  color: '#2e7d32',
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Chip
+                            icon={<HourglassEmptyIcon fontSize="small" />}
+                            label="Pending"
+                            size="small"
+                            sx={{
+                              backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                              color: '#d32f2f',
+                              fontWeight: 'medium',
+                              fontSize: '0.7rem',
+                              height: '24px',
+                              '& .MuiChip-icon': {
+                                color: '#d32f2f',
+                              }
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {student.midtermEvaluationByStudent ? (
+                          <Tooltip title={student.midtermEvalStudentDate ? `Submitted: ${new Date(student.midtermEvalStudentDate).toLocaleString()}` : 'Completed'}>
+                            <Chip
+                              icon={<CheckCircleIcon fontSize="small" />}
+                              label="Completed"
+                              size="small"
+                              sx={{
+                                backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                                color: '#2e7d32',
+                                fontWeight: 'medium',
+                                fontSize: '0.7rem',
+                                height: '24px',
+                                '& .MuiChip-icon': {
+                                  color: '#2e7d32',
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Chip
+                            icon={<HourglassEmptyIcon fontSize="small" />}
+                            label="Pending"
+                            size="small"
+                            sx={{
+                              backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                              color: '#d32f2f',
+                              fontWeight: 'medium',
+                              fontSize: '0.7rem',
+                              height: '24px',
+                              '& .MuiChip-icon': {
+                                color: '#d32f2f',
+                              }
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {student.finalEvaluationByStudent ? (
+                          <Tooltip title={student.finalEvalStudentDate ? `Submitted: ${new Date(student.finalEvalStudentDate).toLocaleString()}` : 'Completed'}>
+                            <Chip
+                              icon={<CheckCircleIcon fontSize="small" />}
+                              label="Completed"
+                              size="small"
+                              sx={{
+                                backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                                color: '#2e7d32',
+                                fontWeight: 'medium',
+                                fontSize: '0.7rem',
+                                height: '24px',
+                                '& .MuiChip-icon': {
+                                  color: '#2e7d32',
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Chip
+                            icon={<HourglassEmptyIcon fontSize="small" />}
+                            label="Pending"
+                            size="small"
+                            sx={{
+                              backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                              color: '#d32f2f',
+                              fontWeight: 'medium',
+                              fontSize: '0.7rem',
+                              height: '24px',
+                              '& .MuiChip-icon': {
+                                color: '#d32f2f',
+                              }
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      {evaluationError ? (
+                        <>
+                          <ErrorIcon sx={{ fontSize: 48, color: '#d32f2f' }} />
+                          <Typography variant="h6" color="error">
+                            Error loading evaluation data
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {evaluationError}
+                          </Typography>
+                        </>
+                      ) : (
+                        <>
+                          <AssessmentIcon sx={{ fontSize: 48, color: 'rgba(128, 0, 0, 0.3)' }} />
+                          <Typography variant="h6" color="text.secondary">
+                            No evaluation data available
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Try adjusting your filters or search criteria
+                          </Typography>
+                        </>
+                      )}
+                      <Button 
+                        color="primary"
+                        onClick={() => {
+                          console.log('Refreshing evaluation data...');
+                          setEvaluationError(null);
+                          fetchEvaluationData();
+                        }}
+                        sx={{
+                          mt: 1,
+                          bgcolor: '#800000',
+                          '&:hover': {
+                            bgcolor: '#600000'
+                          }
+                        }}
+                      >
+                        Refresh Data
+                      </Button>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Box sx={{ 
         mt: 3, 
-        display: 'flex', 
+        display: activeTab === 0 ? 'flex' : 'none', 
         justifyContent: 'space-between', 
         alignItems: 'center',
         flexWrap: 'wrap',
@@ -1766,6 +2655,51 @@ function StudentList() {
           </Select>
         </FormControl>
       </Box>
+
+      {/* Evaluation Tab Summary - only show when on Evaluation tab */}
+      {activeTab === 1 && (
+        <Box sx={{ 
+          mt: 3, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          bgcolor: 'rgba(255, 255, 255, 0.8)',
+          p: 2,
+          borderRadius: 2,
+          boxShadow: '0 4px 8px rgba(0,0,0,0.05)'
+        }}>
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+            <Box component="span" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+              {evaluationData.filter(s => s.midtermEvaluationByMentor).length} 
+            </Box> of {evaluationData.length} students have midterm evaluations from mentors
+          </Typography>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
+            <Box component="span" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+              {evaluationData.filter(s => s.finalEvaluationByMentor).length} 
+            </Box> of {evaluationData.length} students have final evaluations from mentors
+          </Typography>
+          
+          <Button 
+            variant="outlined" 
+            color="primary" 
+            startIcon={<AssessmentIcon />}
+            onClick={fetchEvaluationData}
+            sx={{ 
+              borderColor: '#800000',
+              color: '#800000',
+              '&:hover': {
+                borderColor: '#600000',
+                bgcolor: 'rgba(128, 0, 0, 0.04)'
+              }
+            }}
+          >
+            Refresh Evaluation Data
+          </Button>
+        </Box>
+      )}
 
       <Dialog
         open={isDialogOpen}

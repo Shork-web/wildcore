@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { AppBar, Toolbar, Button, Box, IconButton } from '@mui/material';
-import { Menu as MenuIcon } from '@mui/icons-material';
+import { Menu as MenuIcon, AccountCircle } from '@mui/icons-material';
 
 function Navigation() {
   const { userRole, currentUser, auth } = useContext(AuthContext);
@@ -68,6 +68,20 @@ function Navigation() {
             </Button>
           </>
         )}
+
+        {/* Flexible space to push profile and logout to the right */}
+        <Box sx={{ flexGrow: 1 }} />
+        
+        {/* Profile Link */}
+        <Button 
+          color="inherit" 
+          component={Link} 
+          to="/profile"
+          startIcon={<AccountCircle />}
+          sx={{ mr: 1 }}
+        >
+          Profile
+        </Button>
 
         {/* Logout Button */}
         <Button color="inherit" onClick={handleLogout}>

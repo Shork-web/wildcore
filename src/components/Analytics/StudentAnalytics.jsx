@@ -39,6 +39,7 @@ function StudentAnalytics() {
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedSurveyType, setSelectedSurveyType] = useState('all');
   const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedSection, setSelectedSection] = useState('all');
   
   // Get user context instead of fetching separately
   const { currentUser } = useContext(AuthContext);
@@ -322,7 +323,8 @@ function StudentAnalytics() {
     years: [...new Set(surveyData.map(survey => survey.schoolYear))].sort(),
     semesters: [...new Set(surveyData.map(survey => survey.semester))].sort(),
     programs: [...new Set(surveyData.map(survey => survey.program).filter(Boolean))].sort(),
-    companies: [...new Set(surveyData.map(survey => survey.companyName || survey.partnerCompany).filter(Boolean))].sort()
+    companies: [...new Set(surveyData.map(survey => survey.companyName || survey.partnerCompany).filter(Boolean))].sort(),
+    sections: [...new Set(surveyData.map(survey => survey.section).filter(Boolean))].sort()
   };
 
   // Filter data with strict program isolation
@@ -373,10 +375,15 @@ function StudentAnalytics() {
           return companyMatch;
         });
     
+    // Apply section filter
+    const sectionFilteredData = selectedSection === 'all'
+      ? companyFilteredData
+      : companyFilteredData.filter(survey => survey.section === selectedSection);
+    
     // Finally, apply survey type filter (midterm/final)
     return selectedSurveyType === 'all'
-      ? companyFilteredData
-      : companyFilteredData.filter(survey => survey.surveyType === selectedSurveyType);
+      ? sectionFilteredData
+      : sectionFilteredData.filter(survey => survey.surveyType === selectedSurveyType);
   };
 
   // Process data for metrics display
@@ -498,7 +505,8 @@ function StudentAnalytics() {
       selectedYear !== 'all',
       selectedSemester !== 'all',
       selectedSurveyType !== 'all',
-      selectedCompany !== 'all'
+      selectedCompany !== 'all',
+      selectedSection !== 'all'
     ].filter(Boolean).length;
     
     // Handle reset all filters
@@ -508,6 +516,7 @@ function StudentAnalytics() {
       setSelectedSemester('all');
       setSelectedSurveyType('all');
       setSelectedCompany('all');
+      setSelectedSection('all');
     };
 
     return (
@@ -753,8 +762,8 @@ function StudentAnalytics() {
             </FormControl>
           </Grid>
           
-          {/* Second row - 2 filters taking 50% width each */}
-          <Grid item xs={12} sm={6}>
+          {/* Second row - 3 filters taking 33% width each */}
+          <Grid item xs={12} sm={4}>
             <FormControl fullWidth size="small" variant="outlined">
               <InputLabel 
                 sx={{ 
@@ -813,7 +822,7 @@ function StudentAnalytics() {
             </FormControl>
           </Grid>
           
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <FormControl fullWidth size="small" variant="outlined">
               <InputLabel 
                 sx={{ 
@@ -874,6 +883,68 @@ function StudentAnalytics() {
               </Select>
             </FormControl>
           </Grid>
+          
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth size="small" variant="outlined">
+              <InputLabel 
+                sx={{ 
+                  color: '#800000', 
+                  fontSize: '0.85rem',
+                  fontWeight: 500
+                }}
+              >
+                Section
+              </InputLabel>
+              <Select
+                value={selectedSection}
+                label="Section"
+                onChange={(e) => setSelectedSection(e.target.value)}
+                sx={{
+                  height: '45px',
+                  bgcolor: 'white',
+                  '& .MuiSelect-select': { 
+                    color: '#800000', 
+                    py: 1.5 
+                  },
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.2)',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(128, 0, 0, 0.5)',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#800000',
+                  },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      maxHeight: 300,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                      '& .MuiMenuItem-root': {
+                        '&:hover': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.08)',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(128, 0, 0, 0.12)',
+                          '&:hover': {
+                            backgroundColor: 'rgba(128, 0, 0, 0.18)',
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="all">All Sections</MenuItem>
+                {filterOptions.sections?.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
         </Grid>
 
         {/* Active Filters as Chips */}
@@ -917,6 +988,12 @@ function StudentAnalytics() {
                 label: 'Company', 
                 value: selectedCompany, 
                 onDelete: () => setSelectedCompany('all') 
+              },
+              { 
+                active: selectedSection !== 'all', 
+                label: 'Section', 
+                value: selectedSection, 
+                onDelete: () => setSelectedSection('all') 
               }
             ]
             .filter(chip => chip.active)

@@ -30,11 +30,22 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.college;
     }
 
-    // Get user's section
+    // Get user's sections as an array
+    function getUserSections() {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      // First check for sections array
+      return 'sections' in userData && userData.sections is list 
+        ? userData.sections 
+        : (userData.section == "" || userData.section == null) 
+          ? [] 
+          : [userData.section];
+    }
+
+    // Old function kept for backward compatibility
     function getUserSection() {
-      let section = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.section;
-      // Return null if section is empty or undefined
-      return (section == "" || section == null) ? null : section;
+      let sections = getUserSections();
+      // Return null if no sections
+      return sections.size() == 0 ? null : sections[0];
     }
 
     // Check if instructor has access to student's college
@@ -47,9 +58,8 @@ service cloud.firestore {
       return isAdmin() || 
             (isInstructor() && 
              getUserCollege() == studentCollege && 
-             (getUserSection() == "" || 
-              getUserSection() == null || 
-              getUserSection() == studentSection));
+             (getUserSections().size() == 0 || 
+              getUserSections().hasAny([studentSection])));
     }
 
     // Check if the department is a valid college
@@ -565,8 +575,8 @@ service cloud.firestore {
                     (isAdmin() || 
                       (isInstructor() && 
                        request.resource.data.college == getUserCollege() &&
-                       (request.resource.data.section == getUserSection() || 
-                        !getUserSection() || getUserSection() == ""))) &&
+                       (getUserSections().size() == 0 || 
+                        getUserSections().hasAny([request.resource.data.section])))) &&
                     request.resource.data.createdBy == request.auth.uid &&
                     request.resource.data.updatedBy == request.auth.uid;
       // Combined update rule with special case for concerns/solutions
@@ -590,8 +600,8 @@ service cloud.firestore {
                       (isAdmin() || 
                         (isInstructor() && 
                          request.resource.data.college == getUserCollege() &&
-                         (request.resource.data.section == getUserSection() || 
-                          !getUserSection() || getUserSection() == ""))) &&
+                         (getUserSections().size() == 0 || 
+                          getUserSections().hasAny([request.resource.data.section])))) &&
                       request.resource.data.updatedBy == request.auth.uid
                     )
                    );
@@ -602,8 +612,8 @@ service cloud.firestore {
                        (!resource.data.keys().hasAny(['section']) || 
                         resource.data.section == null || 
                         resource.data.section == "" || 
-                        resource.data.section == getUserSection() || 
-                        !getUserSection() || getUserSection() == "")));
+                        getUserSections().hasAny([resource.data.section]) || 
+                        getUserSections().size() == 0)));
     }
 
     // Student Surveys Collection
@@ -637,7 +647,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Period-specific OJT Advisers Collections
+    // Period-specific OJT Advisers Collections with updated structure
     match /OJTadvisers_midterm/{surveyId} {
       allow read: if true;  // Allow anyone to read
       allow create: if true;  // Allow anyone to create without validation
@@ -766,7 +776,8 @@ service cloud.firestore {
                     (isAdmin() || 
                       (isInstructor() && 
                        request.resource.data.college == getUserCollege() &&
-                       request.resource.data.instructorId == request.auth.uid)) &&
+                       (request.resource.data.instructorId == request.auth.uid ||
+                        getUserSections().hasAny([sectionId])))) &&
                     request.resource.data.createdBy == request.auth.uid &&
                     request.resource.data.updatedBy == request.auth.uid;
       
@@ -777,7 +788,8 @@ service cloud.firestore {
                       (isInstructor() && 
                        request.resource.data.college == getUserCollege() &&
                        (resource.data.instructorId == request.auth.uid || 
-                        request.resource.data.instructorId == request.auth.uid))) &&
+                        request.resource.data.instructorId == request.auth.uid ||
+                        getUserSections().hasAny([sectionId])))) &&
                     request.resource.data.updatedBy == request.auth.uid;
       
       // Only admins can delete sections
@@ -793,7 +805,8 @@ service cloud.firestore {
                       isValidSectionStudent() &&
                       (isAdmin() || 
                         (isInstructor() && 
-                         get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid)) &&
+                         (get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid ||
+                          getUserSections().hasAny([sectionId])))) &&
                       request.resource.data.addedBy == request.auth.uid;
         
         // Only admins and the section's instructor can update student entries
@@ -801,14 +814,16 @@ service cloud.firestore {
                       isValidSectionStudent() &&
                       (isAdmin() || 
                         (isInstructor() && 
-                         get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid)) &&
+                         (get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid ||
+                          getUserSections().hasAny([sectionId])))) &&
                       request.resource.data.addedBy == request.auth.uid;
         
         // Only admins and the section's instructor can remove students
         allow delete: if isAuthenticated() && 
                       (isAdmin() || 
                         (isInstructor() && 
-                         get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid));
+                         (get(/databases/$(database)/documents/sections/$(sectionId)).data.instructorId == request.auth.uid ||
+                          getUserSections().hasAny([sectionId]))));
       }
     }
     
@@ -976,6 +991,30 @@ service cloud.firestore {
                       (request.path.segments[0] == 'users' || 
                        request.path.segments[0] == 'profile') &&
                       request.auth.uid != resource.id;
+    }
+
+    // Settings Collection - Admin only
+    match /settings/{settingId} {
+      // Only administrators can read or write to settings
+      allow read: if true;  // Allow reading by all (settings checked client-side)
+      allow write: if isAdmin();  // Only admins can modify settings
+    }
+    
+    // Evaluation Collections - Allow read access to all users
+    match /studentSurveys_midterm/{docId} {
+      allow read: if true;
+    }
+    
+    match /studentSurveys_final/{docId} {
+      allow read: if true;
+    }
+    
+    match /companyEvaluations_midterm/{docId} {
+      allow read: if true;
+    }
+    
+    match /companyEvaluations_final/{docId} {
+      allow read: if true;
     }
   }
 } 

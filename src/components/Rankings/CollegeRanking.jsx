@@ -187,11 +187,11 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
           console.log(`Received update from final surveys: ${finalSnapshot.docs.length} documents`);
           
           // Process final surveys
-          const finalSurveys = finalSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id,
-            surveyType: 'final'
-          }));
+        const finalSurveys = finalSnapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+          surveyType: 'final'
+        }));
         
           // Create a listener for midterm survey collection without any filters
           const midtermSurveysRef = collection(db, 'studentSurveys_midterm');
@@ -199,11 +199,11 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
             console.log(`Received update from midterm surveys: ${midtermSnapshot.docs.length} documents`);
             
             // Process midterm surveys
-            const midtermSurveys = midtermSnapshot.docs.map(doc => ({
-              ...doc.data(),
-              id: doc.id,
-              surveyType: 'midterm'
-            }));
+        const midtermSurveys = midtermSnapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+          surveyType: 'midterm'
+        }));
         
             // Initialize a map to track unique students with their scores
             const studentMap = new Map();
@@ -695,7 +695,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                 <TableRow sx={{ backgroundColor: 'rgba(128, 0, 0, 0.03)' }}>
                   <TableCell sx={{ fontWeight: 'bold', width: '8%', py: 1 }}>Rank</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '25%', py: 1 }}>College</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '20%', py: 1 }}>College</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '20%', py: 1 }}>College</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '15%', py: 1, textAlign: 'center' }}>Students</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '32%', py: 1 }}>Performance</TableCell>
                 </TableRow>
@@ -716,7 +716,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                         </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ py: 1 }}>{college.college}</TableCell>
+                      <TableCell sx={{ py: 1 }}>{college.college}</TableCell>
                     <TableCell sx={{ py: 1, textAlign: 'center' }}>
                       <Chip 
                         label={college.studentCount} 
@@ -776,9 +776,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                       {college.college}
                     </Typography>
                   </Box>
-                  <Box sx={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center',
+                  <Typography sx={{ 
                     color: index === 0 
                       ? '#FFD700' 
                       : index === 1 
@@ -787,7 +785,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                     fontWeight: 'bold'
                   }}>
                     {college.averageScore.toFixed(1)}
-                  </Box>
+                  </Typography>
                 </Box>
               ))}
             </CardContent>
@@ -824,14 +822,12 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                       {college.college}
                     </Typography>
                   </Box>
-                  <Box sx={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center',
+                  <Typography sx={{ 
                     color: maroon,
                     fontWeight: 'medium'
                   }}>
                     {college.averageScore.toFixed(1)}
-                  </Box>
+                  </Typography>
                 </Box>
               ))}
             </CardContent>
@@ -938,9 +934,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                           </TableCell>
                           <TableCell sx={{ py: 1 }}>{student.program}</TableCell>
                           <TableCell sx={{ py: 1, textAlign: 'center' }}>
-                            <Box sx={{ 
-                              display: 'inline-flex', 
-                              alignItems: 'center',
+                            <Typography sx={{ 
                               color: maroon,
                               fontWeight: 'medium'
                             }}>
@@ -949,7 +943,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                                 : surveyTypeFilter === 'midterm' && student.surveyScores?.midterm !== null
                                   ? student.surveyScores.midterm 
                                   : student.evaluationScore || 0).toFixed(1)}
-                            </Box>
+                            </Typography>
                           </TableCell>
                         </StyledTableRow>
                       ))}

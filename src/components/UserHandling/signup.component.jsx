@@ -12,9 +12,10 @@ import {
   Fade,
   Divider,
   Alert,
-  Snackbar
+  Snackbar,
+  Chip
 } from '@mui/material';
-import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey } from '@mui/icons-material';
+import { Person, Email, Lock, School, Phone, AdminPanelSettings, VpnKey, Add } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import Auth from '../../classes/Auth';
 
@@ -77,7 +78,8 @@ export default function SignUp() {
     adminKeyVerified: false,
     role: 'instructor',
     college: '',
-    section: '',
+    sections: [],
+    currentSectionInput: '',
     createdAt: new Date().toISOString()
   });
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -119,7 +121,7 @@ export default function SignUp() {
         phoneNumber: userData.phoneNumber,
         role: userData.accountType,
         college: userData.college,
-        section: userData.section,
+        sections: userData.sections,
         createdAt: new Date().toISOString(),
         adminKey: userData.adminKey
       };
@@ -178,8 +180,33 @@ export default function SignUp() {
       accountType: type,
       adminKey: type !== 'admin' ? '' : prev.adminKey,
       college: type === 'instructor' ? '' : prev.college,
-      section: type === 'instructor' ? '' : prev.section
+      sections: type === 'instructor' ? prev.sections : []
     }));
+  };
+
+  const handleAddSection = () => {
+    if (userData.currentSectionInput.trim() !== '' && 
+        !userData.sections.includes(userData.currentSectionInput.trim())) {
+      setUserData(prev => ({
+        ...prev,
+        sections: [...prev.sections, prev.currentSectionInput.trim()],
+        currentSectionInput: ''
+      }));
+    }
+  };
+
+  const handleRemoveSection = (sectionToRemove) => {
+    setUserData(prev => ({
+      ...prev,
+      sections: prev.sections.filter(section => section !== sectionToRemove)
+    }));
+  };
+
+  const handleKeyPress = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleAddSection();
+    }
   };
 
   const handleSnackbarClose = (event, reason) => {
@@ -403,7 +430,7 @@ export default function SignUp() {
               </Grid>
               {userData.accountType === 'instructor' && (
                 <>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} sm={12}>
                     <TextField
                       select
                       required
@@ -442,32 +469,60 @@ export default function SignUp() {
                       ))}
                     </TextField>
                   </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      name="section"
-                      label="Section"
-                      value={userData.section}
-                      onChange={handleChange}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          height: '56px',
-                          '&:hover fieldset': {
-                            borderColor: '#800000',
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" sx={{ mb: 1, color: '#555' }}>
+                      Sections (You can add multiple sections)
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <TextField
+                        fullWidth
+                        name="currentSectionInput"
+                        label="Add Section"
+                        value={userData.currentSectionInput}
+                        onChange={handleChange}
+                        onKeyPress={handleKeyPress}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            height: '56px',
+                            '&:hover fieldset': {
+                              borderColor: '#800000',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#800000',
+                            },
                           },
-                          '&.Mui-focused fieldset': {
-                            borderColor: '#800000',
-                          },
-                        },
-                      }}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <School sx={{ color: '#800000' }} />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
+                        }}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <School sx={{ color: '#800000' }} />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={handleAddSection}
+                        sx={{ ml: 1, height: '56px', minWidth: '56px' }}
+                      >
+                        <Add />
+                      </Button>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {userData.sections.map((section, index) => (
+                        <Chip
+                          key={index}
+                          label={section}
+                          onDelete={() => handleRemoveSection(section)}
+                          color="primary"
+                          sx={{ 
+                            background: '#800000',
+                            '&:hover': { background: '#600000' }
+                          }}
+                        />
+                      ))}
+                    </Box>
                   </Grid>
                 </>
               )}
