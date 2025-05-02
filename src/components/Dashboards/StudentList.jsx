@@ -19,7 +19,7 @@ import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import { db, auth } from '../../firebase-config';
-import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, onSnapshot, updateDoc, where, setDoc, getDoc } from 'firebase/firestore';
 import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
@@ -130,6 +130,23 @@ const getProgramAcronym = (program) => {
     }
   }
   return cleanProgram;
+};
+
+// Add a utility function near the top of the file to handle different timestamp formats
+const formatTimestamp = (timestamp) => {
+  if (!timestamp) return null;
+  
+  try {
+    // If timestamp is a Firestore Timestamp object with toDate method
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      return timestamp.toDate();
+    }
+    // If timestamp is an ISO string or other date format
+    return new Date(timestamp);
+  } catch (error) {
+    console.error("Error formatting timestamp:", error);
+    return null;
+  }
 };
 
 class StudentManager {
@@ -776,6 +793,10 @@ function StudentList() {
   // Function to fetch evaluation data
   const fetchEvaluationData = useCallback(async (studentIds) => {
     setLoadingEvaluations(true);
+    
+    // Keep track of all onSnapshot unsubscribe functions
+    const unsubscribeFunctions = [];
+    
     try {
       // Get current students, filtered by studentIds if provided
       let currentStudents = studentManager.getFilteredStudents();
@@ -784,214 +805,301 @@ function StudentList() {
       }
       
       // Create array to hold evaluation statuses
-      const evaluations = [];
+      let evaluations = [];
       
-      // MENTOR EVALUATIONS - Uses studentSurveys collections
-      // Query midterm mentor evaluations
-      const mentorMidtermQuery = query(collection(db, 'studentSurveys_midterm'));
-      const mentorMidtermSnap = await getDocs(mentorMidtermQuery);
-      const mentorMidtermData = mentorMidtermSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('Mentor midterm evaluations total:', mentorMidtermData.length);
+      // Arrays to hold evaluation data as it comes in
+      let mentorMidtermData = [];
+      let mentorFinalData = [];
+      let studentMidtermData = [];
+      let studentFinalData = [];
       
-      // Query final mentor evaluations
-      const mentorFinalQuery = query(collection(db, 'studentSurveys_final'));
-      const mentorFinalSnap = await getDocs(mentorFinalQuery);
-      const mentorFinalData = mentorFinalSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('Mentor final evaluations total:', mentorFinalData.length);
-      
-      // STUDENT EVALUATIONS - Uses companyEvaluations collections
-      // Query midterm student evaluations
-      const studentMidtermQuery = query(collection(db, 'companyEvaluations_midterm'));
-      const studentMidtermSnap = await getDocs(studentMidtermQuery);
-      const studentMidtermData = studentMidtermSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('Student midterm evaluations total:', studentMidtermData.length);
-      
-      // Query final student evaluations
-      const studentFinalQuery = query(collection(db, 'companyEvaluations_final'));
-      const studentFinalSnap = await getDocs(studentFinalQuery);
-      const studentFinalData = studentFinalSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('Student final evaluations total:', studentFinalData.length);
-      
-      // Compile evaluation data for each student
-      for (const student of currentStudents) {
-        // Find midterm evaluation BY MENTOR (from studentSurveys_midterm)
-        const midtermEvalByMentor = mentorMidtermData.find(
-          evalItem => {
-            // Match by student name primarily, since studentId might be empty
-            const matchesStudent = (
-              (evalItem.studentName && student.name && 
-               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+      // Create a function to process all data when any collection updates
+      const processAllData = () => {
+        // Skip processing if we don't have all four data sets yet
+        if (!mentorMidtermData.length && !mentorFinalData.length && 
+            !studentMidtermData.length && !studentFinalData.length) {
+          return;
+        }
+        
+        console.log('Processing evaluation data...');
+        console.log('Mentor midterm evaluations:', mentorMidtermData.length);
+        console.log('Mentor final evaluations:', mentorFinalData.length);
+        console.log('Student midterm evaluations:', studentMidtermData.length);
+        console.log('Student final evaluations:', studentFinalData.length);
+        
+        // Clear previous evaluations
+        evaluations = [];
+        
+        // Compile evaluation data for each student
+        for (const student of currentStudents) {
+          // Find midterm evaluation BY MENTOR (from studentSurveys_midterm)
+          const midtermEvalByMentor = mentorMidtermData.find(evalItem => {
+            // More robust name matching - consider exact matches and contained names
+            const nameMatches = 
+              (evalItem.studentName && student.name && (
+                evalItem.studentName.toLowerCase() === student.name.toLowerCase() ||
+                evalItem.studentName.toLowerCase().includes(student.name.toLowerCase()) ||
+                student.name.toLowerCase().includes(evalItem.studentName.toLowerCase())
+              ));
+            
+            // Match by student ID, email or name
+            const matchesStudent = 
               (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
               (student.email && evalItem.studentEmail === student.email) || 
-              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
-            );
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail) ||
+              nameMatches;
             
             // Log diagnostics for this specific student
             if (matchesStudent) {
               console.log('MENTOR MIDTERM: Found match for student:', student.name);
               console.log('MENTOR MIDTERM: studentName:', evalItem.studentName, 'vs', student.name);
-              console.log('MENTOR MIDTERM: evaluationMode:', evalItem.evaluationMode);
               console.log('MENTOR MIDTERM: status:', evalItem.status);
             }
             
-            return matchesStudent &&
-                   evalItem.evaluationMode === 'MIDTERM' &&
-                   evalItem.status === 'submitted' &&
-                   evalItem.surveyType === 'mentor';
-          }
-        );
-        
-        // Find final evaluation BY MENTOR (from studentSurveys_final)
-        const finalEvalByMentor = mentorFinalData.find(
-          evalItem => {
-            // Match by student name primarily, since studentId might be empty
-            const matchesStudent = (
-              (evalItem.studentName && student.name && 
-               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+            return matchesStudent && evalItem.status === 'submitted';
+          });
+          
+          // Find final evaluation BY MENTOR (from studentSurveys_final)
+          const finalEvalByMentor = mentorFinalData.find(evalItem => {
+            // More robust name matching - consider exact matches and contained names
+            const nameMatches = 
+              (evalItem.studentName && student.name && (
+                evalItem.studentName.toLowerCase() === student.name.toLowerCase() ||
+                evalItem.studentName.toLowerCase().includes(student.name.toLowerCase()) ||
+                student.name.toLowerCase().includes(evalItem.studentName.toLowerCase())
+              ));
+            
+            // Match by student ID, email or name
+            const matchesStudent = 
               (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
               (student.email && evalItem.studentEmail === student.email) || 
-              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
-            );
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail) ||
+              nameMatches;
             
             // Log diagnostics for this specific student
             if (matchesStudent) {
               console.log('MENTOR FINAL: Found match for student:', student.name);
               console.log('MENTOR FINAL: studentName:', evalItem.studentName, 'vs', student.name);
-              console.log('MENTOR FINAL: evaluationMode:', evalItem.evaluationMode);
               console.log('MENTOR FINAL: status:', evalItem.status);
             }
             
-            return matchesStudent &&
-                   evalItem.evaluationMode === 'FINAL' &&
-                   evalItem.status === 'submitted' &&
-                   evalItem.surveyType === 'mentor';
-          }
-        );
-        
-        // Find midterm evaluation BY STUDENT (from companyEvaluations_midterm)
-        const midtermEvalByStudent = studentMidtermData.find(
-          evalItem => {
-            // Match by student name primarily, since studentId might be empty
-            const matchesStudent = (
-              (evalItem.studentName && student.name && 
-               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+            return matchesStudent && evalItem.status === 'submitted';
+          });
+          
+          // Find midterm evaluation BY STUDENT (from companyEvaluations_midterm)
+          const midtermEvalByStudent = studentMidtermData.find(evalItem => {
+            // More robust name matching - consider exact matches and contained names
+            const nameMatches = 
+              (evalItem.studentName && student.name && (
+                evalItem.studentName.toLowerCase() === student.name.toLowerCase() ||
+                evalItem.studentName.toLowerCase().includes(student.name.toLowerCase()) ||
+                student.name.toLowerCase().includes(evalItem.studentName.toLowerCase())
+              ));
+            
+            // Match by student ID, email or name
+            const matchesStudent = 
               (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
               (student.email && evalItem.studentEmail === student.email) || 
-              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
-            );
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail) ||
+              nameMatches;
             
             // Log diagnostics for this specific student
             if (matchesStudent) {
               console.log('STUDENT MIDTERM: Found match for student:', student.name);
               console.log('STUDENT MIDTERM: studentName:', evalItem.studentName, 'vs', student.name);
-              console.log('STUDENT MIDTERM: evaluationMode:', evalItem.evaluationMode);
               console.log('STUDENT MIDTERM: status:', evalItem.status);
             }
             
-            return matchesStudent &&
-                   evalItem.evaluationMode === 'MIDTERM' &&
-                   evalItem.status === 'submitted' &&
-                   evalItem.surveyType === 'student';
-          }
-        );
-        
-        // Find final evaluation BY STUDENT (from companyEvaluations_final)
-        const finalEvalByStudent = studentFinalData.find(
-          evalItem => {
-            // Match by student name primarily, since studentId might be empty
-            const matchesStudent = (
-              (evalItem.studentName && student.name && 
-               evalItem.studentName.toLowerCase().includes(student.name.toLowerCase())) ||
+            return matchesStudent && evalItem.status === 'submitted';
+          });
+          
+          // Find final evaluation BY STUDENT (from companyEvaluations_final)
+          const finalEvalByStudent = studentFinalData.find(evalItem => {
+            // More robust name matching - consider exact matches and contained names
+            const nameMatches = 
+              (evalItem.studentName && student.name && (
+                evalItem.studentName.toLowerCase() === student.name.toLowerCase() ||
+                evalItem.studentName.toLowerCase().includes(student.name.toLowerCase()) ||
+                student.name.toLowerCase().includes(evalItem.studentName.toLowerCase())
+              ));
+            
+            // Match by student ID, email or name
+            const matchesStudent = 
               (evalItem.studentId && student.id && evalItem.studentId === student.id) || 
               (student.email && evalItem.studentEmail === student.email) || 
-              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail)
-            );
+              (student.internshipEmail && evalItem.internshipEmail === student.internshipEmail) ||
+              nameMatches;
             
             // Log diagnostics for this specific student
             if (matchesStudent) {
               console.log('STUDENT FINAL: Found match for student:', student.name);
               console.log('STUDENT FINAL: studentName:', evalItem.studentName, 'vs', student.name);
-              console.log('STUDENT FINAL: evaluationMode:', evalItem.evaluationMode);
               console.log('STUDENT FINAL: status:', evalItem.status);
             }
             
-            return matchesStudent &&
-                   evalItem.evaluationMode === 'FINAL' &&
-                   evalItem.status === 'submitted' &&
-                   evalItem.surveyType === 'student';
-          }
-        );
+            return matchesStudent && evalItem.status === 'submitted';
+          });
+          
+          // Add compiled evaluation data
+          evaluations.push({
+            studentId: student.id,
+            studentName: student.name,
+            program: student.program,
+            section: student.section,
+            company: student.partnerCompany,
+            companyName: student.partnerCompany,
+            email: student.email,
+            internshipEmail: student.internshipEmail,
+            semester: student.semester,
+            schoolYear: student.schoolYear,
+            midtermEvaluationByMentor: midtermEvalByMentor ? true : false,
+            finalEvaluationByMentor: finalEvalByMentor ? true : false,
+            midtermEvaluationByStudent: midtermEvalByStudent ? true : false,
+            finalEvaluationByStudent: finalEvalByStudent ? true : false,
+            // Add timestamps for when evaluations were submitted
+            midtermEvalMentorDate: midtermEvalByMentor ? formatTimestamp(midtermEvalByMentor.submittedAt) : null,
+            finalEvalMentorDate: finalEvalByMentor ? formatTimestamp(finalEvalByMentor.submittedAt) : null,
+            midtermEvalStudentDate: midtermEvalByStudent ? formatTimestamp(midtermEvalByStudent.submittedAt) : null,
+            finalEvalStudentDate: finalEvalByStudent ? formatTimestamp(finalEvalByStudent.submittedAt) : null,
+            // Include the full evaluation data for reference
+            midtermKey: student.midtermsKey,
+            finalsKey: student.finalsKey,
+            midtermEvaluationData: midtermEvalByMentor,
+            finalEvaluationData: finalEvalByMentor,
+            midtermStudentEvalData: midtermEvalByStudent,
+            finalStudentEvalData: finalEvalByStudent
+          });
+        }
         
-        // Add compiled evaluation data
-        evaluations.push({
-          studentId: student.id,
-          studentName: student.name,
-          program: student.program,
-          section: student.section,
-          company: student.partnerCompany,
-          companyName: student.partnerCompany,
-          email: student.email,
-          internshipEmail: student.internshipEmail,
-          semester: student.semester,
-          schoolYear: student.schoolYear,
-          midtermEvaluationByMentor: midtermEvalByMentor ? true : false,
-          finalEvaluationByMentor: finalEvalByMentor ? true : false,
-          midtermEvaluationByStudent: midtermEvalByStudent ? true : false,
-          finalEvaluationByStudent: finalEvalByStudent ? true : false,
-          // Add timestamps for when evaluations were submitted
-          midtermEvalMentorDate: midtermEvalByMentor ? midtermEvalByMentor.submittedAt : null,
-          finalEvalMentorDate: finalEvalByMentor ? finalEvalByMentor.submittedAt : null,
-          midtermEvalStudentDate: midtermEvalByStudent ? midtermEvalByStudent.submittedAt : null,
-          finalEvalStudentDate: finalEvalByStudent ? finalEvalByStudent.submittedAt : null,
-          // Include the full evaluation data for reference
-          midtermKey: student.midtermsKey,
-          finalsKey: student.finalsKey,
-          midtermEvaluationData: midtermEvalByMentor,
-          finalEvaluationData: finalEvalByMentor,
-          midtermStudentEvalData: midtermEvalByStudent,
-          finalStudentEvalData: finalEvalByStudent
-        });
-      }
+        // Update state with compiled evaluations
+        setEvaluationData(evaluations);
+        setLoadingEvaluations(false);
+      };
       
-      setEvaluationData(evaluations);
+      // MENTOR EVALUATIONS - Uses separate collections with onSnapshot
+      // Listen for midterm mentor evaluations (from studentSurveys_midterm)
+      const mentorMidtermQuery = query(collection(db, 'studentSurveys_midterm'));
+      const unsubMentorMidterm = onSnapshot(mentorMidtermQuery, 
+        (snapshot) => {
+          mentorMidtermData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('Mentor midterm evaluations updated:', mentorMidtermData.length);
+          processAllData();
+        },
+        (error) => {
+          console.error('Error listening to mentor midterm evaluations:', error);
+          setEvaluationError(error.message);
+          setLoadingEvaluations(false);
+        }
+      );
+      unsubscribeFunctions.push(unsubMentorMidterm);
+      
+      // Listen for final mentor evaluations (from studentSurveys_final)
+      const mentorFinalQuery = query(collection(db, 'studentSurveys_final'));
+      const unsubMentorFinal = onSnapshot(mentorFinalQuery, 
+        (snapshot) => {
+          mentorFinalData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('Mentor final evaluations updated:', mentorFinalData.length);
+          processAllData();
+        },
+        (error) => {
+          console.error('Error listening to mentor final evaluations:', error);
+          setEvaluationError(error.message);
+          setLoadingEvaluations(false);
+        }
+      );
+      unsubscribeFunctions.push(unsubMentorFinal);
+      
+      // STUDENT EVALUATIONS - Uses separate collections with onSnapshot
+      // Listen for midterm student evaluations (from companyEvaluations_midterm)
+      const studentMidtermQuery = query(collection(db, 'companyEvaluations_midterm'));
+      const unsubStudentMidterm = onSnapshot(studentMidtermQuery, 
+        (snapshot) => {
+          studentMidtermData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('Student midterm evaluations updated:', studentMidtermData.length);
+          processAllData();
+        },
+        (error) => {
+          console.error('Error listening to student midterm evaluations:', error);
+          setEvaluationError(error.message);
+          setLoadingEvaluations(false);
+        }
+      );
+      unsubscribeFunctions.push(unsubStudentMidterm);
+      
+      // Listen for final student evaluations (from companyEvaluations_final)
+      const studentFinalQuery = query(collection(db, 'companyEvaluations_final'));
+      const unsubStudentFinal = onSnapshot(studentFinalQuery, 
+        (snapshot) => {
+          studentFinalData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('Student final evaluations updated:', studentFinalData.length);
+          processAllData();
+        },
+        (error) => {
+          console.error('Error listening to student final evaluations:', error);
+          setEvaluationError(error.message);
+          setLoadingEvaluations(false);
+        }
+      );
+      unsubscribeFunctions.push(unsubStudentFinal);
+      
+      // Return a function to unsubscribe from all listeners
+      return () => {
+        console.log('Unsubscribing from evaluation listeners');
+        unsubscribeFunctions.forEach(unsubFn => unsubFn());
+      };
+      
     } catch (error) {
-      console.error('Error fetching evaluation data:', error);
+      console.error('Error setting up evaluation listeners:', error);
       setEvaluationError(error.message);
-    } finally {
       setLoadingEvaluations(false);
+      
+      // Clean up any listeners that were created
+      unsubscribeFunctions.forEach(unsubFn => unsubFn());
+      return () => {};
     }
   }, [studentManager]);
   
-  // Effect to filter evaluation data when student filters change
+  // Set up and clean up evaluation listeners
   useEffect(() => {
-    if (evaluationData.length > 0 && filteredStudents.length > 0 && activeTab === 1) {
-      console.log('Filtering evaluation data based on student filters');
-      // Get current filtered student IDs
-      const filteredStudentIds = filteredStudents.map(student => student.id);
+    let unsubscribeFunction = null;
+    
+    if (activeTab === 1) {
+      console.log('Setting up evaluation listeners');
+      const result = fetchEvaluationData();
       
-      // Fetch evaluation data but filter it to only show data for filtered students
-      fetchEvaluationData(filteredStudentIds);
+      if (result && typeof result.then === 'function') {
+        // Handle Promise
+        result.then(cleanupFn => {
+          if (cleanupFn && typeof cleanupFn === 'function') {
+            unsubscribeFunction = cleanupFn;
+          }
+        });
+      } else if (result && typeof result === 'function') {
+        // Handle direct function return
+        unsubscribeFunction = result;
+      }
     }
-  }, [filteredStudents, activeTab, evaluationData.length, fetchEvaluationData]);
-
-  // Fetch evaluation data when student list changes
-  useEffect(() => {
-    if (activeTab === 1 && studentManager) {
-      fetchEvaluationData();
-    }
-  }, [activeTab, studentManager, fetchEvaluationData]);
+    
+    // Clean up function
+    return () => {
+      console.log('Cleaning up evaluation listeners');
+      if (unsubscribeFunction && typeof unsubscribeFunction === 'function') {
+        unsubscribeFunction();
+      }
+    };
+  }, [activeTab, fetchEvaluationData]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -2380,7 +2488,7 @@ function StudentList() {
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                         {student.midtermEvaluationByMentor ? (
-                          <Tooltip title={student.midtermEvalMentorDate ? `Submitted: ${new Date(student.midtermEvalMentorDate).toLocaleString()}` : 'Completed'}>
+                          <Tooltip title={student.midtermEvalMentorDate ? `Submitted: ${student.midtermEvalMentorDate.toLocaleString()}` : 'Completed'}>
                             <Chip
                               icon={<CheckCircleIcon fontSize="small" />}
                               label="Completed"
@@ -2419,7 +2527,7 @@ function StudentList() {
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                         {student.finalEvaluationByMentor ? (
-                          <Tooltip title={student.finalEvalMentorDate ? `Submitted: ${new Date(student.finalEvalMentorDate).toLocaleString()}` : 'Completed'}>
+                          <Tooltip title={student.finalEvalMentorDate ? `Submitted: ${student.finalEvalMentorDate.toLocaleString()}` : 'Completed'}>
                             <Chip
                               icon={<CheckCircleIcon fontSize="small" />}
                               label="Completed"
@@ -2458,7 +2566,7 @@ function StudentList() {
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                         {student.midtermEvaluationByStudent ? (
-                          <Tooltip title={student.midtermEvalStudentDate ? `Submitted: ${new Date(student.midtermEvalStudentDate).toLocaleString()}` : 'Completed'}>
+                          <Tooltip title={student.midtermEvalStudentDate ? `Submitted: ${student.midtermEvalStudentDate.toLocaleString()}` : 'Completed'}>
                             <Chip
                               icon={<CheckCircleIcon fontSize="small" />}
                               label="Completed"
@@ -2497,7 +2605,7 @@ function StudentList() {
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                         {student.finalEvaluationByStudent ? (
-                          <Tooltip title={student.finalEvalStudentDate ? `Submitted: ${new Date(student.finalEvalStudentDate).toLocaleString()}` : 'Completed'}>
+                          <Tooltip title={student.finalEvalStudentDate ? `Submitted: ${student.finalEvalStudentDate.toLocaleString()}` : 'Completed'}>
                             <Chip
                               icon={<CheckCircleIcon fontSize="small" />}
                               label="Completed"
