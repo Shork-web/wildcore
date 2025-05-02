@@ -210,8 +210,9 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
             
             // Process final surveys first
             finalSurveys.forEach(survey => {
-              const studentId = survey.studentId || survey.student_id || survey.id;
-              if (!studentId) return;
+              // Use student name instead of ID for grouping
+              const studentName = survey.studentName || 'Unknown';
+              if (!studentName || studentName === 'Unknown') return;
               
               // Calculate score for this survey
               let score = 0;
@@ -232,8 +233,8 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
               
               // Get program, college, semester, and year information
               const student = {
-                id: studentId,
-                name: survey.studentName || 'Unknown',
+                id: survey.studentId || survey.student_id || survey.id,
+                name: studentName,
                 program: survey.program || 'Unknown Program',
                 college: survey.college || 'Unknown College',
                 section: survey.section || 'Unspecified',
@@ -243,8 +244,8 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
               };
               
               // Initialize student in map if not exists
-              if (!studentMap.has(studentId)) {
-                studentMap.set(studentId, {
+              if (!studentMap.has(studentName)) {
+                studentMap.set(studentName, {
                   student: student,
                   finalSurveys: [],
                   midtermSurveys: [],
@@ -254,7 +255,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                 });
               } else {
                 // Update student info with any additional data
-                const existingData = studentMap.get(studentId);
+                const existingData = studentMap.get(studentName);
                 existingData.student = {
                   ...existingData.student,
                   ...student
@@ -262,7 +263,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
               }
               
               // Add score to student data
-              studentMap.get(studentId).finalSurveys.push({
+              studentMap.get(studentName).finalSurveys.push({
                 score: score,
                 survey: survey
               });
@@ -270,8 +271,9 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
             
             // Process midterm surveys
             midtermSurveys.forEach(survey => {
-              const studentId = survey.studentId || survey.student_id || survey.id;
-              if (!studentId) return;
+              // Use student name instead of ID for grouping
+              const studentName = survey.studentName || 'Unknown';
+              if (!studentName || studentName === 'Unknown') return;
               
               // Calculate score for this survey
           let score = 0;
@@ -292,8 +294,8 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
           
               // Get program, college, semester, and year information
               const student = {
-                id: studentId,
-                name: survey.studentName || 'Unknown',
+                id: survey.studentId || survey.student_id || survey.id,
+                name: studentName,
                 program: survey.program || 'Unknown Program',
                 college: survey.college || 'Unknown College',
                 section: survey.section || 'Unspecified',
@@ -303,8 +305,8 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
               };
               
               // Initialize student in map if not exists
-              if (!studentMap.has(studentId)) {
-                studentMap.set(studentId, {
+              if (!studentMap.has(studentName)) {
+                studentMap.set(studentName, {
                   student: student,
                   finalSurveys: [],
                   midtermSurveys: [],
@@ -314,7 +316,7 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
               });
             } else {
                 // Update student info with any additional data
-                const existingData = studentMap.get(studentId);
+                const existingData = studentMap.get(studentName);
                 existingData.student = {
                   ...existingData.student,
                   ...student
@@ -322,14 +324,14 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
               }
               
               // Add score to student data
-              studentMap.get(studentId).midtermSurveys.push({
+              studentMap.get(studentName).midtermSurveys.push({
                 score: score,
                 survey: survey
               });
             });
             
             // Calculate average scores and apply 50-50 weighting
-            studentMap.forEach((data, studentId) => {
+            studentMap.forEach((data, studentName) => {
               // Calculate final average score
               if (data.finalSurveys.length > 0) {
                 const totalFinalScore = data.finalSurveys.reduce((sum, item) => sum + item.score, 0);
@@ -342,10 +344,18 @@ function CollegeRanking({ collegeFilter = 'All', semesterFilter, yearFilter, sur
                 data.midtermAvgScore = totalMidtermScore / data.midtermSurveys.length;
               }
               
-              // Apply 50-50 weighting if both types are available
+              // Always apply 50-50 weighting if both types are available and surveyTypeFilter is 'all'
               if (data.finalSurveys.length > 0 && data.midtermSurveys.length > 0) {
-                // 50% weight to each type
-                data.combinedScore = (data.finalAvgScore * 0.5) + (data.midtermAvgScore * 0.5);
+                if (surveyTypeFilter === 'all') {
+                  // 50% weight to each type for 'all' filter
+                  data.combinedScore = (data.finalAvgScore * 0.5) + (data.midtermAvgScore * 0.5);
+                } else if (surveyTypeFilter === 'final') {
+                  // Use only final score
+                  data.combinedScore = data.finalAvgScore;
+                } else if (surveyTypeFilter === 'midterm') {
+                  // Use only midterm score
+                  data.combinedScore = data.midtermAvgScore;
+                }
               }
               // Otherwise use available data (100% weight to what we have)
               else if (data.finalSurveys.length > 0) {

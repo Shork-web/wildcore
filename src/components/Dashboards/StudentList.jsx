@@ -24,10 +24,13 @@ import StudentForm from './StudentForm';
 import { AuthContext } from '../../context/AuthContext';
 import exportManager from '../../utils/ExportManager';
 import exportKeysManager from '../../utils/ExportKeysManager';
+import { exportSurveyData } from '../../utils/ExportManager';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import ErrorIcon from '@mui/icons-material/Error';
+import DescriptionIcon from '@mui/icons-material/Description';
+import SurveyDataView from './SurveyDataView';
 
 // Utility function to convert program names to acronyms
 const getProgramAcronym = (program) => {
@@ -714,6 +717,7 @@ function StudentList() {
   const [keyExportType, setKeyExportType] = useState('midterms');
   const [activeTab, setActiveTab] = useState(0);
   const [evaluationData, setEvaluationData] = useState([]);
+  const [filteredEvaluationData, setFilteredEvaluationData] = useState([]);
   const [loadingEvaluations, setLoadingEvaluations] = useState(false);
   const [evaluationError, setEvaluationError] = useState(null);
 
@@ -1075,8 +1079,8 @@ function StudentList() {
   useEffect(() => {
     let unsubscribeFunction = null;
     
-    if (activeTab === 1) {
-      console.log('Setting up evaluation listeners');
+    if (activeTab === 1 || activeTab === 2) {
+      console.log('Setting up evaluation listeners for tab:', activeTab);
       const result = fetchEvaluationData();
       
       if (result && typeof result.then === 'function') {
@@ -1100,6 +1104,11 @@ function StudentList() {
       }
     };
   }, [activeTab, fetchEvaluationData]);
+
+  // Update the effect where evaluationData is set to also update filteredEvaluationData
+  useEffect(() => {
+    setFilteredEvaluationData(evaluationData);
+  }, [evaluationData]);
 
   const handleFilterChange = (type, value) => {
     studentManager.setFilter(type, value);
@@ -1254,10 +1263,12 @@ function StudentList() {
     page * rowsPerPage
   );
 
+  // Modified handleSearch function
   const handleSearch = (event) => {
     setSearchQuery(event.target.value);
     const query = event.target.value.toLowerCase();
     
+    // Filter main student list
     const filtered = students.filter(student => 
       student.name?.toLowerCase().includes(query) ||
       student.program?.toLowerCase().includes(query) ||
@@ -1267,8 +1278,29 @@ function StudentList() {
     );
     
     setFilteredStudents(filtered);
+    
+    // Filter evaluation data separately
+    if (evaluationData.length > 0) {
+      const filteredEvals = evaluationData.filter(student => 
+        student.studentName?.toLowerCase().includes(query) ||
+        student.program?.toLowerCase().includes(query) ||
+        student.company?.toLowerCase().includes(query) ||
+        student.section?.toLowerCase().includes(query)
+      );
+      
+      setFilteredEvaluationData(filteredEvals);
+    }
+    
     setPage(1); // Reset to first page when searching
   };
+
+  // Update useEffect to reset filtered evaluation data
+  useEffect(() => {
+    // If search query is cleared, reset the filtered data
+    if (searchQuery === '') {
+      setFilteredEvaluationData(evaluationData);
+    }
+  }, [searchQuery, evaluationData]);
 
   const handleExportClick = () => {
     setExportDialogOpen(true);
@@ -1310,6 +1342,32 @@ function StudentList() {
       '2023-2024' // Academic year
     );
     setExportDialogOpen(false);
+  };
+
+  const handleExportSurveys = () => {
+    try {
+      // Get the current academic year
+      const currentYear = new Date().getFullYear();
+      const academicYear = `${currentYear-1}-${currentYear}`;
+      
+      // Get HEI information
+      const heiName = 'Cebu Institute of Technology - University';
+      const heiAddress = 'N. Bacalso Avenue, Cebu City';
+      
+      exportSurveyData(
+        evaluationData,
+        'survey_evaluations.xlsx',
+        heiName,
+        heiAddress,
+        academicYear
+      );
+      setExportDialogOpen(false);
+    } catch (error) {
+      console.error('Survey export error:', error);
+      setSnackbarMessage('Failed to export survey data: ' + error.message);
+      setSnackbarSeverity('error');
+      setOpenSnackbar(true);
+    }
   };
 
   // Function to handle tab change
@@ -1730,6 +1788,11 @@ function StudentList() {
           <Tab 
             icon={<AssessmentIcon sx={{ fontSize: '1.2rem', mr: 1 }} />} 
             label="Evaluation Status" 
+            iconPosition="start" 
+          />
+          <Tab 
+            icon={<DescriptionIcon sx={{ fontSize: '1.2rem', mr: 1 }} />} 
+            label="Survey Data" 
             iconPosition="start" 
           />
         </Tabs>
@@ -2440,8 +2503,8 @@ function StudentList() {
                     </Box>
                   </TableCell>
                 </TableRow>
-              ) : evaluationData.length > 0 ? (
-                evaluationData.map((student) => (
+              ) : filteredEvaluationData.length > 0 ? (
+                filteredEvaluationData.map((student) => (
                   <TableRow 
                     key={student.studentId}
                     sx={{ 
@@ -2657,6 +2720,28 @@ function StudentList() {
                             {evaluationError}
                           </Typography>
                         </>
+                      ) : searchQuery ? (
+                        <>
+                          <SearchIcon sx={{ fontSize: 48, color: 'rgba(128, 0, 0, 0.3)' }} />
+                          <Typography variant="h6" color="text.secondary">
+                            No matching evaluation data
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            No evaluation data found for "{searchQuery}"
+                          </Typography>
+                          <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => setSearchQuery('')}
+                            sx={{
+                              borderColor: '#800000',
+                              color: '#800000',
+                              mt: 1
+                            }}
+                          >
+                            Clear Search
+                          </Button>
+                        </>
                       ) : (
                         <>
                           <AssessmentIcon sx={{ fontSize: 48, color: 'rgba(128, 0, 0, 0.3)' }} />
@@ -2692,6 +2777,15 @@ function StudentList() {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {/* Survey Data Tab Content */}
+      {activeTab === 2 && (
+        <SurveyDataView 
+          students={filteredStudents}
+          evaluationData={filteredEvaluationData}
+          searchQuery={searchQuery}
+        />
       )}
 
       <Box sx={{ 
@@ -2780,21 +2874,24 @@ function StudentList() {
         }}>
           <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
             <Box component="span" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
-              {evaluationData.filter(s => s.midtermEvaluationByMentor).length} 
-            </Box> of {evaluationData.length} students have midterm evaluations from mentors
+              {filteredEvaluationData.filter(s => s.midtermEvaluationByMentor).length} 
+            </Box> of {filteredEvaluationData.length} students have midterm evaluations from mentors
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'medium' }}>
             <Box component="span" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
-              {evaluationData.filter(s => s.finalEvaluationByMentor).length} 
-            </Box> of {evaluationData.length} students have final evaluations from mentors
+              {filteredEvaluationData.filter(s => s.finalEvaluationByMentor).length} 
+            </Box> of {filteredEvaluationData.length} students have final evaluations from mentors
           </Typography>
           
           <Button 
             variant="outlined" 
             color="primary" 
             startIcon={<AssessmentIcon />}
-            onClick={fetchEvaluationData}
+            onClick={() => {
+              setSearchQuery('');
+              fetchEvaluationData();
+            }}
             sx={{ 
               borderColor: '#800000',
               color: '#800000',
@@ -2987,6 +3084,23 @@ function StudentList() {
               <ListItemText 
                 primary="Student Keys Table" 
                 secondary="Exports the table with student keys"
+              />
+            </ListItem>
+            <Divider />
+            <ListItem 
+              button 
+              onClick={handleExportSurveys}
+              sx={{ 
+                py: 2,
+                '&:hover': { bgcolor: 'rgba(128, 0, 0, 0.04)' }
+              }}
+            >
+              <ListItemIcon>
+                <AssessmentIcon sx={{ color: '#800000' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Survey Evaluations Data" 
+                secondary="Exports the survey evaluation data with ratings"
               />
             </ListItem>
           </List>
