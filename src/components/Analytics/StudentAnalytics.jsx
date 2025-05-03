@@ -74,17 +74,23 @@ function StudentAnalytics() {
             
             const userRole = userData.role;
             let userCollege = userData.college;
-            const userSection = userData.section;
             
-            console.log(`User role: ${userRole}, college: ${userCollege}, section: ${userSection}`);
+            // Support for multiple sections
+            const userSections = userData.sections || [];
+            // For backward compatibility with users that only have section field
+            if (!userSections.length && userData.section) {
+              userSections.push(userData.section);
+            }
+            
+            console.log(`User role: ${userRole}, college: ${userCollege}, sections: ${userSections.join(', ')}`);
             
             // Clear previous data when user data changes
             setSurveyData([]);
             setLoading(true);
             
-            // Don't fetch data if section is required but missing
-            if (userRole === 'instructor' && !userSection) {
-              console.log("Section is required but not assigned to user");
+            // Don't fetch data if sections are required but missing
+            if (userRole === 'instructor' && userSections.length === 0) {
+              console.log("Sections are required but none assigned to user");
               setLoading(false);
               return;
             }
@@ -97,17 +103,34 @@ function StudentAnalytics() {
             try {
               let finalQuery, midtermQuery;
 
-              if (userSection) {
-                // If instructor has a specific section assigned
-                finalQuery = query(
-                  collection(db, 'studentSurveys_final'),
-                  where('section', '==', userSection)
-                );
-                
-                midtermQuery = query(
-                  collection(db, 'studentSurveys_midterm'),
-                  where('section', '==', userSection)
-                );
+              if (userSections.length > 0) {
+                // If instructor has specific sections assigned
+                if (userSections.length <= 10) {
+                  // Firestore 'in' operator supports up to 10 values
+                  finalQuery = query(
+                    collection(db, 'studentSurveys_final'),
+                    where('section', 'in', userSections)
+                  );
+                  
+                  midtermQuery = query(
+                    collection(db, 'studentSurveys_midterm'),
+                    where('section', 'in', userSections)
+                  );
+                } else {
+                  // If more than 10 sections, we need to query by college and filter client-side
+                  console.log(`Too many sections (${userSections.length}) for Firestore 'in' operator. Using college filter instead.`);
+                  finalQuery = query(
+                    collection(db, 'studentSurveys_final'),
+                    where('college', '==', userCollege)
+                  );
+                  
+                  midtermQuery = query(
+                    collection(db, 'studentSurveys_midterm'),
+                    where('college', '==', userCollege)
+                  );
+                  
+                  // We'll manually filter by section in the processSurveyData function
+                }
               } else if (userRole === 'admin') {
                 // Admin sees all surveys
                 finalQuery = collection(db, 'studentSurveys_final');
@@ -144,7 +167,7 @@ function StudentAnalytics() {
                   
                   // Combine with existing midterm surveys and process
                   allSurveys = [...finalSurveys, ...midtermSurveys];
-                  processSurveyData(allSurveys);
+                  processSurveyData(allSurveys, userSections, userRole);
                 }, 
                 (error) => {
                   console.error("Error listening to final surveys:", error);
@@ -166,7 +189,7 @@ function StudentAnalytics() {
                   
                   // Combine with existing final surveys and process
                   allSurveys = [...finalSurveys, ...midtermSurveys];
-                  processSurveyData(allSurveys);
+                  processSurveyData(allSurveys, userSections, userRole);
                 }, 
                 (error) => {
                   console.error("Error listening to midterm surveys:", error);
@@ -190,11 +213,21 @@ function StudentAnalytics() {
     };
 
     // Helper function to process survey data
-    const processSurveyData = (allSurveys) => {
+    const processSurveyData = (allSurveys, userSections, userRole) => {
       console.log(`Processing ${allSurveys.length} surveys`);
       
-      // Process all surveys as before (existing data processing code)
-      const processedSurveys = allSurveys.map(survey => {
+      // Apply manual section filtering if needed (for instructors with > 10 sections)
+      let filteredSurveys = allSurveys;
+      if (userSections.length > 10 && userRole === 'instructor') {
+        // Manually filter surveys to include only those from instructor's sections
+        filteredSurveys = allSurveys.filter(survey => 
+          survey.section && userSections.includes(survey.section)
+        );
+        console.log(`Manually filtered surveys by section: ${filteredSurveys.length} of ${allSurveys.length} surveys match instructor sections`);
+      }
+      
+      // Process all filtered surveys
+      const processedSurveys = filteredSurveys.map(survey => {
         // Ensure workAttitude exists and has ratings
         const workAttitude = {
             ratings: {

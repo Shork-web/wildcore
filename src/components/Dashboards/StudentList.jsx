@@ -2532,14 +2532,20 @@ function StudentList() {
                       transition: 'background-color 0.2s ease',
                     }}
                   >
-                    <TableCell>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        fontWeight: 'medium'
-                      }}>
-                        {student.studentName}
-                      </Box>
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%',
+                        fontWeight: 'medium',
+                      }
+                    }}>
+                      <Tooltip title={student.studentName} placement="top" arrow>
+                        <span className="content">{student.studentName}</span>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       {getProgramAcronym(student.program)}
@@ -2562,8 +2568,19 @@ function StudentList() {
                         />
                       ) : 'N/A'}
                     </TableCell>
-                    <TableCell>
-                      {student.company || 'N/A'}
+                    <TableCell sx={{ 
+                      padding: '16px',
+                      '& .content': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        maxWidth: '100%'
+                      }
+                    }}>
+                      <Tooltip title={student.company || 'N/A'} placement="top" arrow>
+                        <span className="content">{student.company || 'N/A'}</span>
+                      </Tooltip>
                     </TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

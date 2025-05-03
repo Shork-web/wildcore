@@ -105,10 +105,18 @@ export default function SignUp() {
         return;
       }
 
-      if (userData.accountType === 'instructor' && !userData.college) {
-        setMessage({ type: 'error', text: 'Please select a college' });
-        setIsSubmitting(false);
-        return;
+      if (userData.accountType === 'instructor') {
+        if (!userData.college) {
+          setMessage({ type: 'error', text: 'Please select a college' });
+          setIsSubmitting(false);
+          return;
+        }
+        
+        if (userData.sections.length === 0) {
+          setMessage({ type: 'error', text: 'Please add at least one section' });
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       const userForAuth = {
@@ -471,7 +479,7 @@ export default function SignUp() {
                   </Grid>
                   <Grid item xs={12}>
                     <Typography variant="subtitle1" sx={{ mb: 1, color: '#555' }}>
-                      Sections (You can add multiple sections)
+                      Sections <Typography component="span" color="error">*</Typography>
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                       <TextField
